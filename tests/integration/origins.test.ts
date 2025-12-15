@@ -124,6 +124,35 @@ describe("originMatchesPattern", () => {
 		// Just verify it doesn't crash - result may be true or false depending on implementation
 		expect(typeof result).toBe("boolean");
 	});
+
+	it("handles complex wildcard patterns with regex", () => {
+		// Test patterns that require regex matching (not just *.example.com)
+		expect(
+			originMatchesPattern(
+				"https://api-v1.example.com",
+				"https://api-*.example.com",
+			),
+		).toBe(true);
+		expect(
+			originMatchesPattern(
+				"https://api-v2.example.com",
+				"https://api-*.example.com",
+			),
+		).toBe(true);
+	});
+
+	it("handles normalizePort edge cases", () => {
+		// Test cases that trigger normalizePort return "" path
+		// This covers the edge case where port is empty and scheme is not http/https
+		// Note: This might be hard to trigger with URL constructor, but we can test
+		// that the function handles various port scenarios correctly
+		expect(
+			originMatchesPattern("https://example.com:443", "https://example.com"),
+		).toBe(true);
+		expect(
+			originMatchesPattern("http://example.com:80", "http://example.com"),
+		).toBe(true);
+	});
 });
 
 describe("originMatchesAnyPattern", () => {

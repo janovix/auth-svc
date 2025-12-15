@@ -251,6 +251,14 @@ describe("Better Auth route access control", () => {
 			expect(response.headers.get("Access-Control-Allow-Credentials")).toBe(
 				"true",
 			);
+
+			// Consume the response body to prevent unhandled promise rejections
+			// Better Auth may throw errors that we need to handle
+			try {
+				await response.text();
+			} catch {
+				// Ignore errors from consuming the response
+			}
 		});
 
 		it("does not add CORS headers to POST request without origin", async () => {
