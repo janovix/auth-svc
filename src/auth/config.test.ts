@@ -31,6 +31,7 @@ describe("buildResolvedAuthConfig", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "dev",
+				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
 			}),
 		);
 
@@ -56,6 +57,7 @@ describe("buildResolvedAuthConfig", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "qa",
+				BETTER_AUTH_URL: "https://auth-core.algenium.qa",
 			}),
 		);
 
@@ -73,6 +75,7 @@ describe("buildResolvedAuthConfig", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "production",
+				BETTER_AUTH_URL: "https://auth-core.janovix.ai",
 				AUTH_COOKIE_DOMAIN: "login.client.com",
 				AUTH_TRUSTED_ORIGINS:
 					"https://portal.client.com,https://*.client-staging.com",
@@ -116,5 +119,47 @@ describe("buildResolvedAuthConfig", () => {
 		expect((config.options as any).baseURL).toBe(
 			"https://auth-core.janovix.workers.dev",
 		);
+	});
+
+	it("allows missing BETTER_AUTH_URL in local environment", () => {
+		const config = buildResolvedAuthConfig(
+			buildEnvWithoutInternalToken({
+				ENVIRONMENT: "local",
+			}),
+		);
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		expect((config.options as any).baseURL).toBeUndefined();
+	});
+
+	it("requires BETTER_AUTH_URL in production environment", () => {
+		expect(() => {
+			buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: undefined,
+				}),
+			);
+		}).toThrow("BETTER_AUTH_URL is required for non-local environments");
+	});
+
+	it("validates BETTER_AUTH_URL format", () => {
+		expect(() => {
+			buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "not-a-valid-url",
+				}),
+			);
+		}).toThrow("BETTER_AUTH_URL must be a valid URL");
+
+		expect(() => {
+			buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "ftp://invalid-protocol.com",
+				}),
+			);
+		}).toThrow("BETTER_AUTH_URL must use http:// or https:// protocol");
 	});
 });

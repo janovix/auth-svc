@@ -22,6 +22,7 @@ describe("getTrustedOriginPatterns", () => {
 		const patterns = getTrustedOriginPatterns({
 			...baseEnv,
 			ENVIRONMENT: "dev",
+			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 		});
 		expect(patterns).toContain("https://*.janovix.workers.dev");
@@ -31,6 +32,7 @@ describe("getTrustedOriginPatterns", () => {
 		const patterns = getTrustedOriginPatterns({
 			...baseEnv,
 			ENVIRONMENT: "dev",
+			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 			AUTH_TRUSTED_ORIGINS: "https://custom.example.com,https://*.custom.com",
 		});
@@ -42,11 +44,13 @@ describe("getTrustedOriginPatterns", () => {
 		const env1 = {
 			...baseEnv,
 			ENVIRONMENT: "dev",
+			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 		};
 		const env2 = {
 			...baseEnv,
 			ENVIRONMENT: "dev",
+			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 		};
 		const patterns1 = getTrustedOriginPatterns(env1);
