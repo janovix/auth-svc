@@ -24,7 +24,7 @@ describe("getTrustedOriginPatterns", () => {
 			ENVIRONMENT: "dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 		});
-		expect(patterns).toContain("https://*.algenium.dev");
+		expect(patterns).toContain("https://*.janovix.workers.dev");
 	});
 
 	it("includes custom trusted origins", () => {

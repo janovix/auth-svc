@@ -27,7 +27,7 @@ function buildEnvWithoutInternalToken(overrides: Partial<Bindings> = {}) {
 }
 
 describe("buildResolvedAuthConfig", () => {
-	it("enables cross-subdomain cookies for dev and allows *.algenium.dev origins", () => {
+	it("enables cross-subdomain cookies for dev and allows *.janovix.workers.dev origins", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "dev",
@@ -36,9 +36,11 @@ describe("buildResolvedAuthConfig", () => {
 
 		expect(config.options.advanced?.crossSubDomainCookies).toEqual({
 			enabled: true,
-			domain: ".algenium.dev",
+			domain: ".janovix.workers.dev",
 		});
-		expect(config.options.trustedOrigins).toContain("https://*.algenium.dev");
+		expect(config.options.trustedOrigins).toContain(
+			"https://*.janovix.workers.dev",
+		);
 		expect(config.options.advanced?.useSecureCookies).toBe(true);
 		// JWT/JWKS plugin is enabled by default
 		expect(
@@ -63,7 +65,7 @@ describe("buildResolvedAuthConfig", () => {
 		});
 		expect(config.options.trustedOrigins).toContain("https://*.algenium.qa");
 		expect(config.options.trustedOrigins).not.toContain(
-			"https://*.algenium.dev",
+			"https://*.janovix.workers.dev",
 		);
 	});
 
@@ -83,7 +85,7 @@ describe("buildResolvedAuthConfig", () => {
 		});
 		expect(config.options.trustedOrigins).toEqual(
 			expect.arrayContaining([
-				"https://*.algenium.app",
+				"https://*.janovix.ai",
 				"https://portal.client.com",
 				"https://*.client-staging.com",
 				"https://*.login.client.com",
@@ -106,13 +108,13 @@ describe("buildResolvedAuthConfig", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.algenium.dev",
+				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
 			}),
 		);
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		expect((config.options as any).baseURL).toBe(
-			"https://auth-core.algenium.dev",
+			"https://auth-core.janovix.workers.dev",
 		);
 	});
 });
