@@ -5,15 +5,21 @@ import { ContentfulStatusCode } from "hono/utils/http-status";
 import { DummyEndpoint } from "./endpoints/dummyEndpoint";
 import pkg from "../package.json";
 import { getOpenApiInfo, getScalarHtml, type AppMeta } from "./app-meta";
+import { registerBetterAuthRoutes } from "./auth/routes";
+import { createCorsMiddleware } from "./middleware/cors";
+import type { Bindings } from "./types/bindings";
 
 // Start a Hono app
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Bindings }>();
 
 const appMeta: AppMeta = {
 	name: pkg.name,
 	version: pkg.version,
 	description: pkg.description,
 };
+
+// Global middleware
+app.use("*", createCorsMiddleware());
 
 app.onError((err, c) => {
 	if (err instanceof ApiException) {
@@ -60,6 +66,9 @@ app.get("/healthz", (c) => {
 app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
+
+// Register Better Auth routes
+registerBetterAuthRoutes(app);
 
 // Register Tasks Sub router
 openapi.route("/tasks", tasksRouter);
