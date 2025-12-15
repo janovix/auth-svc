@@ -3,13 +3,21 @@ import type { Context } from "hono";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import { originMatchesAnyPattern } from "../http/origins";
-import { getTrustedOriginPatterns } from "../middleware/cors";
+import {
+	createCorsMiddleware,
+	getTrustedOriginPatterns,
+} from "../middleware/cors";
 import type { Bindings } from "../types/bindings";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	const router = new Hono<{ Bindings: Bindings }>();
+
+	// Apply CORS middleware to Better Auth routes
+	// This is necessary because Better Auth's handler returns raw Response objects
+	// that bypass Hono's global middleware. The middleware handles OPTIONS preflight requests.
+	router.use("*", createCorsMiddleware());
 
 	router.all("*", async (c) => {
 		const { auth, accessPolicy } = getBetterAuthContext(c.env);
@@ -20,6 +28,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		const isTrustedBrowserOrigin =
 			!!requestOrigin &&
 			originMatchesAnyPattern(requestOrigin, getTrustedOriginPatterns(c.env));
+
+		// Handle OPTIONS preflight requests explicitly
+		// Better Auth might handle these, but we ensure CORS headers are present
+		if (c.req.method === "OPTIONS") {
+			return handleBetterAuthRequest(c, auth);
+		}
 
 		if (accessPolicy.enforceInternal) {
 			// JWKS must be publicly reachable so downstream services can verify JWTs.
@@ -68,12 +82,13 @@ async function handleBetterAuthRequest(
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
-			return response;
+			return await addCorsHeadersToResponse(c, response);
 		}
 
 		await clearJwksAndResetAuth(c);
 		const { auth: refreshed } = getBetterAuthContext(c.env);
-		return refreshed.handler(c.req.raw);
+		const retryResponse = await refreshed.handler(c.req.raw);
+		return await addCorsHeadersToResponse(c, retryResponse);
 	} catch (error) {
 		if (!isJwksDecryptError(error)) {
 			throw error;
@@ -81,8 +96,46 @@ async function handleBetterAuthRequest(
 
 		await clearJwksAndResetAuth(c, error);
 		const { auth: refreshed } = getBetterAuthContext(c.env);
-		return refreshed.handler(c.req.raw);
+		const retryResponse = await refreshed.handler(c.req.raw);
+		return await addCorsHeadersToResponse(c, retryResponse);
 	}
+}
+
+async function addCorsHeadersToResponse(
+	c: Context<{ Bindings: Bindings }>,
+	response: Response,
+): Promise<Response> {
+	const requestOrigin = c.req.header("origin");
+	if (!requestOrigin) {
+		return response;
+	}
+
+	const patterns = getTrustedOriginPatterns(c.env);
+	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+	if (!isTrusted) {
+		return response;
+	}
+
+	// Clone headers and add CORS headers
+	const headers = new Headers(response.headers);
+	headers.set("Access-Control-Allow-Origin", requestOrigin);
+	headers.set("Access-Control-Allow-Credentials", "true");
+	headers.set(
+		"Access-Control-Allow-Methods",
+		"GET, POST, PUT, DELETE, PATCH, OPTIONS",
+	);
+	headers.set(
+		"Access-Control-Allow-Headers",
+		"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
+	);
+
+	// Create new response with CORS headers
+	// Note: We need to clone the body stream properly
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 function isJwksDecryptError(error: unknown) {
