@@ -1,6 +1,5 @@
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
-import { tasksRouter } from "./endpoints/tasks/router";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { DummyEndpoint } from "./endpoints/dummyEndpoint";
 import pkg from "../package.json";
@@ -87,9 +86,6 @@ openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
 
 // Register Better Auth routes (actual implementation - handles requests)
 registerBetterAuthRoutes(app);
-
-// Register Tasks Sub router
-openapi.route("/tasks", tasksRouter);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
