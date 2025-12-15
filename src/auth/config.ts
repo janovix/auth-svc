@@ -31,17 +31,17 @@ const RATE_LIMITS: Record<
 };
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
-	preview: ".algenium.dev",
-	dev: ".algenium.dev",
+	preview: ".janovix.workers.dev",
+	dev: ".janovix.workers.dev",
 	qa: ".algenium.qa",
-	production: ".algenium.app",
+	production: ".janovix.ai",
 };
 
 const TRUSTED_ORIGINS_BY_ENV: Partial<Record<JanovixEnvironment, string[]>> = {
-	preview: ["https://*.algenium.dev"],
-	dev: ["https://*.algenium.dev"],
+	preview: ["https://*.janovix.workers.dev"],
+	dev: ["https://*.janovix.workers.dev"],
 	qa: ["https://*.algenium.qa"],
-	production: ["https://*.algenium.app"],
+	production: ["https://*.janovix.ai"],
 };
 
 const LOCAL_DEVELOPMENT_ORIGINS = [
