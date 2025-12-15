@@ -1,15 +1,10 @@
-/**
- * KV namespace used to cache Tasks reads.
- * Bound via `wrangler*.jsonc` as `TASKS_KV`.
- */
 declare namespace Cloudflare {
 	interface Env {
-		TASKS_KV: KVNamespace;
 		/**
-		 * Optional override for tasks cache TTL (seconds).
-		 * Must be >= 60. Defaults to 60.
+		 * KV namespace for general-purpose key-value storage.
+		 * Bound via `wrangler*.jsonc` as `KV`.
 		 */
-		TASKS_CACHE_TTL_SECONDS?: string;
+		KV: KVNamespace;
 		/**
 		 * Environment identifier (local, dev, qa, production, preview, test)
 		 */
