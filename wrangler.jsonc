@@ -1,0 +1,23 @@
+{
+	"compatibility_date": "2025-10-08",
+	"main": "src/index.ts",
+	"name": "auth-svc",
+	"upload_source_maps": true,
+	"workers_dev": true,
+	"observability": {
+		"enabled": true,
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "auth-dev",
+			"database_id": "80ca9ee0-571c-452d-a9ed-cffb4cc00975",
+		},
+	],
+	"kv_namespaces": [
+		{
+			"binding": "TASKS_KV",
+			"id": "bc9ed2441eaa4660a619e64e603cdccc",
+		},
+	],
+}
