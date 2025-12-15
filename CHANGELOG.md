@@ -1,3 +1,15 @@
+# 1.0.0-rc.1 (2025-12-15)
+
+
+### Bug Fixes
+
+* removed package manager fron package.json ([c55ee2d](https://github.com/janovix/auth-svc/commit/c55ee2d4cf6aec4442b7604f826c49b977bd6dad))
+
+
+### Features
+
+* Integrate Better Auth and Prisma ([49145a6](https://github.com/janovix/auth-svc/commit/49145a6158153144bccea6b0680aa89f1bc16e1f))
+
 # [1.1.0](https://github.com/algtools/backend-template/compare/v1.0.0...v1.1.0) (2025-12-14)
 
 
