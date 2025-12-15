@@ -92,7 +92,7 @@ describe("Better Auth route access control", () => {
 	it("allows trusted browser origins in non-local envs", async () => {
 		const request = new Request("http://localhost/api/auth/health", {
 			headers: {
-				origin: "https://app.algenium.dev",
+				origin: "https://app.janovix.workers.dev",
 			},
 		});
 
