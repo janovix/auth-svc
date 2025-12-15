@@ -8,6 +8,15 @@ import { getOpenApiInfo, getScalarHtml, type AppMeta } from "./app-meta";
 import { registerBetterAuthRoutes } from "./auth/routes";
 import { createCorsMiddleware } from "./middleware/cors";
 import type { Bindings } from "./types/bindings";
+import {
+	AuthSignUpEndpoint,
+	AuthSignInEndpoint,
+	AuthSignOutEndpoint,
+	AuthSessionEndpoint,
+	AuthJwksEndpoint,
+	AuthForgotPasswordEndpoint,
+	AuthResetPasswordEndpoint,
+} from "./endpoints/auth/openapi";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Bindings }>();
@@ -67,7 +76,16 @@ app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
 
-// Register Better Auth routes
+// Register Better Auth OpenAPI documentation (must be before actual routes)
+openapi.post("/api/auth/sign-up", AuthSignUpEndpoint);
+openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
+openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
+openapi.get("/api/auth/session", AuthSessionEndpoint);
+openapi.get("/api/auth/jwks", AuthJwksEndpoint);
+openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
+openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
+
+// Register Better Auth routes (actual implementation - handles requests)
 registerBetterAuthRoutes(app);
 
 // Register Tasks Sub router
