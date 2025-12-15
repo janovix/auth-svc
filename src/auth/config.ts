@@ -78,6 +78,7 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
+	const baseURL = resolveBaseURL(env.BETTER_AUTH_URL, resolvedEnv);
 	const accessPolicy = resolveAccessPolicy(env, resolvedEnv);
 	const cookieDomain = resolveCookieDomain(env, resolvedEnv);
 	const trustedOrigins = resolveTrustedOrigins(env, resolvedEnv, cookieDomain);
@@ -85,7 +86,7 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 	const options: BetterAuthOptions = {
 		appName: `${ORG_SLUG}-auth-core-${resolvedEnv}`,
 		basePath: BASE_PATH,
-		baseURL: env.BETTER_AUTH_URL,
+		baseURL,
 		secret,
 		emailAndPassword: {
 			enabled: true,
@@ -157,6 +158,40 @@ function resolveSecret(secret: string | undefined, env: JanovixEnvironment) {
 	throw new Error(
 		"BETTER_AUTH_SECRET is not configured or too short. Set a >=32 char secret via `wrangler secret put BETTER_AUTH_SECRET`.",
 	);
+}
+
+function resolveBaseURL(
+	baseURL: string | undefined,
+	env: JanovixEnvironment,
+): string | undefined {
+	// baseURL is optional for local/test environments where Better Auth can infer it
+	if (env === "local" || env === "test") {
+		return baseURL;
+	}
+
+	// For production environments, baseURL should be set for proper JWT issuer/audience validation
+	if (!baseURL || baseURL.trim().length === 0) {
+		throw new Error(
+			"BETTER_AUTH_URL is required for non-local environments. Set it via environment variable or `wrangler secret put BETTER_AUTH_URL`.",
+		);
+	}
+
+	// Validate URL format
+	try {
+		const url = new URL(baseURL);
+		if (!["http:", "https:"].includes(url.protocol)) {
+			throw new Error("BETTER_AUTH_URL must use http:// or https:// protocol.");
+		}
+	} catch (error) {
+		if (error instanceof TypeError) {
+			throw new Error(
+				`BETTER_AUTH_URL must be a valid URL. Received: ${baseURL}`,
+			);
+		}
+		throw error;
+	}
+
+	return baseURL.trim();
 }
 
 function resolveAccessPolicy(
