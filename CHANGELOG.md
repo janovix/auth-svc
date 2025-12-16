@@ -1,3 +1,10 @@
+# [1.0.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2025-12-16)
+
+
+### Bug Fixes
+
+* enhance CORS handling by checking for same-origin requests before adding CORS headers ([4ac5da1](https://github.com/janovix/auth-svc/commit/4ac5da149cc443058eb1e5ce469d896f2fb6f5a2))
+
 # [1.0.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.4...v1.0.0-rc.5) (2025-12-16)
 
 
