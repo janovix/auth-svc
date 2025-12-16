@@ -1,5 +1,6 @@
 {
 	"compatibility_date": "2025-10-08",
+	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
 	"name": "backend-template-prod",
 	"upload_source_maps": true,
@@ -23,9 +24,4 @@
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.ai",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.ai",
 	},
-	"resolve": {
-		"alias": {
-			"node:async_hooks": "./src/polyfills/async_hooks.ts"
-		}
-	}
 }
