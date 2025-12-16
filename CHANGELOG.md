@@ -1,3 +1,10 @@
+# [1.0.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.4...v1.0.0-rc.5) (2025-12-16)
+
+
+### Features
+
+* Enable nodejs_compat for better-auth ([20e45fa](https://github.com/janovix/auth-svc/commit/20e45fa493744e3f90a7d6f3f4be4cc5229c5c82))
+
 # [1.0.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2025-12-16)
 
 
