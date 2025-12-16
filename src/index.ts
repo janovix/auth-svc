@@ -75,7 +75,12 @@ app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
 
-// Register Better Auth OpenAPI documentation (must be before actual routes)
+// Register Better Auth routes (actual implementation - handles requests)
+// Must be registered BEFORE OpenAPI documentation routes so they handle requests first
+registerBetterAuthRoutes(app);
+
+// Register Better Auth OpenAPI documentation (for API docs generation only)
+// These routes are registered after Better Auth routes, so they won't intercept requests
 openapi.post("/api/auth/sign-up", AuthSignUpEndpoint);
 openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
 openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
@@ -83,9 +88,6 @@ openapi.get("/api/auth/session", AuthSessionEndpoint);
 openapi.get("/api/auth/jwks", AuthJwksEndpoint);
 openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
 openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
-
-// Register Better Auth routes (actual implementation - handles requests)
-registerBetterAuthRoutes(app);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
