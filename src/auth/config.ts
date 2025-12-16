@@ -265,19 +265,27 @@ function resolveTrustedOrigins(
 ) {
 	const origins = new Set<string>();
 
-	(TRUSTED_ORIGINS_BY_ENV[resolvedEnv] ?? []).forEach((origin) =>
-		origins.add(origin),
-	);
+	// Prioritize AUTH_TRUSTED_ORIGINS from wrangler vars over ENVIRONMENT-based defaults
+	const explicitTrustedOrigins = parseList(env.AUTH_TRUSTED_ORIGINS);
+	if (explicitTrustedOrigins.length > 0) {
+		// If AUTH_TRUSTED_ORIGINS is set, use it and skip ENVIRONMENT-based defaults
+		explicitTrustedOrigins.forEach((origin) => origins.add(origin));
+	} else {
+		// Fallback to ENVIRONMENT-based defaults only if AUTH_TRUSTED_ORIGINS is not set
+		(TRUSTED_ORIGINS_BY_ENV[resolvedEnv] ?? []).forEach((origin) =>
+			origins.add(origin),
+		);
+	}
 
+	// Always add localhost origins for local/test environments
 	if (resolvedEnv === "local" || resolvedEnv === "test") {
 		LOCAL_DEVELOPMENT_ORIGINS.forEach((origin) => origins.add(origin));
 	}
 
+	// Add domain-based patterns from cookieDomain (for cross-subdomain cookies)
 	domainToTrustedOriginPatterns(cookieDomain).forEach((origin) =>
 		origins.add(origin),
 	);
-
-	parseList(env.AUTH_TRUSTED_ORIGINS).forEach((origin) => origins.add(origin));
 
 	return Array.from(origins).filter(Boolean);
 }
