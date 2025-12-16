@@ -134,6 +134,12 @@ function buildAdvancedOptions(
 		disableCSRFCheck: env === "local" || env === "test",
 		disableOriginCheck: env === "local" || env === "test",
 		useSecureCookies: env !== "local" && env !== "test",
+		// Explicitly set cookie path to "/" so cookies are accessible on all paths.
+		// Without this, cookies might only be sent to paths matching the basePath (/api/auth).
+		defaultCookieAttributes: {
+			path: "/",
+			sameSite: "lax",
+		},
 	};
 
 	if (shouldEnableCrossSubdomainCookies(env, cookieDomain)) {
