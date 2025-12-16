@@ -169,7 +169,9 @@ async function addCorsHeadersToResponse(
 	}
 
 	// Clone headers and add CORS headers for trusted cross-origin requests
-	const headers = new Headers(response.headers);
+	// Important: Clone the response first to avoid consuming the body stream
+	const clonedResponse = response.clone();
+	const headers = new Headers(clonedResponse.headers);
 	headers.set("Access-Control-Allow-Origin", requestOrigin);
 	headers.set("Access-Control-Allow-Credentials", "true");
 	headers.set(
@@ -181,11 +183,10 @@ async function addCorsHeadersToResponse(
 		"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
 	);
 
-	// Create new response with CORS headers
-	// Note: We need to clone the body stream properly
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
+	// Create new response with CORS headers and cloned body
+	return new Response(clonedResponse.body, {
+		status: clonedResponse.status,
+		statusText: clonedResponse.statusText,
 		headers,
 	});
 }
