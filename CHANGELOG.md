@@ -1,3 +1,11 @@
+# [1.0.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2025-12-16)
+
+
+### Features
+
+* Add CORS logging and improve origin checking ([06bdd66](https://github.com/janovix/auth-svc/commit/06bdd662708fcf48d49872ee47d35759bf50135a))
+* Handle OPTIONS preflight requests before CORS middleware ([58bd8f6](https://github.com/janovix/auth-svc/commit/58bd8f630c373c9ba4709dcf8544ee7b6c607cfd))
+
 # [1.0.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2025-12-15)
 
 
