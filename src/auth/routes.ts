@@ -3,30 +3,13 @@ import type { Context } from "hono";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import { originMatchesAnyPattern } from "../http/origins";
-import {
-	createCorsMiddleware,
-	getTrustedOriginPatterns,
-} from "../middleware/cors";
+import { getTrustedOriginPatterns } from "../middleware/cors";
 import type { Bindings } from "../types/bindings";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	const router = new Hono<{ Bindings: Bindings }>();
-
-	// Handle OPTIONS preflight requests with a custom middleware that runs first
-	// This ensures we always add CORS headers for trusted origins
-	router.use("*", async (c, next) => {
-		if (c.req.method === "OPTIONS") {
-			return handleOptionsPreflight(c);
-		}
-		return next();
-	});
-
-	// Apply CORS middleware to Better Auth routes for non-OPTIONS requests
-	// This is necessary because Better Auth's handler returns raw Response objects
-	// that bypass Hono's global middleware. The middleware handles CORS for actual requests.
-	router.use("*", createCorsMiddleware());
 
 	router.all("*", async (c) => {
 		const { auth, accessPolicy } = getBetterAuthContext(c.env);
@@ -85,13 +68,13 @@ async function handleBetterAuthRequest(
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
-			return await addCorsHeadersToResponse(c, response);
+			return addCorsHeadersIfNeeded(c, response);
 		}
 
 		await clearJwksAndResetAuth(c);
 		const { auth: refreshed } = getBetterAuthContext(c.env);
 		const retryResponse = await refreshed.handler(c.req.raw);
-		return await addCorsHeadersToResponse(c, retryResponse);
+		return addCorsHeadersIfNeeded(c, retryResponse);
 	} catch (error) {
 		if (!isJwksDecryptError(error)) {
 			throw error;
@@ -100,78 +83,34 @@ async function handleBetterAuthRequest(
 		await clearJwksAndResetAuth(c, error);
 		const { auth: refreshed } = getBetterAuthContext(c.env);
 		const retryResponse = await refreshed.handler(c.req.raw);
-		return await addCorsHeadersToResponse(c, retryResponse);
+		return addCorsHeadersIfNeeded(c, retryResponse);
 	}
 }
 
-function handleOptionsPreflight(c: Context<{ Bindings: Bindings }>) {
-	const requestOrigin = c.req.header("origin");
-	if (!requestOrigin) {
-		console.log("[CORS] OPTIONS preflight: No origin header");
-		return new Response(null, { status: 204 });
-	}
-
-	const patterns = getTrustedOriginPatterns(c.env);
-	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
-	console.log("[CORS] OPTIONS preflight:", {
-		requestOrigin,
-		patterns,
-		isTrusted,
-	});
-	if (!isTrusted) {
-		console.log(
-			"[CORS] OPTIONS preflight: Origin not trusted, returning 204 without CORS headers",
-		);
-		return new Response(null, { status: 204 });
-	}
-
-	// Return OPTIONS response with CORS headers
-	console.log(
-		"[CORS] OPTIONS preflight: Origin trusted, returning 204 with CORS headers",
-	);
-	return new Response(null, {
-		status: 204,
-		headers: {
-			"Access-Control-Allow-Origin": requestOrigin,
-			"Access-Control-Allow-Credentials": "true",
-			"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-			"Access-Control-Allow-Headers":
-				"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
-			"Access-Control-Max-Age": "86400", // 24 hours
-		},
-	});
-}
-
-async function addCorsHeadersToResponse(
+function addCorsHeadersIfNeeded(
 	c: Context<{ Bindings: Bindings }>,
 	response: Response,
-): Promise<Response> {
+): Response {
 	const requestOrigin = c.req.header("origin");
-	const requestUrl = new URL(c.req.url);
-	const isSameOrigin =
-		!requestOrigin ||
-		requestOrigin === `${requestUrl.protocol}//${requestUrl.host}`;
 
-	// For same-origin requests, return response as-is (cookies work without CORS headers)
-	if (isSameOrigin) {
-		return response;
-	}
-
-	// For cross-origin requests, check if origin is trusted
+	// No origin header means same-origin request - return response as-is
+	// Better Auth handles cookies correctly for same-origin requests
 	if (!requestOrigin) {
 		return response;
 	}
 
+	// Check if origin is trusted for cross-origin requests
 	const patterns = getTrustedOriginPatterns(c.env);
 	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+
+	// If not trusted, return response as-is (Better Auth will handle it)
 	if (!isTrusted) {
 		return response;
 	}
 
-	// Clone headers and add CORS headers for trusted cross-origin requests
-	// Important: Clone the response first to avoid consuming the body stream
-	const clonedResponse = response.clone();
-	const headers = new Headers(clonedResponse.headers);
+	// For trusted cross-origin requests, add CORS headers
+	// Clone response to preserve all headers including Set-Cookie
+	const headers = new Headers(response.headers);
 	headers.set("Access-Control-Allow-Origin", requestOrigin);
 	headers.set("Access-Control-Allow-Credentials", "true");
 	headers.set(
@@ -183,10 +122,9 @@ async function addCorsHeadersToResponse(
 		"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
 	);
 
-	// Create new response with CORS headers and cloned body
-	return new Response(clonedResponse.body, {
-		status: clonedResponse.status,
-		statusText: clonedResponse.statusText,
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
 		headers,
 	});
 }
