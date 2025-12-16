@@ -1,3 +1,10 @@
+# [1.0.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2025-12-16)
+
+
+### Features
+
+* Prioritize AUTH_TRUSTED_ORIGINS over environment defaults ([dc7f14d](https://github.com/janovix/auth-svc/commit/dc7f14d3dcd04a28eabbd61c3d7bb0281bb71a42))
+
 # [1.0.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2025-12-16)
 
 
