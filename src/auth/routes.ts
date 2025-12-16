@@ -30,9 +30,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			originMatchesAnyPattern(requestOrigin, getTrustedOriginPatterns(c.env));
 
 		// Handle OPTIONS preflight requests explicitly
-		// Better Auth might handle these, but we ensure CORS headers are present
+		// The CORS middleware should handle this, but we ensure it works correctly
+		// by returning early with proper CORS headers without calling Better Auth
 		if (c.req.method === "OPTIONS") {
-			return handleBetterAuthRequest(c, auth);
+			return handleOptionsPreflight(c);
 		}
 
 		if (accessPolicy.enforceInternal) {
@@ -99,6 +100,32 @@ async function handleBetterAuthRequest(
 		const retryResponse = await refreshed.handler(c.req.raw);
 		return await addCorsHeadersToResponse(c, retryResponse);
 	}
+}
+
+function handleOptionsPreflight(c: Context<{ Bindings: Bindings }>) {
+	const requestOrigin = c.req.header("origin");
+	if (!requestOrigin) {
+		return new Response(null, { status: 204 });
+	}
+
+	const patterns = getTrustedOriginPatterns(c.env);
+	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+	if (!isTrusted) {
+		return new Response(null, { status: 204 });
+	}
+
+	// Return OPTIONS response with CORS headers
+	return new Response(null, {
+		status: 204,
+		headers: {
+			"Access-Control-Allow-Origin": requestOrigin,
+			"Access-Control-Allow-Credentials": "true",
+			"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+			"Access-Control-Allow-Headers":
+				"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
+			"Access-Control-Max-Age": "86400", // 24 hours
+		},
+	});
 }
 
 async function addCorsHeadersToResponse(
