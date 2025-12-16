@@ -14,9 +14,18 @@ export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	const router = new Hono<{ Bindings: Bindings }>();
 
-	// Apply CORS middleware to Better Auth routes
+	// Handle OPTIONS preflight requests with a custom middleware that runs first
+	// This ensures we always add CORS headers for trusted origins
+	router.use("*", async (c, next) => {
+		if (c.req.method === "OPTIONS") {
+			return handleOptionsPreflight(c);
+		}
+		return next();
+	});
+
+	// Apply CORS middleware to Better Auth routes for non-OPTIONS requests
 	// This is necessary because Better Auth's handler returns raw Response objects
-	// that bypass Hono's global middleware. The middleware handles OPTIONS preflight requests.
+	// that bypass Hono's global middleware. The middleware handles CORS for actual requests.
 	router.use("*", createCorsMiddleware());
 
 	router.all("*", async (c) => {
@@ -28,13 +37,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		const isTrustedBrowserOrigin =
 			!!requestOrigin &&
 			originMatchesAnyPattern(requestOrigin, getTrustedOriginPatterns(c.env));
-
-		// Handle OPTIONS preflight requests explicitly
-		// The CORS middleware should handle this, but we ensure it works correctly
-		// by returning early with proper CORS headers without calling Better Auth
-		if (c.req.method === "OPTIONS") {
-			return handleOptionsPreflight(c);
-		}
 
 		if (accessPolicy.enforceInternal) {
 			// JWKS must be publicly reachable so downstream services can verify JWTs.
@@ -105,16 +107,28 @@ async function handleBetterAuthRequest(
 function handleOptionsPreflight(c: Context<{ Bindings: Bindings }>) {
 	const requestOrigin = c.req.header("origin");
 	if (!requestOrigin) {
+		console.log("[CORS] OPTIONS preflight: No origin header");
 		return new Response(null, { status: 204 });
 	}
 
 	const patterns = getTrustedOriginPatterns(c.env);
 	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+	console.log("[CORS] OPTIONS preflight:", {
+		requestOrigin,
+		patterns,
+		isTrusted,
+	});
 	if (!isTrusted) {
+		console.log(
+			"[CORS] OPTIONS preflight: Origin not trusted, returning 204 without CORS headers",
+		);
 		return new Response(null, { status: 204 });
 	}
 
 	// Return OPTIONS response with CORS headers
+	console.log(
+		"[CORS] OPTIONS preflight: Origin trusted, returning 204 with CORS headers",
+	);
 	return new Response(null, {
 		status: 204,
 		headers: {
