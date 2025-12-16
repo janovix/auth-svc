@@ -86,14 +86,18 @@ describe("buildResolvedAuthConfig", () => {
 			enabled: true,
 			domain: ".login.client.com",
 		});
+		// When AUTH_TRUSTED_ORIGINS is explicitly set, it replaces ENVIRONMENT-based defaults
+		// but domain-based patterns from cookieDomain are still added
 		expect(config.options.trustedOrigins).toEqual(
 			expect.arrayContaining([
-				"https://*.janovix.ai",
 				"https://portal.client.com",
 				"https://*.client-staging.com",
+				"https://login.client.com",
 				"https://*.login.client.com",
 			]),
 		);
+		// ENVIRONMENT-based default should NOT be included when AUTH_TRUSTED_ORIGINS is set
+		expect(config.options.trustedOrigins).not.toContain("https://*.janovix.ai");
 	});
 
 	it("keeps localhost origins for local env without cross-subdomain cookies", () => {
