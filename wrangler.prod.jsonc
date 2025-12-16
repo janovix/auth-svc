@@ -19,4 +19,7 @@
 			"id": "bdce8bcdb45b485fb0518fec19ab664b",
 		},
 	],
+	"vars": {
+		"BETTER_AUTH_URL": "https://auth-svc.janovix.ai",
+	},
 }
