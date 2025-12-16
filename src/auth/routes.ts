@@ -111,7 +111,7 @@ async function handleAuthRequest(
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
-			return response;
+			return addCorsHeadersIfNeeded(c, response);
 		}
 
 		// Retry after clearing JWKS on decrypt error
@@ -136,7 +136,7 @@ async function handleAuthRequest(
 				},
 			);
 		});
-		return retryPromise;
+		return addCorsHeadersIfNeeded(c, await retryPromise);
 	} catch (error) {
 		// Catch any errors from response processing
 		if (!isJwksDecryptError(error)) {
@@ -178,8 +178,41 @@ async function handleAuthRequest(
 				},
 			);
 		});
-		return retryPromise;
+		return addCorsHeadersIfNeeded(c, await retryPromise);
 	}
+}
+
+async function addCorsHeadersIfNeeded(
+	c: Context<{ Bindings: Bindings }>,
+	response: Response,
+): Promise<Response> {
+	const requestOrigin = c.req.header("origin");
+	if (!requestOrigin) {
+		// No origin header means same-origin request - no CORS headers needed
+		return response;
+	}
+
+	// Check if origin is trusted (Better Auth's trustedOrigins config)
+	const { originMatchesAnyPattern } = await import("../http/origins");
+	const { getTrustedOriginPatterns } = await import("../middleware/cors");
+	const patterns = getTrustedOriginPatterns(c.env);
+	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+
+	if (!isTrusted) {
+		// Untrusted origin - don't add CORS headers
+		return response;
+	}
+
+	// Clone response and add CORS headers for trusted origins
+	const headers = new Headers(response.headers);
+	headers.set("Access-Control-Allow-Origin", requestOrigin);
+	headers.set("Access-Control-Allow-Credentials", "true");
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 function isJwksDecryptError(error: unknown) {
