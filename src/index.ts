@@ -1,3 +1,6 @@
+// Polyfill for node:async_hooks (required for better-auth in Cloudflare Workers)
+import "./polyfills/async_hooks";
+
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
 import { ContentfulStatusCode } from "hono/utils/http-status";
