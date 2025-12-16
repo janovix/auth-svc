@@ -107,16 +107,28 @@ async function handleBetterAuthRequest(
 function handleOptionsPreflight(c: Context<{ Bindings: Bindings }>) {
 	const requestOrigin = c.req.header("origin");
 	if (!requestOrigin) {
+		console.log("[CORS] OPTIONS preflight: No origin header");
 		return new Response(null, { status: 204 });
 	}
 
 	const patterns = getTrustedOriginPatterns(c.env);
 	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
+	console.log("[CORS] OPTIONS preflight:", {
+		requestOrigin,
+		patterns,
+		isTrusted,
+	});
 	if (!isTrusted) {
+		console.log(
+			"[CORS] OPTIONS preflight: Origin not trusted, returning 204 without CORS headers",
+		);
 		return new Response(null, { status: 204 });
 	}
 
 	// Return OPTIONS response with CORS headers
+	console.log(
+		"[CORS] OPTIONS preflight: Origin trusted, returning 204 with CORS headers",
+	);
 	return new Response(null, {
 		status: 204,
 		headers: {
