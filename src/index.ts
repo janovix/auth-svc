@@ -26,8 +26,15 @@ const appMeta: AppMeta = {
 	description: pkg.description,
 };
 
-// Global middleware
-app.use("*", createCorsMiddleware());
+// Global middleware - Better Auth handles its own CORS via trustedOrigins config
+// Only apply CORS middleware to non-Better Auth routes
+const corsMiddleware = createCorsMiddleware();
+app.use("*", async (c, next) => {
+	if (c.req.path.startsWith("/api/auth")) {
+		return next();
+	}
+	return corsMiddleware(c, next);
+});
 
 app.onError((err, c) => {
 	if (err instanceof ApiException) {
