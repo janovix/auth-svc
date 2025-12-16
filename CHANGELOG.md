@@ -1,3 +1,10 @@
+# [1.0.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.7...v1.0.0-rc.8) (2025-12-16)
+
+
+### Features
+
+* add default cookie attributes to enhance cookie accessibility across paths ([24188c5](https://github.com/janovix/auth-svc/commit/24188c5177fe6643191fd5666750880e1d0e0239))
+
 # [1.0.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.6...v1.0.0-rc.7) (2025-12-16)
 
 
