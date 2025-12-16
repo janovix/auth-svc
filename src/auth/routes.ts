@@ -14,9 +14,18 @@ export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	const router = new Hono<{ Bindings: Bindings }>();
 
-	// Apply CORS middleware to Better Auth routes
+	// Handle OPTIONS preflight requests with a custom middleware that runs first
+	// This ensures we always add CORS headers for trusted origins
+	router.use("*", async (c, next) => {
+		if (c.req.method === "OPTIONS") {
+			return handleOptionsPreflight(c);
+		}
+		return next();
+	});
+
+	// Apply CORS middleware to Better Auth routes for non-OPTIONS requests
 	// This is necessary because Better Auth's handler returns raw Response objects
-	// that bypass Hono's global middleware. The middleware handles OPTIONS preflight requests.
+	// that bypass Hono's global middleware. The middleware handles CORS for actual requests.
 	router.use("*", createCorsMiddleware());
 
 	router.all("*", async (c) => {
@@ -28,13 +37,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		const isTrustedBrowserOrigin =
 			!!requestOrigin &&
 			originMatchesAnyPattern(requestOrigin, getTrustedOriginPatterns(c.env));
-
-		// Handle OPTIONS preflight requests explicitly
-		// The CORS middleware should handle this, but we ensure it works correctly
-		// by returning early with proper CORS headers without calling Better Auth
-		if (c.req.method === "OPTIONS") {
-			return handleOptionsPreflight(c);
-		}
 
 		if (accessPolicy.enforceInternal) {
 			// JWKS must be publicly reachable so downstream services can verify JWTs.
