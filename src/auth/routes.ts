@@ -9,8 +9,40 @@ export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	// Better Auth handles CORS and cookies internally based on its configuration
 	// Just mount the handler as per Better Auth documentation: https://www.better-auth.com/docs/integrations/hono
-	// Include OPTIONS to handle preflight requests
-	app.on(["POST", "GET", "OPTIONS"], "/api/auth/*", async (c) => {
+
+	// Handle OPTIONS preflight requests explicitly - Better Auth may not handle them
+	app.options("/api/auth/*", async (c) => {
+		const requestOrigin = c.req.header("origin");
+
+		// Check if origin is trusted (Better Auth's trustedOrigins config)
+		const { originMatchesAnyPattern } = await import("../http/origins");
+		const { getTrustedOriginPatterns } = await import("../middleware/cors");
+		const patterns = getTrustedOriginPatterns(c.env);
+		const isTrusted =
+			requestOrigin && originMatchesAnyPattern(requestOrigin, patterns);
+
+		// Return CORS headers for trusted origins
+		if (isTrusted) {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					"Access-Control-Allow-Origin": requestOrigin,
+					"Access-Control-Allow-Credentials": "true",
+					"Access-Control-Allow-Methods":
+						"GET, POST, PUT, DELETE, PATCH, OPTIONS",
+					"Access-Control-Allow-Headers":
+						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
+					"Access-Control-Max-Age": "86400",
+				},
+			});
+		}
+
+		// For untrusted origins or no origin, return 204 without CORS headers
+		return new Response(null, { status: 204 });
+	});
+
+	// Handle actual requests (GET, POST, etc.)
+	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
 		const { auth, accessPolicy } = getBetterAuthContext(c.env);
 
 		// Defensive cleanup: Better Auth stores *encrypted* private keys in `jwks.privateKey`.
@@ -22,16 +54,9 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		if (accessPolicy.enforceInternal) {
 			const pathname = c.req.path;
 			const isPublicJwks = pathname === "/api/auth/jwks";
-			const isOptions = c.req.method === "OPTIONS";
 
 			// JWKS must be publicly reachable
 			if (isPublicJwks) {
-				return handleAuthRequest(c, auth);
-			}
-
-			// OPTIONS preflight requests should be allowed through
-			// Better Auth will handle CORS validation
-			if (isOptions) {
 				return handleAuthRequest(c, auth);
 			}
 
