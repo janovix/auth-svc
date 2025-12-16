@@ -147,6 +147,17 @@ async function addCorsHeadersToResponse(
 	response: Response,
 ): Promise<Response> {
 	const requestOrigin = c.req.header("origin");
+	const requestUrl = new URL(c.req.url);
+	const isSameOrigin =
+		!requestOrigin ||
+		requestOrigin === `${requestUrl.protocol}//${requestUrl.host}`;
+
+	// For same-origin requests, return response as-is (cookies work without CORS headers)
+	if (isSameOrigin) {
+		return response;
+	}
+
+	// For cross-origin requests, check if origin is trusted
 	if (!requestOrigin) {
 		return response;
 	}
@@ -157,7 +168,7 @@ async function addCorsHeadersToResponse(
 		return response;
 	}
 
-	// Clone headers and add CORS headers
+	// Clone headers and add CORS headers for trusted cross-origin requests
 	const headers = new Headers(response.headers);
 	headers.set("Access-Control-Allow-Origin", requestOrigin);
 	headers.set("Access-Control-Allow-Credentials", "true");
