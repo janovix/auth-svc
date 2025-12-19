@@ -179,7 +179,7 @@ describe("Mandrill Email Integration", () => {
 				"janovix-auth-password-recovery-template",
 			);
 			expect(callBody.message.to).toEqual([{ email: toEmail, type: "to" }]);
-			expect(callBody.message.from_email).toBe("noreply@janovix.ai");
+			expect(callBody.message.from_email).toBe("noreply@janovix.algenium.dev");
 			expect(callBody.message.from_name).toBe("Janovix");
 			expect(callBody.message.subject).toBe(
 				"Restablecer tu contraseña - Janovix",

@@ -104,7 +104,7 @@ export async function sendPasswordResetEmail(
 	// On serverless platforms, use waitUntil if available
 	void sendMandrillTemplate(apiKey, {
 		to: [{ email: toEmail, type: "to" }],
-		from_email: "noreply@janovix.ai",
+		from_email: "noreply@janovix.algenium.dev",
 		from_name: "Janovix",
 		subject: "Restablecer tu contraseña - Janovix",
 		template_name: templateName,
