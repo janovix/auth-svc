@@ -1,0 +1,95 @@
+// Prisma schema for D1 database
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Better Auth User model
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  phone         String?
+  name          String?
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+
+  @@map("users")
+}
+
+// Better Auth Session model
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+  @@index([userId])
+}
+
+// Better Auth Account model
+model Account {
+  id                     String   @id @default(uuid())
+  accountId              String
+  providerId             String
+  userId                 String
+  accessToken            String?
+  refreshToken           String?
+  idToken                String?
+  accessTokenExpiresAt   DateTime?
+  refreshTokenExpiresAt  DateTime?
+  scope                  String?
+  password               String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("accounts")
+  @@index([userId])
+}
+
+// Better Auth Verification model
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+  @@index([identifier])
+}
+
+// Used by the Better Auth JWT plugin to persist key pairs for JWKS.
+model Jwks {
+  id        String   @id @default(uuid())
+  publicKey String
+  privateKey String
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  alg       String?
+  crv       String?
+
+  @@map("jwks")
+  @@index([createdAt])
+  @@index([expiresAt])
+}

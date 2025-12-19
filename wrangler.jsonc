@@ -1,5 +1,6 @@
 {
 	"compatibility_date": "2025-10-08",
+	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
 	"name": "auth-svc",
 	"upload_source_maps": true,
@@ -16,8 +17,13 @@
 	],
 	"kv_namespaces": [
 		{
-			"binding": "TASKS_KV",
+			"binding": "KV",
 			"id": "bc9ed2441eaa4660a619e64e603cdccc",
 		},
 	],
+	"vars": {
+		"ENVIRONMENT": "dev",
+		"BETTER_AUTH_URL": "https://auth-svc.janovix.workers.dev",
+		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
+	},
 }

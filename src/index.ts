@@ -1,19 +1,40 @@
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
-import { tasksRouter } from "./endpoints/tasks/router";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { DummyEndpoint } from "./endpoints/dummyEndpoint";
 import pkg from "../package.json";
 import { getOpenApiInfo, getScalarHtml, type AppMeta } from "./app-meta";
+import { registerBetterAuthRoutes } from "./auth/routes";
+import { createCorsMiddleware } from "./middleware/cors";
+import type { Bindings } from "./types/bindings";
+import {
+	AuthSignUpEndpoint,
+	AuthSignInEndpoint,
+	AuthSignOutEndpoint,
+	AuthSessionEndpoint,
+	AuthJwksEndpoint,
+	AuthForgotPasswordEndpoint,
+	AuthResetPasswordEndpoint,
+} from "./endpoints/auth/openapi";
 
 // Start a Hono app
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Bindings }>();
 
 const appMeta: AppMeta = {
 	name: pkg.name,
 	version: pkg.version,
 	description: pkg.description,
 };
+
+// Global middleware - Better Auth handles its own CORS via trustedOrigins config
+// Only apply CORS middleware to non-Better Auth routes
+const corsMiddleware = createCorsMiddleware();
+app.use("*", async (c, next) => {
+	if (c.req.path.startsWith("/api/auth")) {
+		return next();
+	}
+	return corsMiddleware(c, next);
+});
 
 app.onError((err, c) => {
 	if (err instanceof ApiException) {
@@ -61,8 +82,19 @@ app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
 
-// Register Tasks Sub router
-openapi.route("/tasks", tasksRouter);
+// Register Better Auth routes (actual implementation - handles requests)
+// Must be registered BEFORE OpenAPI documentation routes so they handle requests first
+registerBetterAuthRoutes(app);
+
+// Register Better Auth OpenAPI documentation (for API docs generation only)
+// These routes are registered after Better Auth routes, so they won't intercept requests
+openapi.post("/api/auth/sign-up", AuthSignUpEndpoint);
+openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
+openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
+openapi.get("/api/auth/session", AuthSessionEndpoint);
+openapi.get("/api/auth/jwks", AuthJwksEndpoint);
+openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
+openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
