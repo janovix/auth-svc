@@ -1,3 +1,10 @@
+# [1.0.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2025-12-19)
+
+
+### Features
+
+* Set pnpm as package manager ([7f2820f](https://github.com/janovix/auth-svc/commit/7f2820f0cd0183dde2fb1bb2d961bb0130136cbf))
+
 # [1.0.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.7...v1.0.0-rc.8) (2025-12-16)
 
 
