@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
+import { sendPasswordResetEmail } from "../utils/mandrill";
 
 const BASE_PATH = "/api/auth";
 const ORG_SLUG = "janovix";
@@ -90,6 +91,29 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 		secret,
 		emailAndPassword: {
 			enabled: true,
+			sendResetPassword: async ({ user, url }, _request) => {
+				const apiKey = env.MANDRILL_API_KEY;
+				if (!apiKey) {
+					console.error("MANDRILL_API_KEY is not configured");
+					// Don't throw - Better Auth will handle the error gracefully
+					return;
+				}
+
+				// Use void to avoid awaiting - prevents timing attacks
+				// Better Auth documentation recommends not awaiting email sending
+				void sendPasswordResetEmail(
+					apiKey,
+					user.email,
+					user.name || user.email,
+					url,
+					"janovix-auth-password-recovery-template",
+				);
+			},
+			onPasswordReset: async ({ user }, _request) => {
+				// Optional callback after password reset is successful
+				// Log for audit purposes or trigger additional actions
+				console.log(`Password reset completed for user: ${user.email}`);
+			},
 		},
 		plugins: [
 			jwt({

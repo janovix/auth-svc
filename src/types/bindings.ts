@@ -39,4 +39,9 @@ export type Bindings = Env & {
 	 * `https://*.client.com`.
 	 */
 	AUTH_TRUSTED_ORIGINS?: string;
+	/**
+	 * Mandrill API key for sending transactional emails.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	MANDRILL_API_KEY?: string;
 };
