@@ -1,3 +1,26 @@
+# 1.0.0 (2025-12-19)
+
+
+### Bug Fixes
+
+* enhance CORS handling by checking for same-origin requests before adding CORS headers ([4ac5da1](https://github.com/janovix/auth-svc/commit/4ac5da149cc443058eb1e5ce469d896f2fb6f5a2))
+* ensure proper CORS header handling by cloning response before adding headers ([5f936e0](https://github.com/janovix/auth-svc/commit/5f936e01352270c06a0980120d9c3d37b9a3de2b))
+* removed package manager fron package.json ([c55ee2d](https://github.com/janovix/auth-svc/commit/c55ee2d4cf6aec4442b7604f826c49b977bd6dad))
+
+
+### Features
+
+* Add BETTER_AUTH_URL to integration tests ([f01f14b](https://github.com/janovix/auth-svc/commit/f01f14bc6bb4b9ddbda84d25d5f80cf6acba6510))
+* Add CORS handling for Better Auth routes ([a1bdd3e](https://github.com/janovix/auth-svc/commit/a1bdd3e0b416ed7c37ffcd7431ed7aa42d731cab))
+* Add CORS logging and improve origin checking ([06bdd66](https://github.com/janovix/auth-svc/commit/06bdd662708fcf48d49872ee47d35759bf50135a))
+* add default cookie attributes to enhance cookie accessibility across paths ([24188c5](https://github.com/janovix/auth-svc/commit/24188c5177fe6643191fd5666750880e1d0e0239))
+* Enable nodejs_compat for better-auth ([20e45fa](https://github.com/janovix/auth-svc/commit/20e45fa493744e3f90a7d6f3f4be4cc5229c5c82))
+* Handle OPTIONS preflight requests before CORS middleware ([58bd8f6](https://github.com/janovix/auth-svc/commit/58bd8f630c373c9ba4709dcf8544ee7b6c607cfd))
+* Integrate Better Auth and Prisma ([49145a6](https://github.com/janovix/auth-svc/commit/49145a6158153144bccea6b0680aa89f1bc16e1f))
+* Prioritize AUTH_TRUSTED_ORIGINS over environment defaults ([dc7f14d](https://github.com/janovix/auth-svc/commit/dc7f14d3dcd04a28eabbd61c3d7bb0281bb71a42))
+* Set pnpm as package manager ([7f2820f](https://github.com/janovix/auth-svc/commit/7f2820f0cd0183dde2fb1bb2d961bb0130136cbf))
+* Validate BETTER_AUTH_URL in auth config ([c9a504e](https://github.com/janovix/auth-svc/commit/c9a504e816dcc14fa92ca225b1397bf8fcfcaed6))
+
 # [1.0.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2025-12-19)
 
 
