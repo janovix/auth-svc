@@ -54,6 +54,16 @@ export async function sendMandrillTemplate(
 		},
 	};
 
+	console.log("[Mandrill] Sending email via Mandrill API", {
+		templateName: message.template_name,
+		to: message.to.map((t) => t.email),
+		fromEmail: message.from_email,
+		fromName: message.from_name,
+		subject: message.subject,
+		globalMergeVars: message.global_merge_vars?.map((v) => v.name),
+		timestamp: new Date().toISOString(),
+	});
+
 	const response = await fetch(url, {
 		method: "POST",
 		headers: {
@@ -62,12 +72,33 @@ export async function sendMandrillTemplate(
 		body: JSON.stringify(payload),
 	});
 
+	console.log("[Mandrill] API response received", {
+		status: response.status,
+		statusText: response.statusText,
+		ok: response.ok,
+	});
+
 	if (!response.ok) {
 		const errorText = await response.text();
+		console.error("[Mandrill] API error response", {
+			status: response.status,
+			errorText,
+			url,
+		});
 		throw new Error(`Mandrill API error (${response.status}): ${errorText}`);
 	}
 
 	const result = (await response.json()) as MandrillSendResponse[];
+
+	console.log("[Mandrill] API response parsed", {
+		resultCount: result.length,
+		results: result.map((r) => ({
+			email: r.email,
+			status: r.status,
+			_id: r._id,
+			reject_reason: r.reject_reason,
+		})),
+	});
 
 	// Check for rejected or invalid emails
 	const rejected = result.filter(
@@ -77,8 +108,23 @@ export async function sendMandrillTemplate(
 		const reasons = rejected
 			.map((r) => `${r.email}: ${r.reject_reason || r.status}`)
 			.join(", ");
+		console.error("[Mandrill] Email rejected or invalid", {
+			rejectedEmails: rejected.map((r) => ({
+				email: r.email,
+				status: r.status,
+				reject_reason: r.reject_reason,
+			})),
+		});
 		throw new Error(`Mandrill send failed: ${reasons}`);
 	}
+
+	console.log("[Mandrill] Email sent successfully", {
+		emails: result.map((r) => ({
+			email: r.email,
+			status: r.status,
+			_id: r._id,
+		})),
+	});
 
 	return result;
 }
@@ -100,6 +146,15 @@ export async function sendPasswordResetEmail(
 	resetUrl: string,
 	templateName = "janovix-auth-password-recovery-template",
 ): Promise<void> {
+	console.log("[Password Reset Email] Preparing to send", {
+		toEmail,
+		userName,
+		templateName,
+		resetUrlLength: resetUrl.length,
+		resetUrlPrefix: resetUrl.substring(0, 50) + "...",
+		timestamp: new Date().toISOString(),
+	});
+
 	// Don't await - fire and forget to prevent timing attacks
 	// On serverless platforms, use waitUntil if available
 	void sendMandrillTemplate(apiKey, {
@@ -112,8 +167,25 @@ export async function sendPasswordResetEmail(
 			{ name: "env", content: userName },
 			{ name: "recover_url", content: resetUrl },
 		],
-	}).catch((error) => {
-		// Log error but don't throw - we don't want to expose email sending failures
-		console.error("Failed to send password reset email:", error);
-	});
+	})
+		.then((result) => {
+			console.log("[Password Reset Email] Successfully sent", {
+				toEmail,
+				resultCount: result.length,
+				results: result.map((r) => ({
+					email: r.email,
+					status: r.status,
+					_id: r._id,
+				})),
+			});
+		})
+		.catch((error) => {
+			// Log error but don't throw - we don't want to expose email sending failures
+			console.error("[Password Reset Email] Failed to send", {
+				toEmail,
+				error: error instanceof Error ? error.message : String(error),
+				errorStack: error instanceof Error ? error.stack : undefined,
+				timestamp: new Date().toISOString(),
+			});
+		});
 }

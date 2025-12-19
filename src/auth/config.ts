@@ -92,12 +92,24 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 		emailAndPassword: {
 			enabled: true,
 			sendResetPassword: async ({ user, url }, _request) => {
+				console.log("[Password Reset] sendResetPassword callback triggered", {
+					userEmail: user.email,
+					userName: user.name,
+					resetUrl: url,
+					timestamp: new Date().toISOString(),
+				});
+
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
-					console.error("MANDRILL_API_KEY is not configured");
+					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
 					// Don't throw - Better Auth will handle the error gracefully
 					return;
 				}
+
+				console.log("[Password Reset] MANDRILL_API_KEY found, sending email", {
+					userEmail: user.email,
+					apiKeyPrefix: apiKey.substring(0, 8) + "...",
+				});
 
 				// Use void to avoid awaiting - prevents timing attacks
 				// Better Auth documentation recommends not awaiting email sending
