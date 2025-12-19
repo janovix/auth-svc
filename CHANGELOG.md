@@ -1,3 +1,10 @@
+# [1.0.0-rc.12](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.11...v1.0.0-rc.12) (2025-12-19)
+
+
+### Features
+
+* add comprehensive debug logging for password reset emails ([95d6879](https://github.com/janovix/auth-svc/commit/95d68796795f9cbce5d350920cd09343029fda9a))
+
 # [1.0.0-rc.11](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.10...v1.0.0-rc.11) (2025-12-19)
 
 
