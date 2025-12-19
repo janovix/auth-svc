@@ -1,3 +1,10 @@
+# [1.0.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.9...v1.0.0-rc.10) (2025-12-19)
+
+
+### Features
+
+* implement password reset with Mandrill email integration ([c9fe6a3](https://github.com/janovix/auth-svc/commit/c9fe6a3af26209d4aec877f9353c4fef5ab29a18))
+
 # [1.0.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2025-12-19)
 
 
