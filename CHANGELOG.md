@@ -1,3 +1,10 @@
+# [1.0.0-rc.14](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.13...v1.0.0-rc.14) (2025-12-20)
+
+
+### Features
+
+* add comprehensive logging and waitUntil support for password reset ([46cef05](https://github.com/janovix/auth-svc/commit/46cef052b27759ffbe68c6554d72d32872d85de3))
+
 # [1.0.0-rc.13](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.12...v1.0.0-rc.13) (2025-12-20)
 
 
