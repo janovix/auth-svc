@@ -1,3 +1,10 @@
+# [1.0.0-rc.18](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.17...v1.0.0-rc.18) (2025-12-20)
+
+
+### Features
+
+* add inline images to password reset email template ([d4c1ee2](https://github.com/janovix/auth-svc/commit/d4c1ee28fe97cf48f359ace480f02daf49842ec8))
+
 # [1.0.0-rc.17](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.16...v1.0.0-rc.17) (2025-12-20)
 
 
