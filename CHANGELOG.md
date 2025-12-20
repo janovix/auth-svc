@@ -1,3 +1,10 @@
+# [1.0.0-rc.13](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.12...v1.0.0-rc.13) (2025-12-20)
+
+
+### Bug Fixes
+
+* update Mandrill API endpoint to include .json extension ([23344d1](https://github.com/janovix/auth-svc/commit/23344d1e6f039b5254ecea2ff1fcb9673812ec73))
+
 # [1.0.0-rc.12](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.11...v1.0.0-rc.12) (2025-12-19)
 
 
