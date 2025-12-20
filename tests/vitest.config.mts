@@ -23,6 +23,7 @@ export default defineWorkersConfig({
 				"**/tests/**",
 				"**/dist/**",
 				"**/coverage/**",
+				"**/endpoints/**/openapi.ts", // OpenAPI schema definitions don't need coverage
 			],
 			thresholds: {
 				lines: 80,
