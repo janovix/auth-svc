@@ -77,10 +77,16 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Handle internal access policy if enabled
 		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
 		if (accessPolicy.enforceInternal) {
-			const isPublicJwks = pathname === "/api/auth/jwks";
+			// Public routes that can be accessed without origin header or internal token:
+			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
+			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
+			// - /api/auth/reset-password: Users click password reset links in emails (direct browser navigation)
+			const isPublicRoute =
+				pathname === "/api/auth/jwks" ||
+				pathname === "/api/auth/verify-email" ||
+				pathname === "/api/auth/reset-password";
 
-			// JWKS must be publicly reachable
-			if (isPublicJwks) {
+			if (isPublicRoute) {
 				return handleAuthRequest(c, auth);
 			}
 
@@ -162,6 +168,22 @@ async function handleAuthRequest(
 ) {
 	// Wrap Better Auth handler to ensure all errors are caught and converted to responses
 	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
+		// Better Auth uses APIError with statusCode for redirects (302)
+		// Convert these "errors" to proper redirect responses
+		if (isBetterAuthRedirectError(error)) {
+			const headers = new Headers();
+			const errorHeaders = error.headers;
+			if (errorHeaders && typeof errorHeaders.forEach === "function") {
+				errorHeaders.forEach((value: string, key: string) => {
+					headers.set(key, value);
+				});
+			}
+			return new Response(null, {
+				status: error.statusCode,
+				headers,
+			});
+		}
+
 		// If Better Auth throws an error, convert it to a proper error response
 		// Better Auth should return responses, but if it throws, handle it gracefully
 		const errorMessage = error instanceof Error ? error.message : String(error);
@@ -293,6 +315,25 @@ function addCorsHeadersIfNeeded(
 		statusText: response.statusText,
 		headers,
 	});
+}
+
+/**
+ * Checks if an error is a Better Auth redirect "error" (APIError with statusCode 3xx).
+ * Better Auth throws APIError for redirects instead of returning Response objects.
+ * Exported for unit testing.
+ */
+export function isBetterAuthRedirectError(
+	error: unknown,
+): error is { statusCode: number; headers: Headers } {
+	if (!error || typeof error !== "object") return false;
+	const e = error as { statusCode?: number; headers?: unknown; name?: string };
+	return (
+		e.name === "APIError" &&
+		typeof e.statusCode === "number" &&
+		e.statusCode >= 300 &&
+		e.statusCode < 400 &&
+		e.headers !== undefined
+	);
 }
 
 /**
