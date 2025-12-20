@@ -1,3 +1,10 @@
+# [1.0.0-rc.15](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.14...v1.0.0-rc.15) (2025-12-20)
+
+
+### Features
+
+* add Mandrill response logging and callback trigger logging ([caa2da8](https://github.com/janovix/auth-svc/commit/caa2da8d15bf26372f3578f6465a56a85dfdc674))
+
 # [1.0.0-rc.14](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.13...v1.0.0-rc.14) (2025-12-20)
 
 
