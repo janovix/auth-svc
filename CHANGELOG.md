@@ -1,3 +1,10 @@
+# [1.0.0-rc.22](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.21...v1.0.0-rc.22) (2025-12-20)
+
+
+### Bug Fixes
+
+* exclude openapi.ts from coverage requirements ([c2f09f7](https://github.com/janovix/auth-svc/commit/c2f09f7a6b76f0aa58cbcc9a6dd376976776703e))
+
 # [1.0.0-rc.21](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.20...v1.0.0-rc.21) (2025-12-20)
 
 
