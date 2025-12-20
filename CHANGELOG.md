@@ -1,3 +1,10 @@
+# [1.0.0-rc.21](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.20...v1.0.0-rc.21) (2025-12-20)
+
+
+### Features
+
+* add email verification support ([4551ece](https://github.com/janovix/auth-svc/commit/4551ece29133c038acbe5628c2fe8f05cca347e9))
+
 # [1.0.0-rc.20](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.19...v1.0.0-rc.20) (2025-12-20)
 
 
