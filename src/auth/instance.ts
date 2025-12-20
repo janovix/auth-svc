@@ -23,8 +23,11 @@ export function invalidateBetterAuthCache(env: Bindings) {
 	authCache.delete(resolved.cacheKey);
 }
 
-export function getBetterAuthContext(env: Bindings) {
-	const resolved = buildResolvedAuthConfig(env);
+export function getBetterAuthContext(
+	env: Bindings,
+	executionContext?: ExecutionContext,
+) {
+	const resolved = buildResolvedAuthConfig(env, executionContext);
 	const cached = authCache.get(resolved.cacheKey);
 
 	if (cached) {

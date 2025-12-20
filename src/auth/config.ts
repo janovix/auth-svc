@@ -76,7 +76,10 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 	return ENVIRONMENT_MAP[fallback] ?? "local";
 }
 
-export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
+export function buildResolvedAuthConfig(
+	env: Bindings,
+	executionContext?: ExecutionContext,
+): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
 	const baseURL = resolveBaseURL(env.BETTER_AUTH_URL, resolvedEnv);
@@ -96,12 +99,18 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 					userEmail: user.email,
 					userName: user.name,
 					resetUrl: url,
+					userId: user.id,
 					timestamp: new Date().toISOString(),
 				});
 
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
-					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
+					console.error("[Password Reset] MANDRILL_API_KEY is not configured", {
+						userEmail: user.email,
+						envKeys: Object.keys(env).filter(
+							(k) => k.includes("MANDRILL") || k.includes("EMAIL"),
+						),
+					});
 					// Don't throw - Better Auth will handle the error gracefully
 					return;
 				}
@@ -109,17 +118,46 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 				console.log("[Password Reset] MANDRILL_API_KEY found, sending email", {
 					userEmail: user.email,
 					apiKeyPrefix: apiKey.substring(0, 8) + "...",
+					apiKeyLength: apiKey.length,
 				});
 
-				// Use void to avoid awaiting - prevents timing attacks
-				// Better Auth documentation recommends not awaiting email sending
-				void sendPasswordResetEmail(
+				// Use waitUntil for Cloudflare Workers to ensure async operation completes
+				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
+				// But in Cloudflare Workers, we need waitUntil to ensure the promise completes
+				const emailPromise = sendPasswordResetEmail(
 					apiKey,
 					user.email,
 					user.name || user.email,
 					url,
 					"janovix-auth-password-recovery-template",
-				);
+				).catch((error) => {
+					console.error("[Password Reset] Email sending promise rejected", {
+						userEmail: user.email,
+						error: error instanceof Error ? error.message : String(error),
+						errorStack: error instanceof Error ? error.stack : undefined,
+					});
+				});
+
+				// Use waitUntil if execution context is available (Cloudflare Workers)
+				if (
+					executionContext &&
+					typeof executionContext.waitUntil === "function"
+				) {
+					executionContext.waitUntil(emailPromise);
+					console.log(
+						"[Password Reset] Using waitUntil to ensure email sending completes",
+						{
+							userEmail: user.email,
+						},
+					);
+				} else {
+					// Fallback: void for non-Cloudflare environments
+					void emailPromise;
+					console.log("[Password Reset] Using void (no waitUntil available)", {
+						userEmail: user.email,
+						hasExecutionContext: !!executionContext,
+					});
+				}
 			},
 			onPasswordReset: async ({ user }, _request) => {
 				// Optional callback after password reset is successful
