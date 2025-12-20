@@ -121,7 +121,7 @@ export async function sendMandrillTemplate(
  * @param userName - User's name for personalization
  * @param resetUrl - Password reset URL with token
  * @param templateName - Mandrill template name (default: janovix-auth-password-recovery-template)
- * @returns Promise that resolves when email is sent (void to avoid timing attacks)
+ * @returns Promise that resolves when email is sent (use with waitUntil on serverless)
  */
 export async function sendPasswordResetEmail(
 	apiKey: string,
@@ -130,23 +130,23 @@ export async function sendPasswordResetEmail(
 	resetUrl: string,
 	templateName = "janovix-auth-password-recovery-template",
 ): Promise<void> {
-	// Don't await - fire and forget to prevent timing attacks
-	// On serverless platforms, use waitUntil if available
-	void sendMandrillTemplate(apiKey, {
-		to: [{ email: toEmail, type: "to" }],
-		from_email: "noreply@janovix.algenium.dev",
-		from_name: "Janovix",
-		subject: "Restablecer tu contraseña - Janovix",
-		template_name: templateName,
-		global_merge_vars: [
-			{ name: "env", content: userName },
-			{ name: "recover_url", content: resetUrl },
-		],
-	}).catch((error) => {
+	try {
+		await sendMandrillTemplate(apiKey, {
+			to: [{ email: toEmail, type: "to" }],
+			from_email: "noreply@janovix.algenium.dev",
+			from_name: "Janovix",
+			subject: "Restablecer tu contraseña - Janovix",
+			template_name: templateName,
+			global_merge_vars: [
+				{ name: "env", content: userName },
+				{ name: "recover_url", content: resetUrl },
+			],
+		});
+	} catch (error) {
 		// Log error but don't throw - we don't want to expose email sending failures
 		console.error("[Mandrill] Failed to send password reset email", {
 			toEmail,
 			error: error instanceof Error ? error.message : String(error),
 		});
-	});
+	}
 }
