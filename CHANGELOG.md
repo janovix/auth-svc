@@ -1,3 +1,10 @@
+# [1.0.0-rc.23](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.22...v1.0.0-rc.23) (2025-12-20)
+
+
+### Features
+
+* require email verification before sign-in ([3c861cd](https://github.com/janovix/auth-svc/commit/3c861cda485b510466d4cc9f451414b39d10fc54))
+
 # [1.0.0-rc.22](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.21...v1.0.0-rc.22) (2025-12-20)
 
 
