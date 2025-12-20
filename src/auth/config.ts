@@ -140,7 +140,7 @@ export function buildResolvedAuthConfig(
 			},
 		},
 		emailVerification: {
-			sendVerificationEmail: async ({ user, url }, _request) => {
+			sendVerificationEmail: async ({ user, url, token }, _request) => {
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
 					console.error(
@@ -149,13 +149,34 @@ export function buildResolvedAuthConfig(
 					return;
 				}
 
+				// Construct verify URL that points to Better Auth's endpoint
+				// but redirects to the auth frontend after verification
+				const authServiceBaseUrl =
+					env.BETTER_AUTH_URL || "https://auth-svc.janovix.workers.dev";
+				const frontendBaseUrl =
+					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+
+				// The callback URL is where Better Auth redirects after successful verification
+				// It should point to the auth frontend's verify page with success flag
+				const callbackURL = `${frontendBaseUrl}/verify?success=true`;
+
+				// Construct the full verification URL
+				// - Points to Better Auth's verify-email endpoint (does actual verification)
+				// - callbackURL tells Better Auth where to redirect after verification
+				const verifyUrl = `${authServiceBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent(callbackURL)}`;
+
+				// Log the URL transformation for debugging
+				console.log(
+					`[Email Verification] Original URL: ${url}, New URL: ${verifyUrl}`,
+				);
+
 				// Use waitUntil for Cloudflare Workers to ensure async operation completes
 				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
 				const emailPromise = sendVerificationEmail(
 					apiKey,
 					user.email,
 					user.name || user.email,
-					url,
+					verifyUrl,
 					"janovix-auth-email-verification-template",
 				);
 
