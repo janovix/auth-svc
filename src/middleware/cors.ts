@@ -21,20 +21,13 @@ export function getTrustedOriginPatterns(env: Bindings) {
 	const key = cacheKey(env);
 	const cached = trustedOriginCache.get(key);
 	if (cached) {
-		console.log("[CORS] Using cached trusted origin patterns:", cached);
 		return cached;
 	}
 
 	const resolved = buildResolvedAuthConfig(env);
 	const trustedOrigins = resolved.options.trustedOrigins;
 	const patterns = Array.isArray(trustedOrigins) ? trustedOrigins : [];
-	console.log("[CORS] Setting trusted origin patterns:", patterns);
-	console.log("[CORS] Environment:", {
-		ENVIRONMENT: env.ENVIRONMENT,
-		AUTH_COOKIE_DOMAIN: env.AUTH_COOKIE_DOMAIN,
-		AUTH_TRUSTED_ORIGINS: env.AUTH_TRUSTED_ORIGINS,
-		BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-	});
+
 	trustedOriginCache.set(key, patterns);
 	return patterns;
 }
@@ -45,11 +38,7 @@ export function createCorsMiddleware() {
 			if (!requestOrigin) return undefined;
 			const patterns = getTrustedOriginPatterns(c.env as Bindings);
 			const matches = originMatchesAnyPattern(requestOrigin, patterns);
-			console.log("[CORS] Origin check:", {
-				requestOrigin,
-				patterns,
-				matches,
-			});
+
 			return matches ? requestOrigin : undefined;
 		},
 		allowHeaders: [
