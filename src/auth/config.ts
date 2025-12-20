@@ -108,11 +108,6 @@ export function buildResolvedAuthConfig(
 					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
 				const resetUrl = `${frontendBaseUrl}/recover/reset?token=${encodeURIComponent(token)}`;
 
-				console.log("[Password Reset] Sending email", {
-					toEmail: user.email,
-					hasExecutionContext: !!executionContext,
-				});
-
 				// Use waitUntil for Cloudflare Workers to ensure async operation completes
 				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
 				const emailPromise = sendPasswordResetEmail(

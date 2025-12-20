@@ -3,7 +3,15 @@
  * Documentation: https://mailchimp.com/developer/transactional/api/
  */
 
+import { TEMPLATE_IMAGES } from "./constants";
+
 const MANDRILL_API_BASE = "https://mandrillapp.com/api/1.0";
+
+export interface MandrillImage {
+	type: string;
+	name: string;
+	content: string;
+}
 
 export interface MandrillMessage {
 	to: Array<{ email: string; name?: string; type?: "to" }>;
@@ -17,6 +25,7 @@ export interface MandrillMessage {
 		rcpt: string;
 		vars: Array<{ name: string; content: string }>;
 	}>;
+	images?: MandrillImage[];
 }
 
 export interface MandrillSendResponse {
@@ -51,6 +60,7 @@ export async function sendMandrillTemplate(
 			subject: message.subject,
 			global_merge_vars: message.global_merge_vars || [],
 			merge_vars: message.merge_vars || [],
+			images: message.images || [],
 		},
 	};
 
@@ -65,12 +75,7 @@ export async function sendMandrillTemplate(
 	const responseStatus = response.status;
 	const responseText = await response.text();
 
-	// Log Mandrill API response (always log, even on errors)
 	if (!response.ok) {
-		console.log("[Mandrill] Response", {
-			status: responseStatus,
-			error: responseText,
-		});
 		throw new Error(`Mandrill API error (${responseStatus}): ${responseText}`);
 	}
 
@@ -78,26 +83,10 @@ export async function sendMandrillTemplate(
 	try {
 		result = JSON.parse(responseText) as MandrillSendResponse[];
 	} catch {
-		console.log("[Mandrill] Response", {
-			status: responseStatus,
-			error: "Invalid JSON response",
-			responseText,
-		});
 		throw new Error(
 			`Mandrill API returned invalid JSON (${responseStatus}): ${responseText}`,
 		);
 	}
-
-	// Log successful Mandrill API response
-	console.log("[Mandrill] Response", {
-		status: responseStatus,
-		results: result.map((r) => ({
-			email: r.email,
-			status: r.status,
-			_id: r._id,
-			reject_reason: r.reject_reason,
-		})),
-	});
 
 	// Check for rejected or invalid emails
 	const rejected = result.filter(
@@ -141,6 +130,7 @@ export async function sendPasswordResetEmail(
 				{ name: "env", content: userName },
 				{ name: "recover_url", content: resetUrl },
 			],
+			images: TEMPLATE_IMAGES,
 		});
 	} catch (error) {
 		// Log error but don't throw - we don't want to expose email sending failures
