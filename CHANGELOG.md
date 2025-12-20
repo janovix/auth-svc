@@ -1,3 +1,11 @@
+# [1.0.0-rc.16](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.15...v1.0.0-rc.16) (2025-12-20)
+
+
+### Bug Fixes
+
+* await Mandrill API call so waitUntil tracks it correctly ([d74a1f0](https://github.com/janovix/auth-svc/commit/d74a1f0ba5f29dd4e80e84a65a4ec521741572e3))
+* removed messages in cors middleware ([3d1a92b](https://github.com/janovix/auth-svc/commit/3d1a92b7d29a7696a409c30efe1a9fa41ed6ac82))
+
 # [1.0.0-rc.15](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.14...v1.0.0-rc.15) (2025-12-20)
 
 
