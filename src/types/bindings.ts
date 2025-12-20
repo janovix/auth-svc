@@ -50,4 +50,10 @@ export type Bindings = Env & {
 	 * Example: `https://auth.janovix.workers.dev`
 	 */
 	AUTH_FRONTEND_URL?: string;
+	/**
+	 * Cloudflare Turnstile secret key for bot protection.
+	 * Used to verify Turnstile tokens on password reset requests.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	TURNSTILE_SECRET_KEY?: string;
 };

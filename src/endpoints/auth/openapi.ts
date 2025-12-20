@@ -190,11 +190,19 @@ export class AuthForgotPasswordEndpoint extends OpenAPIRoute {
 	public schema = {
 		tags: ["Authentication"],
 		summary: "Request password reset",
+		description:
+			"Sends a password reset email to the specified address. Requires Turnstile verification for bot protection.",
 		operationId: "auth-forgot-password",
 		request: {
 			body: contentJson(
 				z.object({
-					email: z.string().email(),
+					email: z
+						.string()
+						.email()
+						.describe("Email address to send reset link"),
+					turnstileToken: z
+						.string()
+						.describe("Cloudflare Turnstile verification token"),
 				}),
 			),
 		},
@@ -202,6 +210,10 @@ export class AuthForgotPasswordEndpoint extends OpenAPIRoute {
 			"200": {
 				description: "Password reset email sent",
 				...contentJson(SuccessResponseSchema),
+			},
+			"400": {
+				description: "Bad request (missing or invalid turnstile token)",
+				...contentJson(ErrorResponseSchema),
 			},
 		},
 	};

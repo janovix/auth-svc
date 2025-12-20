@@ -3,6 +3,7 @@ import type { Context } from "hono";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import type { Bindings } from "../types/bindings";
+import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
@@ -58,10 +59,25 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Some environments were seeded with plaintext JWK JSON, which triggers decrypt failures.
 		await purgePlaintextJwks(c);
 
+		// Validate Turnstile for forgot-password requests
+		const pathname = c.req.path;
+		if (pathname === "/api/auth/forgot-password" && c.req.method === "POST") {
+			const turnstileResult = await validateTurnstileForRequest(c);
+			if (!turnstileResult.valid) {
+				return c.json(
+					{
+						success: false,
+						message: turnstileResult.message,
+						errors: [{ code: 4003, message: turnstileResult.message }],
+					},
+					400,
+				);
+			}
+		}
+
 		// Handle internal access policy if enabled
 		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
 		if (accessPolicy.enforceInternal) {
-			const pathname = c.req.path;
 			const isPublicJwks = pathname === "/api/auth/jwks";
 
 			// JWKS must be publicly reachable
@@ -87,6 +103,58 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 		return handleAuthRequest(c, auth);
 	});
+}
+
+/**
+ * Validates Turnstile token for password reset requests.
+ *
+ * If TURNSTILE_SECRET_KEY is not configured, validation is skipped (development mode).
+ * This allows local development without Turnstile while enforcing it in production.
+ */
+async function validateTurnstileForRequest(
+	c: Context<{ Bindings: Bindings }>,
+): Promise<{ valid: boolean; message: string }> {
+	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
+
+	// Skip validation if Turnstile is not configured (development mode)
+	if (!turnstileSecret) {
+		console.warn(
+			"[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation",
+		);
+		return { valid: true, message: "Turnstile not configured" };
+	}
+
+	// Parse the request body to get the turnstile token
+	let body: { turnstileToken?: string; email?: string };
+	try {
+		body = await c.req.json();
+	} catch {
+		return { valid: false, message: "Invalid request body" };
+	}
+
+	const { turnstileToken } = body;
+
+	if (!turnstileToken) {
+		return { valid: false, message: "Turnstile token is required" };
+	}
+
+	const clientIp = getClientIp(c.req.raw);
+
+	const result = await verifyTurnstileToken({
+		secretKey: turnstileSecret,
+		token: turnstileToken,
+		remoteIp: clientIp,
+	});
+
+	if (!result.success) {
+		console.warn("[Turnstile] Verification failed:", result["error-codes"]);
+		return {
+			valid: false,
+			message: "Bot verification failed. Please try again.",
+		};
+	}
+
+	return { valid: true, message: "Turnstile verified" };
 }
 
 async function handleAuthRequest(
