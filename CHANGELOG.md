@@ -1,3 +1,10 @@
+# [1.0.0-rc.24](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.23...v1.0.0-rc.24) (2025-12-20)
+
+
+### Bug Fixes
+
+* **auth:** allow verify-email and reset-password routes without token ([ff9e8b5](https://github.com/janovix/auth-svc/commit/ff9e8b52914a6424e1b959a9863d181ef96364e7))
+
 # [1.0.0-rc.23](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.22...v1.0.0-rc.23) (2025-12-20)
 
 
