@@ -1,3 +1,10 @@
+# [1.0.0-rc.19](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.18...v1.0.0-rc.19) (2025-12-20)
+
+
+### Features
+
+* add Turnstile validation for password reset requests ([ac1a4e9](https://github.com/janovix/auth-svc/commit/ac1a4e9e7a6197f4b98bed14d1551b6118b8097a))
+
 # [1.0.0-rc.18](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.17...v1.0.0-rc.18) (2025-12-20)
 
 
