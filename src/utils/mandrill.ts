@@ -62,16 +62,35 @@ export async function sendMandrillTemplate(
 		body: JSON.stringify(payload),
 	});
 
+	const responseStatus = response.status;
+	const responseText = await response.text();
+
+	// Log Mandrill API response (always log, even on errors)
 	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`Mandrill API error (${response.status}): ${errorText}`);
+		console.log("[Mandrill] Response", {
+			status: responseStatus,
+			error: responseText,
+		});
+		throw new Error(`Mandrill API error (${responseStatus}): ${responseText}`);
 	}
 
-	const result = (await response.json()) as MandrillSendResponse[];
+	let result: MandrillSendResponse[];
+	try {
+		result = JSON.parse(responseText) as MandrillSendResponse[];
+	} catch {
+		console.log("[Mandrill] Response", {
+			status: responseStatus,
+			error: "Invalid JSON response",
+			responseText,
+		});
+		throw new Error(
+			`Mandrill API returned invalid JSON (${responseStatus}): ${responseText}`,
+		);
+	}
 
-	// Log Mandrill API response
+	// Log successful Mandrill API response
 	console.log("[Mandrill] Response", {
-		status: response.status,
+		status: responseStatus,
 		results: result.map((r) => ({
 			email: r.email,
 			status: r.status,

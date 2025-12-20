@@ -42,6 +42,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -93,6 +95,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -112,6 +116,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -137,6 +143,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -163,6 +171,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -201,6 +211,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 
@@ -250,6 +262,8 @@ describe("Mandrill Email Integration", () => {
 
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
 				json: async () => mockResponse,
 			});
 

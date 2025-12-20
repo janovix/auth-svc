@@ -101,6 +101,11 @@ export function buildResolvedAuthConfig(
 					return;
 				}
 
+				console.log("[Password Reset] Sending email", {
+					toEmail: user.email,
+					hasExecutionContext: !!executionContext,
+				});
+
 				// Use waitUntil for Cloudflare Workers to ensure async operation completes
 				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
 				const emailPromise = sendPasswordResetEmail(

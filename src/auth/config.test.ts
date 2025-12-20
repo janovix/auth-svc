@@ -166,4 +166,62 @@ describe("buildResolvedAuthConfig", () => {
 			);
 		}).toThrow("BETTER_AUTH_URL must use http:// or https:// protocol");
 	});
+
+	it("validates AUTH_COOKIE_DOMAIN format", () => {
+		expect(() => {
+			buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					AUTH_COOKIE_DOMAIN: "nodot",
+				}),
+			);
+		}).toThrow('AUTH_COOKIE_DOMAIN must include a "."');
+
+		expect(() => {
+			buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					AUTH_COOKIE_DOMAIN: "*.example.com",
+				}),
+			);
+		}).toThrow("AUTH_COOKIE_DOMAIN does not support wildcard values");
+	});
+
+	it("handles execution context parameter", () => {
+		const mockExecutionContext = {
+			waitUntil: () => {},
+			passThroughOnException: () => {},
+			props: {},
+		} as ExecutionContext;
+
+		const config = buildResolvedAuthConfig(
+			buildEnv({
+				ENVIRONMENT: "dev",
+				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+			}),
+			mockExecutionContext,
+		);
+
+		expect(config.options).toBeDefined();
+	});
+
+	it("handles empty sanitized cookie domain", () => {
+		// When domain is just ".", it gets normalized but domainToTrustedOriginPatterns returns empty
+		const config = buildResolvedAuthConfig(
+			buildEnv({
+				ENVIRONMENT: "dev",
+				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				AUTH_COOKIE_DOMAIN: ".",
+			}),
+		);
+
+		// The domain "." is normalized and used, but domainToTrustedOriginPatterns returns []
+		expect(config.options.advanced?.crossSubDomainCookies?.domain).toBe(".");
+		// Trusted origins should still include environment defaults
+		expect(config.options.trustedOrigins).toContain(
+			"https://*.janovix.workers.dev",
+		);
+	});
 });
