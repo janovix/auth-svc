@@ -1,3 +1,10 @@
+# [1.0.0-rc.25](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.24...v1.0.0-rc.25) (2025-12-20)
+
+
+### Bug Fixes
+
+* **auth:** redirect to frontend after email verification ([b9269d5](https://github.com/janovix/auth-svc/commit/b9269d5302d7087dac6b8f74741162556f906e47))
+
 # [1.0.0-rc.24](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.23...v1.0.0-rc.24) (2025-12-20)
 
 
