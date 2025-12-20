@@ -97,6 +97,7 @@ export function buildResolvedAuthConfig(
 		secret,
 		emailAndPassword: {
 			enabled: true,
+			requireEmailVerification: true,
 			sendResetPassword: async ({ user, token }, _request) => {
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
