@@ -95,48 +95,21 @@ export function buildResolvedAuthConfig(
 		emailAndPassword: {
 			enabled: true,
 			sendResetPassword: async ({ user, url }, _request) => {
-				console.log("[Password Reset] sendResetPassword callback triggered", {
-					userEmail: user.email,
-					userName: user.name,
-					resetUrl: url,
-					userId: user.id,
-					timestamp: new Date().toISOString(),
-				});
-
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
-					console.error("[Password Reset] MANDRILL_API_KEY is not configured", {
-						userEmail: user.email,
-						envKeys: Object.keys(env).filter(
-							(k) => k.includes("MANDRILL") || k.includes("EMAIL"),
-						),
-					});
-					// Don't throw - Better Auth will handle the error gracefully
+					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
 					return;
 				}
 
-				console.log("[Password Reset] MANDRILL_API_KEY found, sending email", {
-					userEmail: user.email,
-					apiKeyPrefix: apiKey.substring(0, 8) + "...",
-					apiKeyLength: apiKey.length,
-				});
-
 				// Use waitUntil for Cloudflare Workers to ensure async operation completes
 				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
-				// But in Cloudflare Workers, we need waitUntil to ensure the promise completes
 				const emailPromise = sendPasswordResetEmail(
 					apiKey,
 					user.email,
 					user.name || user.email,
 					url,
 					"janovix-auth-password-recovery-template",
-				).catch((error) => {
-					console.error("[Password Reset] Email sending promise rejected", {
-						userEmail: user.email,
-						error: error instanceof Error ? error.message : String(error),
-						errorStack: error instanceof Error ? error.stack : undefined,
-					});
-				});
+				);
 
 				// Use waitUntil if execution context is available (Cloudflare Workers)
 				if (
@@ -144,19 +117,9 @@ export function buildResolvedAuthConfig(
 					typeof executionContext.waitUntil === "function"
 				) {
 					executionContext.waitUntil(emailPromise);
-					console.log(
-						"[Password Reset] Using waitUntil to ensure email sending completes",
-						{
-							userEmail: user.email,
-						},
-					);
 				} else {
 					// Fallback: void for non-Cloudflare environments
 					void emailPromise;
-					console.log("[Password Reset] Using void (no waitUntil available)", {
-						userEmail: user.email,
-						hasExecutionContext: !!executionContext,
-					});
 				}
 			},
 			onPasswordReset: async ({ user }, _request) => {

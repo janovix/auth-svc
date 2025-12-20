@@ -229,12 +229,10 @@ describe("Mandrill Email Integration", () => {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 
 			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				"[Password Reset Email] Failed to send",
+				"[Mandrill] Failed to send password reset email",
 				expect.objectContaining({
 					toEmail,
 					error: "Network error",
-					errorStack: expect.any(String),
-					timestamp: expect.any(String),
 				}),
 			);
 

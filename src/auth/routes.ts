@@ -43,24 +43,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-		const pathname = c.req.path;
-		const method = c.req.method;
-
-		// Log all Better Auth requests for debugging
-		if (
-			pathname.includes("password") ||
-			pathname.includes("reset") ||
-			pathname.includes("forget")
-		) {
-			console.log("[Better Auth Route] Request received", {
-				method,
-				pathname,
-				url: c.req.url,
-				headers: Object.fromEntries(c.req.raw.headers.entries()),
-				timestamp: new Date().toISOString(),
-			});
-		}
-
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
@@ -103,23 +85,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		const response = await handleAuthRequest(c, auth);
-
-		// Log response for password reset requests
-		if (
-			pathname.includes("password") ||
-			pathname.includes("reset") ||
-			pathname.includes("forget")
-		) {
-			console.log("[Better Auth Route] Response sent", {
-				method,
-				pathname,
-				status: response.status,
-				timestamp: new Date().toISOString(),
-			});
-		}
-
-		return response;
+		return handleAuthRequest(c, auth);
 	});
 }
 
@@ -159,7 +125,10 @@ async function handleAuthRequest(
 
 		// Retry after clearing JWKS on decrypt error
 		await clearJwksAndResetAuth(c);
-		const { auth: refreshed } = getBetterAuthContext(c.env);
+		const executionContext = (
+			c as unknown as { executionCtx?: ExecutionContext }
+		).executionCtx;
+		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -201,7 +170,10 @@ async function handleAuthRequest(
 
 		// Retry after clearing JWKS on decrypt error
 		await clearJwksAndResetAuth(c, error);
-		const { auth: refreshed } = getBetterAuthContext(c.env);
+		const executionContext = (
+			c as unknown as { executionCtx?: ExecutionContext }
+		).executionCtx;
+		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
