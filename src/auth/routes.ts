@@ -4,6 +4,8 @@ import type { Context } from "hono";
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import type { Bindings } from "../types/bindings";
 import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
+import { originMatchesAnyPattern } from "../http/origins";
+import { getTrustedOriginPatterns } from "../middleware/cors";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
@@ -12,12 +14,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	// Just mount the handler as per Better Auth documentation: https://www.better-auth.com/docs/integrations/hono
 
 	// Handle OPTIONS preflight requests explicitly - Better Auth may not handle them
-	app.options("/api/auth/*", async (c) => {
+	app.options("/api/auth/*", (c) => {
 		const requestOrigin = c.req.header("origin");
 
 		// Check if origin is trusted (Better Auth's trustedOrigins config)
-		const { originMatchesAnyPattern } = await import("../http/origins");
-		const { getTrustedOriginPatterns } = await import("../middleware/cors");
 		const patterns = getTrustedOriginPatterns(c.env);
 		const isTrusted =
 			requestOrigin && originMatchesAnyPattern(requestOrigin, patterns);
@@ -55,9 +55,8 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			executionContext,
 		);
 
-		// Defensive cleanup: Better Auth stores *encrypted* private keys in `jwks.privateKey`.
-		// Some environments were seeded with plaintext JWK JSON, which triggers decrypt failures.
-		await purgePlaintextJwks(c);
+		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
+		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
 
 		// Validate Turnstile for forgot-password requests
 		const pathname = c.req.path;
@@ -265,10 +264,10 @@ async function handleAuthRequest(
 	}
 }
 
-async function addCorsHeadersIfNeeded(
+function addCorsHeadersIfNeeded(
 	c: Context<{ Bindings: Bindings }>,
 	response: Response,
-): Promise<Response> {
+): Response {
 	const requestOrigin = c.req.header("origin");
 	if (!requestOrigin) {
 		// No origin header means same-origin request - no CORS headers needed
@@ -276,8 +275,6 @@ async function addCorsHeadersIfNeeded(
 	}
 
 	// Check if origin is trusted (Better Auth's trustedOrigins config)
-	const { originMatchesAnyPattern } = await import("../http/origins");
-	const { getTrustedOriginPatterns } = await import("../middleware/cors");
 	const patterns = getTrustedOriginPatterns(c.env);
 	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
 
@@ -298,7 +295,11 @@ async function addCorsHeadersIfNeeded(
 	});
 }
 
-function isJwksDecryptError(error: unknown) {
+/**
+ * Checks if an error is a JWKS decrypt error from Better Auth.
+ * Exported for unit testing.
+ */
+export function isJwksDecryptError(error: unknown) {
 	if (!error) return false;
 	const message = error instanceof Error ? error.message : String(error);
 	return (
@@ -337,8 +338,12 @@ async function clearJwksAndResetAuth(
 	// Recovery path:
 	// - This error is almost always caused by a stale/seeded JWKS row whose privateKey cannot be
 	//   decrypted with the current Better Auth secret (or isn't encrypted at all).
+	// - First try to purge plaintext JWKS entries, then clear remaining invalid entries.
 	// - Clearing the JWKS table allows Better Auth to regenerate keys on retry.
 	try {
+		// First attempt targeted cleanup of plaintext keys
+		await purgePlaintextJwks(c);
+		// Then clear all remaining JWKS if needed
 		await c.env.DB.prepare("DELETE FROM jwks").run();
 		invalidateBetterAuthCache(c.env);
 	} catch {

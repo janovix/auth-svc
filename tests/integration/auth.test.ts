@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import worker from "../../src/testWorker";
 
-import { INTERNAL_AUTH_HEADER } from "../../src/auth/routes";
+import {
+	INTERNAL_AUTH_HEADER,
+	isJwksDecryptError,
+} from "../../src/auth/routes";
 
 const typedWorker = worker as unknown as {
 	fetch: (
@@ -292,5 +295,33 @@ describe("Better Auth route access control", () => {
 				"https://evil.com",
 			);
 		});
+	});
+});
+
+describe("isJwksDecryptError", () => {
+	it("returns false for null/undefined", () => {
+		expect(isJwksDecryptError(null)).toBe(false);
+		expect(isJwksDecryptError(undefined)).toBe(false);
+	});
+
+	it("returns true for 'Failed to decrypt private key' message", () => {
+		expect(isJwksDecryptError(new Error("Failed to decrypt private key"))).toBe(
+			true,
+		);
+		expect(isJwksDecryptError("Failed to decrypt private key")).toBe(true);
+	});
+
+	it("returns true for BetterAuthError with decrypt message", () => {
+		expect(
+			isJwksDecryptError(
+				new Error("BetterAuthError: could not decrypt private key"),
+			),
+		).toBe(true);
+	});
+
+	it("returns false for unrelated errors", () => {
+		expect(isJwksDecryptError(new Error("Some other error"))).toBe(false);
+		expect(isJwksDecryptError("random string")).toBe(false);
+		expect(isJwksDecryptError({ message: "object error" })).toBe(false);
 	});
 });
