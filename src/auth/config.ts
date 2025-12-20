@@ -2,7 +2,10 @@ import type { BetterAuthOptions } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
-import { sendPasswordResetEmail } from "../utils/mandrill";
+import {
+	sendPasswordResetEmail,
+	sendVerificationEmail,
+} from "../utils/mandrill";
 
 const BASE_PATH = "/api/auth";
 const ORG_SLUG = "janovix";
@@ -133,6 +136,38 @@ export function buildResolvedAuthConfig(
 				// Optional callback after password reset is successful
 				// Log for audit purposes or trigger additional actions
 				console.log(`Password reset completed for user: ${user.email}`);
+			},
+		},
+		emailVerification: {
+			sendVerificationEmail: async ({ user, url }, _request) => {
+				const apiKey = env.MANDRILL_API_KEY;
+				if (!apiKey) {
+					console.error(
+						"[Email Verification] MANDRILL_API_KEY is not configured",
+					);
+					return;
+				}
+
+				// Use waitUntil for Cloudflare Workers to ensure async operation completes
+				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
+				const emailPromise = sendVerificationEmail(
+					apiKey,
+					user.email,
+					user.name || user.email,
+					url,
+					"janovix-auth-email-verification-template",
+				);
+
+				// Use waitUntil if execution context is available (Cloudflare Workers)
+				if (
+					executionContext &&
+					typeof executionContext.waitUntil === "function"
+				) {
+					executionContext.waitUntil(emailPromise);
+				} else {
+					// Fallback: void for non-Cloudflare environments
+					void emailPromise;
+				}
 			},
 		},
 		plugins: [

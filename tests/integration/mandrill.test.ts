@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	sendMandrillTemplate,
 	sendPasswordResetEmail,
+	sendVerificationEmail,
 	type MandrillMessage,
 	type MandrillSendResponse,
 } from "../../src/utils/mandrill";
@@ -275,6 +276,128 @@ describe("Mandrill Email Integration", () => {
 			expect(callBody.message.global_merge_vars).toEqual([
 				{ name: "env", content: "" },
 				{ name: "recover_url", content: resetUrl },
+			]);
+		});
+	});
+
+	describe("sendVerificationEmail", () => {
+		const apiKey = "test-api-key";
+		const toEmail = "[email protected]";
+		const userName = "John Doe";
+		const verificationUrl = "https://example.com/verify?token=abc123";
+
+		it("sends verification email with correct template variables", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: toEmail,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			await sendVerificationEmail(apiKey, toEmail, userName, verificationUrl);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+
+			expect(callBody.template_name).toBe(
+				"janovix-auth-email-verification-template",
+			);
+			expect(callBody.message.to).toEqual([{ email: toEmail, type: "to" }]);
+			expect(callBody.message.from_email).toBe("noreply@janovix.algenium.dev");
+			expect(callBody.message.from_name).toBe("Janovix");
+			expect(callBody.message.subject).toBe(
+				"Verifica tu correo electrónico - Janovix",
+			);
+			expect(callBody.message.global_merge_vars).toEqual([
+				{ name: "env", content: userName },
+				{ name: "url", content: verificationUrl },
+			]);
+		});
+
+		it("uses custom template name when provided", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: toEmail,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			const customTemplate = "custom-verification-template";
+			await sendVerificationEmail(
+				apiKey,
+				toEmail,
+				userName,
+				verificationUrl,
+				customTemplate,
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(callBody.template_name).toBe(customTemplate);
+		});
+
+		it("handles errors gracefully without throwing", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error");
+			mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+			await sendVerificationEmail(apiKey, toEmail, userName, verificationUrl);
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				"[Mandrill] Failed to send verification email",
+				expect.objectContaining({
+					toEmail,
+					error: "Network error",
+				}),
+			);
+
+			consoleErrorSpy.mockRestore();
+		});
+
+		it("uses email as userName fallback", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: toEmail,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			await sendVerificationEmail(apiKey, toEmail, "", verificationUrl);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(callBody.message.global_merge_vars).toEqual([
+				{ name: "env", content: "" },
+				{ name: "url", content: verificationUrl },
 			]);
 		});
 	});

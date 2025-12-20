@@ -140,3 +140,42 @@ export async function sendPasswordResetEmail(
 		});
 	}
 }
+
+/**
+ * Sends an email verification email using Mandrill template.
+ *
+ * @param apiKey - Mandrill API key
+ * @param toEmail - Recipient email address
+ * @param userName - User's name for personalization
+ * @param verificationUrl - Email verification URL with token
+ * @param templateName - Mandrill template name (default: janovix-auth-email-verification-template)
+ * @returns Promise that resolves when email is sent (use with waitUntil on serverless)
+ */
+export async function sendVerificationEmail(
+	apiKey: string,
+	toEmail: string,
+	userName: string,
+	verificationUrl: string,
+	templateName = "janovix-auth-email-verification-template",
+): Promise<void> {
+	try {
+		await sendMandrillTemplate(apiKey, {
+			to: [{ email: toEmail, type: "to" }],
+			from_email: "noreply@janovix.algenium.dev",
+			from_name: "Janovix",
+			subject: "Verifica tu correo electrónico - Janovix",
+			template_name: templateName,
+			global_merge_vars: [
+				{ name: "env", content: userName },
+				{ name: "url", content: verificationUrl },
+			],
+			images: TEMPLATE_IMAGES,
+		});
+	} catch (error) {
+		// Log error but don't throw - we don't want to expose email sending failures
+		console.error("[Mandrill] Failed to send verification email", {
+			toEmail,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
