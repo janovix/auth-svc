@@ -1,3 +1,10 @@
+# [1.0.0-rc.17](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.16...v1.0.0-rc.17) (2025-12-20)
+
+
+### Features
+
+* send frontend URL in password reset email instead of backend ([8e20bdd](https://github.com/janovix/auth-svc/commit/8e20bdd5e4b24a3bc2a64c4a08fff9c9accaf24c))
+
 # [1.0.0-rc.16](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.15...v1.0.0-rc.16) (2025-12-20)
 
 
