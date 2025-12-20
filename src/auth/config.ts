@@ -94,12 +94,19 @@ export function buildResolvedAuthConfig(
 		secret,
 		emailAndPassword: {
 			enabled: true,
-			sendResetPassword: async ({ user, url }, _request) => {
+			sendResetPassword: async ({ user, token }, _request) => {
 				const apiKey = env.MANDRILL_API_KEY;
 				if (!apiKey) {
 					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
 					return;
 				}
+
+				// Construct frontend URL with token for direct password reset
+				// Instead of using Better Auth's backend redirect URL, we send users
+				// directly to the frontend which calls the API to reset password
+				const frontendBaseUrl =
+					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+				const resetUrl = `${frontendBaseUrl}/recover/reset?token=${encodeURIComponent(token)}`;
 
 				console.log("[Password Reset] Sending email", {
 					toEmail: user.email,
@@ -112,7 +119,7 @@ export function buildResolvedAuthConfig(
 					apiKey,
 					user.email,
 					user.name || user.email,
-					url,
+					resetUrl,
 					"janovix-auth-password-recovery-template",
 				);
 

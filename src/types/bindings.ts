@@ -44,4 +44,10 @@ export type Bindings = Env & {
 	 * Configured via Cloudflare Dashboard secrets.
 	 */
 	MANDRILL_API_KEY?: string;
+	/**
+	 * Frontend application URL for password reset and other auth flows.
+	 * Used to construct URLs in emails (e.g., password reset link).
+	 * Example: `https://auth.janovix.workers.dev`
+	 */
+	AUTH_FRONTEND_URL?: string;
 };

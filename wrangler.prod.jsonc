@@ -24,5 +24,6 @@
 		"ENVIRONMENT": "production",
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.ai",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.ai",
+		"AUTH_FRONTEND_URL": "https://auth.janovix.ai",
 	},
 }
