@@ -1,3 +1,10 @@
+# [1.0.0-rc.20](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.19...v1.0.0-rc.20) (2025-12-20)
+
+
+### Performance Improvements
+
+* add KV secondary storage for Better Auth and remove hot-path queries ([73a408f](https://github.com/janovix/auth-svc/commit/73a408f9723e66322c35a262e75369abf7d25a6a))
+
 # [1.0.0-rc.19](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.18...v1.0.0-rc.19) (2025-12-20)
 
 
