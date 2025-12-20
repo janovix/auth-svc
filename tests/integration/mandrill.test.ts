@@ -49,7 +49,7 @@ describe("Mandrill Email Integration", () => {
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"https://mandrillapp.com/api/1.0/messages/send-template",
+				"https://mandrillapp.com/api/1.0/messages/send-template.json",
 				expect.objectContaining({
 					method: "POST",
 					headers: {

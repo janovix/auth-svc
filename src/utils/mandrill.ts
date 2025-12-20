@@ -38,7 +38,7 @@ export async function sendMandrillTemplate(
 	apiKey: string,
 	message: MandrillMessage,
 ): Promise<MandrillSendResponse[]> {
-	const url = `${MANDRILL_API_BASE}/messages/send-template`;
+	const url = `${MANDRILL_API_BASE}/messages/send-template.json`;
 
 	const payload = {
 		key: apiKey,
