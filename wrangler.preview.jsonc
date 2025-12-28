@@ -21,6 +21,12 @@
 			"id": "3c23d46024664e99b7a480bd052c9297",
 		},
 	],
+	"services": [
+		{
+			"binding": "NOTIFICATIONS_SERVICE",
+			"service": "notifications-svc",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "preview",
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.workers.dev",
