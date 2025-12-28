@@ -20,6 +20,12 @@
 			"id": "bdce8bcdb45b485fb0518fec19ab664b",
 		},
 	],
+	"services": [
+		{
+			"binding": "NOTIFICATIONS_SERVICE",
+			"service": "notifications-svc-prod",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "production",
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.ai",
