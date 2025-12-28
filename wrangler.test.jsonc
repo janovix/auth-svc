@@ -2,7 +2,7 @@
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
-	"name": "auth-svc",
+	"name": "auth-svc-test",
 	"upload_source_maps": true,
 	"workers_dev": true,
 	"observability": {
@@ -11,25 +11,20 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "auth-dev",
-			"database_id": "80ca9ee0-571c-452d-a9ed-cffb4cc00975",
+			"database_name": "auth-test",
+			"database_id": "test-database-id",
 		},
 	],
 	"kv_namespaces": [
 		{
 			"binding": "KV",
-			"id": "bc9ed2441eaa4660a619e64e603cdccc",
+			"id": "test-kv-id",
 		},
 	],
-	"services": [
-		{
-			"binding": "NOTIFICATIONS_SERVICE",
-			"service": "notifications-svc",
-		},
-	],
+	// No service binding for tests - service will be mocked via serviceBindings in vitest config
 	"vars": {
-		"ENVIRONMENT": "dev",
-		"BETTER_AUTH_URL": "https://auth-svc.janovix.workers.dev",
+		"ENVIRONMENT": "test",
+		"BETTER_AUTH_URL": "https://auth-svc.test.workers.dev",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
 	},
