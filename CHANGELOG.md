@@ -1,3 +1,11 @@
+# [1.1.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2025-12-30)
+
+
+### Features
+
+* Add auth config and integration tests ([0ad57c0](https://github.com/janovix/auth-svc/commit/0ad57c055a440cd76d550ef8183013291e1c35a5))
+* Bundle kysely for Workers environment ([7225b32](https://github.com/janovix/auth-svc/commit/7225b3251ab9692e1ef09bd09368ecf3627e4e99))
+
 # [1.1.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.0.0...v1.1.0-rc.1) (2025-12-30)
 
 
