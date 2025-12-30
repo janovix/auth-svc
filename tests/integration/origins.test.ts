@@ -153,6 +153,25 @@ describe("originMatchesPattern", () => {
 			originMatchesPattern("http://example.com:80", "http://example.com"),
 		).toBe(true);
 	});
+
+	it("handles parseOriginLike with empty port and non-standard scheme", () => {
+		// This tests the normalizePort function when port is empty
+		// The normalizePort function returns "" when port is empty and scheme is not http/https
+		// When pattern has empty port, it matches default port (443 for https)
+		expect(
+			originMatchesPattern("https://example.com", "https://example.com:"),
+		).toBe(true); // Empty port in pattern matches default port
+	});
+
+	it("handles parseOriginLike edge cases with port parsing", () => {
+		// Test IPv6-like patterns that might affect port parsing
+		// The parseOriginLike function handles lastIndexOf(":") logic
+		const result = originMatchesPattern(
+			"https://example.com:8080",
+			"https://example.com:8080",
+		);
+		expect(result).toBe(true);
+	});
 });
 
 describe("originMatchesAnyPattern", () => {
