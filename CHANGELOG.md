@@ -1,3 +1,35 @@
+# [1.1.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.0.0...v1.1.0-rc.1) (2025-12-30)
+
+
+### Bug Fixes
+
+* **auth:** allow verify-email and reset-password routes without token ([ff9e8b5](https://github.com/janovix/auth-svc/commit/ff9e8b52914a6424e1b959a9863d181ef96364e7))
+* **auth:** redirect to frontend after email verification ([b9269d5](https://github.com/janovix/auth-svc/commit/b9269d5302d7087dac6b8f74741162556f906e47))
+* await Mandrill API call so waitUntil tracks it correctly ([d74a1f0](https://github.com/janovix/auth-svc/commit/d74a1f0ba5f29dd4e80e84a65a4ec521741572e3))
+* exclude openapi.ts from coverage requirements ([c2f09f7](https://github.com/janovix/auth-svc/commit/c2f09f7a6b76f0aa58cbcc9a6dd376976776703e))
+* from name sending function ([b817a98](https://github.com/janovix/auth-svc/commit/b817a98421be760e7d1c617007b01242527a1885))
+* removed messages in cors middleware ([3d1a92b](https://github.com/janovix/auth-svc/commit/3d1a92b7d29a7696a409c30efe1a9fa41ed6ac82))
+* update Mandrill API endpoint to include .json extension ([23344d1](https://github.com/janovix/auth-svc/commit/23344d1e6f039b5254ecea2ff1fcb9673812ec73))
+
+
+### Features
+
+* add comprehensive debug logging for password reset emails ([95d6879](https://github.com/janovix/auth-svc/commit/95d68796795f9cbce5d350920cd09343029fda9a))
+* add comprehensive logging and waitUntil support for password reset ([46cef05](https://github.com/janovix/auth-svc/commit/46cef052b27759ffbe68c6554d72d32872d85de3))
+* add email verification support ([4551ece](https://github.com/janovix/auth-svc/commit/4551ece29133c038acbe5628c2fe8f05cca347e9))
+* add inline images to password reset email template ([d4c1ee2](https://github.com/janovix/auth-svc/commit/d4c1ee28fe97cf48f359ace480f02daf49842ec8))
+* add Mandrill response logging and callback trigger logging ([caa2da8](https://github.com/janovix/auth-svc/commit/caa2da8d15bf26372f3578f6465a56a85dfdc674))
+* add Turnstile validation for password reset requests ([ac1a4e9](https://github.com/janovix/auth-svc/commit/ac1a4e9e7a6197f4b98bed14d1551b6118b8097a))
+* **auth:** add multi-tenant organization support ([3cce3d8](https://github.com/janovix/auth-svc/commit/3cce3d8f7f7bf26b9d12de617e3ac9e805e7498b))
+* implement password reset with Mandrill email integration ([c9fe6a3](https://github.com/janovix/auth-svc/commit/c9fe6a3af26209d4aec877f9353c4fef5ab29a18))
+* require email verification before sign-in ([3c861cd](https://github.com/janovix/auth-svc/commit/3c861cda485b510466d4cc9f451414b39d10fc54))
+* send frontend URL in password reset email instead of backend ([8e20bdd](https://github.com/janovix/auth-svc/commit/8e20bdd5e4b24a3bc2a64c4a08fff9c9accaf24c))
+
+
+### Performance Improvements
+
+* add KV secondary storage for Better Auth and remove hot-path queries ([73a408f](https://github.com/janovix/auth-svc/commit/73a408f9723e66322c35a262e75369abf7d25a6a))
+
 # 1.0.0 (2025-12-19)
 
 
