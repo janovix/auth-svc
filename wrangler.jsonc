@@ -2,7 +2,7 @@
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
-	"name": "auth-svc",
+	"name": "auth-svc-prod",
 	"upload_source_maps": true,
 	"workers_dev": true,
 	"observability": {
