@@ -1,3 +1,10 @@
+# [1.1.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2025-12-30)
+
+
+### Features
+
+* **auth:** enhance organization invitation flow and update test command ([2c3a91f](https://github.com/janovix/auth-svc/commit/2c3a91f0d6ab0abd204f18cee6d53ca8ba2f67a3))
+
 # [1.1.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2025-12-30)
 
 
