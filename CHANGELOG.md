@@ -1,3 +1,10 @@
+# [1.0.0-rc.26](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.25...v1.0.0-rc.26) (2025-12-30)
+
+
+### Features
+
+* **auth:** add multi-tenant organization support ([3cce3d8](https://github.com/janovix/auth-svc/commit/3cce3d8f7f7bf26b9d12de617e3ac9e805e7498b))
+
 # [1.0.0-rc.25](https://github.com/janovix/auth-svc/compare/v1.0.0-rc.24...v1.0.0-rc.25) (2025-12-20)
 
 
