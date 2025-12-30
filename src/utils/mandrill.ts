@@ -179,3 +179,54 @@ export async function sendVerificationEmail(
 		});
 	}
 }
+
+export type OrganizationInvitationEmail = {
+	email: string;
+	inviteUrl: string;
+	organizationName: string;
+	inviterName: string;
+	role?: string;
+};
+
+/**
+ * Sends an organization invitation email using Mandrill template.
+ *
+ * @param apiKey - Mandrill API key
+ * @param invitation - Invitation email payload (org name, inviter, link)
+ * @param templateName - Mandrill template name (default: janovix-org-invitation-template)
+ * @returns Promise that resolves when email is sent (use with waitUntil on serverless)
+ */
+export async function sendOrganizationInvitationEmail(
+	apiKey: string,
+	invitation: OrganizationInvitationEmail,
+	templateName = "janovix-org-invitation-template",
+): Promise<void> {
+	try {
+		await sendMandrillTemplate(apiKey, {
+			to: [{ email: invitation.email, type: "to" }],
+			from_email: "noreply@janovix.algenium.dev",
+			from_name: "Janovix",
+			subject: `Invitation to join ${invitation.organizationName}`,
+			template_name: templateName,
+			global_merge_vars: [
+				{ name: "org_name", content: invitation.organizationName },
+				{ name: "inviter_name", content: invitation.inviterName },
+				{ name: "invite_url", content: invitation.inviteUrl },
+				{ name: "role", content: invitation.role ?? "member" },
+			],
+			images: TEMPLATE_IMAGES,
+		});
+		console.log("[Mandrill] Organization invitation email sent successfully", {
+			toEmail: invitation.email,
+			organizationName: invitation.organizationName,
+		});
+	} catch (error) {
+		// Log error but don't throw - we don't want to expose email sending failures
+		console.error("[Mandrill] Failed to send org invitation email", {
+			toEmail: invitation.email,
+			organizationName: invitation.organizationName,
+			templateName,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}

@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins/organization";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
 import {
+	sendOrganizationInvitationEmail,
 	sendPasswordResetEmail,
 	sendVerificationEmail,
 } from "../utils/mandrill";
@@ -220,7 +221,8 @@ export function buildResolvedAuthConfig(
 				// Organization creator gets "owner" role by default
 				creatorRole: "owner",
 				// Send invitation emails
-				sendInvitationEmail: async ({ email, organization, inviter }) => {
+				sendInvitationEmail: async (data) => {
+					const { email, organization, inviter, id: invitationId, role } = data;
 					const apiKey = env.MANDRILL_API_KEY;
 					if (!apiKey) {
 						console.error(
@@ -229,17 +231,38 @@ export function buildResolvedAuthConfig(
 						return;
 					}
 
-					const frontendBaseUrl =
-						env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
-					const acceptUrl = `${frontendBaseUrl}/accept-invitation?org=${organization.id}`;
+					// Point to the AML frontend for invitation acceptance
+					const amlFrontendUrl =
+						env.AML_FRONTEND_URL || "https://aml.janovix.workers.dev";
+					const acceptUrl = `${amlFrontendUrl}/invitations/accept?invitationId=${invitationId}`;
 
-					// Log for now, implement email sending later
 					console.log(
 						`[Organization Invitation] ${inviter.user.email} invited ${email} to ${organization.name}. Accept URL: ${acceptUrl}`,
 					);
 
-					// TODO: Implement actual email sending via Mandrill
-					// Use waitUntil pattern similar to password reset
+					// Use waitUntil pattern for Cloudflare Workers
+					const emailPromise = sendOrganizationInvitationEmail(
+						apiKey,
+						{
+							email,
+							inviteUrl: acceptUrl,
+							organizationName: organization.name,
+							inviterName: inviter.user.name || inviter.user.email,
+							role: role || "member",
+						},
+						"janovix-org-invitation-template",
+					);
+
+					// Use waitUntil if execution context is available (Cloudflare Workers)
+					if (
+						executionContext &&
+						typeof executionContext.waitUntil === "function"
+					) {
+						executionContext.waitUntil(emailPromise);
+					} else {
+						// Fallback: void for non-Cloudflare environments
+						void emailPromise;
+					}
 				},
 			}),
 		],
