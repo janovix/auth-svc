@@ -5,6 +5,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { buildResolvedAuthConfig } from "./config";
 import type { Bindings } from "../types/bindings";
+import { createKVSecondaryStorage } from "../utils/kv-storage";
 
 const authCache = new Map<
 	string,
@@ -23,8 +24,11 @@ export function invalidateBetterAuthCache(env: Bindings) {
 	authCache.delete(resolved.cacheKey);
 }
 
-export function getBetterAuthContext(env: Bindings) {
-	const resolved = buildResolvedAuthConfig(env);
+export function getBetterAuthContext(
+	env: Bindings,
+	executionContext?: ExecutionContext,
+) {
+	const resolved = buildResolvedAuthConfig(env, executionContext);
 	const cached = authCache.get(resolved.cacheKey);
 
 	if (cached) {
@@ -35,9 +39,12 @@ export function getBetterAuthContext(env: Bindings) {
 	}
 
 	const prisma = createPrismaClient(env.DB);
+	const secondaryStorage = createKVSecondaryStorage(env.KV);
+
 	const auth = betterAuth({
 		...resolved.options,
 		database: prismaAdapter(prisma, { provider: "sqlite", transaction: false }),
+		secondaryStorage,
 	});
 
 	authCache.set(resolved.cacheKey, { auth });

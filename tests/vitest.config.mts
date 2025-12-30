@@ -23,12 +23,28 @@ export default defineWorkersConfig({
 				"**/tests/**",
 				"**/dist/**",
 				"**/coverage/**",
+				"**/endpoints/**/openapi.ts", // OpenAPI schema definitions don't need coverage
 			],
 			thresholds: {
 				lines: 80,
 				functions: 75,
 				branches: 70,
 				statements: 80,
+			},
+		},
+		// Bundle problematic dependencies that fail to import on Windows and other systems
+		// Using the newer optimizer API to ensure kysely is bundled for Workers environment
+		deps: {
+			optimizer: {
+				ssr: {
+					include: [
+						"kysely",
+						// Bundle kysely and any kysely-related packages
+						// These are often used by better-auth internally and can fail on Windows
+						// due to module resolution issues or platform-specific code
+						"@kysely/*",
+					],
+				},
 			},
 		},
 		setupFiles: ["./tests/apply-migrations.ts"],

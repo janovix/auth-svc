@@ -3,6 +3,9 @@ import type { Context } from "hono";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import type { Bindings } from "../types/bindings";
+import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
+import { originMatchesAnyPattern } from "../http/origins";
+import { getTrustedOriginPatterns } from "../middleware/cors";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
@@ -11,12 +14,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	// Just mount the handler as per Better Auth documentation: https://www.better-auth.com/docs/integrations/hono
 
 	// Handle OPTIONS preflight requests explicitly - Better Auth may not handle them
-	app.options("/api/auth/*", async (c) => {
+	app.options("/api/auth/*", (c) => {
 		const requestOrigin = c.req.header("origin");
 
 		// Check if origin is trusted (Better Auth's trustedOrigins config)
-		const { originMatchesAnyPattern } = await import("../http/origins");
-		const { getTrustedOriginPatterns } = await import("../middleware/cors");
 		const patterns = getTrustedOriginPatterns(c.env);
 		const isTrusted =
 			requestOrigin && originMatchesAnyPattern(requestOrigin, patterns);
@@ -43,20 +44,49 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-		const { auth, accessPolicy } = getBetterAuthContext(c.env);
+		// Get execution context from Hono context (Cloudflare Workers)
+		// Hono exposes executionCtx in Cloudflare Workers environment
+		const executionContext = (
+			c as unknown as { executionCtx?: ExecutionContext }
+		).executionCtx;
 
-		// Defensive cleanup: Better Auth stores *encrypted* private keys in `jwks.privateKey`.
-		// Some environments were seeded with plaintext JWK JSON, which triggers decrypt failures.
-		await purgePlaintextJwks(c);
+		const { auth, accessPolicy } = getBetterAuthContext(
+			c.env,
+			executionContext,
+		);
+
+		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
+		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
+
+		// Validate Turnstile for forgot-password requests
+		const pathname = c.req.path;
+		if (pathname === "/api/auth/forgot-password" && c.req.method === "POST") {
+			const turnstileResult = await validateTurnstileForRequest(c);
+			if (!turnstileResult.valid) {
+				return c.json(
+					{
+						success: false,
+						message: turnstileResult.message,
+						errors: [{ code: 4003, message: turnstileResult.message }],
+					},
+					400,
+				);
+			}
+		}
 
 		// Handle internal access policy if enabled
 		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
 		if (accessPolicy.enforceInternal) {
-			const pathname = c.req.path;
-			const isPublicJwks = pathname === "/api/auth/jwks";
+			// Public routes that can be accessed without origin header or internal token:
+			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
+			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
+			// - /api/auth/reset-password: Users click password reset links in emails (direct browser navigation)
+			const isPublicRoute =
+				pathname === "/api/auth/jwks" ||
+				pathname === "/api/auth/verify-email" ||
+				pathname === "/api/auth/reset-password";
 
-			// JWKS must be publicly reachable
-			if (isPublicJwks) {
+			if (isPublicRoute) {
 				return handleAuthRequest(c, auth);
 			}
 
@@ -80,12 +110,80 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	});
 }
 
+/**
+ * Validates Turnstile token for password reset requests.
+ *
+ * If TURNSTILE_SECRET_KEY is not configured, validation is skipped (development mode).
+ * This allows local development without Turnstile while enforcing it in production.
+ */
+async function validateTurnstileForRequest(
+	c: Context<{ Bindings: Bindings }>,
+): Promise<{ valid: boolean; message: string }> {
+	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
+
+	// Skip validation if Turnstile is not configured (development mode)
+	if (!turnstileSecret) {
+		console.warn(
+			"[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation",
+		);
+		return { valid: true, message: "Turnstile not configured" };
+	}
+
+	// Parse the request body to get the turnstile token
+	let body: { turnstileToken?: string; email?: string };
+	try {
+		body = await c.req.json();
+	} catch {
+		return { valid: false, message: "Invalid request body" };
+	}
+
+	const { turnstileToken } = body;
+
+	if (!turnstileToken) {
+		return { valid: false, message: "Turnstile token is required" };
+	}
+
+	const clientIp = getClientIp(c.req.raw);
+
+	const result = await verifyTurnstileToken({
+		secretKey: turnstileSecret,
+		token: turnstileToken,
+		remoteIp: clientIp,
+	});
+
+	if (!result.success) {
+		console.warn("[Turnstile] Verification failed:", result["error-codes"]);
+		return {
+			valid: false,
+			message: "Bot verification failed. Please try again.",
+		};
+	}
+
+	return { valid: true, message: "Turnstile verified" };
+}
+
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
 ) {
 	// Wrap Better Auth handler to ensure all errors are caught and converted to responses
 	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
+		// Better Auth uses APIError with statusCode for redirects (302)
+		// Convert these "errors" to proper redirect responses
+		if (isBetterAuthRedirectError(error)) {
+			const headers = new Headers();
+			const errorHeaders = error.headers;
+			if (errorHeaders && typeof errorHeaders.forEach === "function") {
+				errorHeaders.forEach((value: string, key: string) => {
+					headers.set(key, value);
+				});
+			}
+			return new Response(null, {
+				status: error.statusCode,
+				headers,
+			});
+		}
+
 		// If Better Auth throws an error, convert it to a proper error response
 		// Better Auth should return responses, but if it throws, handle it gracefully
 		const errorMessage = error instanceof Error ? error.message : String(error);
@@ -116,7 +214,10 @@ async function handleAuthRequest(
 
 		// Retry after clearing JWKS on decrypt error
 		await clearJwksAndResetAuth(c);
-		const { auth: refreshed } = getBetterAuthContext(c.env);
+		const executionContext = (
+			c as unknown as { executionCtx?: ExecutionContext }
+		).executionCtx;
+		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -158,7 +259,10 @@ async function handleAuthRequest(
 
 		// Retry after clearing JWKS on decrypt error
 		await clearJwksAndResetAuth(c, error);
-		const { auth: refreshed } = getBetterAuthContext(c.env);
+		const executionContext = (
+			c as unknown as { executionCtx?: ExecutionContext }
+		).executionCtx;
+		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -182,10 +286,10 @@ async function handleAuthRequest(
 	}
 }
 
-async function addCorsHeadersIfNeeded(
+function addCorsHeadersIfNeeded(
 	c: Context<{ Bindings: Bindings }>,
 	response: Response,
-): Promise<Response> {
+): Response {
 	const requestOrigin = c.req.header("origin");
 	if (!requestOrigin) {
 		// No origin header means same-origin request - no CORS headers needed
@@ -193,8 +297,6 @@ async function addCorsHeadersIfNeeded(
 	}
 
 	// Check if origin is trusted (Better Auth's trustedOrigins config)
-	const { originMatchesAnyPattern } = await import("../http/origins");
-	const { getTrustedOriginPatterns } = await import("../middleware/cors");
 	const patterns = getTrustedOriginPatterns(c.env);
 	const isTrusted = originMatchesAnyPattern(requestOrigin, patterns);
 
@@ -215,7 +317,30 @@ async function addCorsHeadersIfNeeded(
 	});
 }
 
-function isJwksDecryptError(error: unknown) {
+/**
+ * Checks if an error is a Better Auth redirect "error" (APIError with statusCode 3xx).
+ * Better Auth throws APIError for redirects instead of returning Response objects.
+ * Exported for unit testing.
+ */
+export function isBetterAuthRedirectError(
+	error: unknown,
+): error is { statusCode: number; headers: Headers } {
+	if (!error || typeof error !== "object") return false;
+	const e = error as { statusCode?: number; headers?: unknown; name?: string };
+	return (
+		e.name === "APIError" &&
+		typeof e.statusCode === "number" &&
+		e.statusCode >= 300 &&
+		e.statusCode < 400 &&
+		e.headers !== undefined
+	);
+}
+
+/**
+ * Checks if an error is a JWKS decrypt error from Better Auth.
+ * Exported for unit testing.
+ */
+export function isJwksDecryptError(error: unknown) {
 	if (!error) return false;
 	const message = error instanceof Error ? error.message : String(error);
 	return (
@@ -254,8 +379,12 @@ async function clearJwksAndResetAuth(
 	// Recovery path:
 	// - This error is almost always caused by a stale/seeded JWKS row whose privateKey cannot be
 	//   decrypted with the current Better Auth secret (or isn't encrypted at all).
+	// - First try to purge plaintext JWKS entries, then clear remaining invalid entries.
 	// - Clearing the JWKS table allows Better Auth to regenerate keys on retry.
 	try {
+		// First attempt targeted cleanup of plaintext keys
+		await purgePlaintextJwks(c);
+		// Then clear all remaining JWKS if needed
 		await c.env.DB.prepare("DELETE FROM jwks").run();
 		invalidateBetterAuthCache(c.env);
 	} catch {

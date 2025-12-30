@@ -8,6 +8,12 @@ export type JanovixEnvironment =
 
 export type Bindings = Env & {
 	/**
+	 * KV namespace for secondary storage (sessions, rate limiting).
+	 * Provides faster access than D1 for high-frequency operations.
+	 */
+	KV: KVNamespace;
+
+	/**
 	 * Environment identifier (local, dev, qa, production, preview, test)
 	 */
 	ENVIRONMENT?: JanovixEnvironment | string;
@@ -39,4 +45,21 @@ export type Bindings = Env & {
 	 * `https://*.client.com`.
 	 */
 	AUTH_TRUSTED_ORIGINS?: string;
+	/**
+	 * Mandrill API key for sending transactional emails.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	MANDRILL_API_KEY?: string;
+	/**
+	 * Frontend application URL for password reset and other auth flows.
+	 * Used to construct URLs in emails (e.g., password reset link).
+	 * Example: `https://auth.janovix.workers.dev`
+	 */
+	AUTH_FRONTEND_URL?: string;
+	/**
+	 * Cloudflare Turnstile secret key for bot protection.
+	 * Used to verify Turnstile tokens on password reset requests.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	TURNSTILE_SECRET_KEY?: string;
 };

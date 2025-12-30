@@ -1,7 +1,12 @@
 import type { BetterAuthOptions } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
+import { organization } from "better-auth/plugins/organization";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
+import {
+	sendPasswordResetEmail,
+	sendVerificationEmail,
+} from "../utils/mandrill";
 
 const BASE_PATH = "/api/auth";
 const ORG_SLUG = "janovix";
@@ -75,7 +80,10 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 	return ENVIRONMENT_MAP[fallback] ?? "local";
 }
 
-export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
+export function buildResolvedAuthConfig(
+	env: Bindings,
+	executionContext?: ExecutionContext,
+): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
 	const baseURL = resolveBaseURL(env.BETTER_AUTH_URL, resolvedEnv);
@@ -90,6 +98,100 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 		secret,
 		emailAndPassword: {
 			enabled: true,
+			requireEmailVerification: true,
+			sendResetPassword: async ({ user, token }, _request) => {
+				const apiKey = env.MANDRILL_API_KEY;
+				if (!apiKey) {
+					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
+					return;
+				}
+
+				// Construct frontend URL with token for direct password reset
+				// Instead of using Better Auth's backend redirect URL, we send users
+				// directly to the frontend which calls the API to reset password
+				const frontendBaseUrl =
+					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+				const resetUrl = `${frontendBaseUrl}/recover/reset?token=${encodeURIComponent(token)}`;
+
+				// Use waitUntil for Cloudflare Workers to ensure async operation completes
+				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
+				const emailPromise = sendPasswordResetEmail(
+					apiKey,
+					user.email,
+					user.name || user.email,
+					resetUrl,
+					"janovix-auth-password-recovery-template",
+				);
+
+				// Use waitUntil if execution context is available (Cloudflare Workers)
+				if (
+					executionContext &&
+					typeof executionContext.waitUntil === "function"
+				) {
+					executionContext.waitUntil(emailPromise);
+				} else {
+					// Fallback: void for non-Cloudflare environments
+					void emailPromise;
+				}
+			},
+			onPasswordReset: async ({ user }, _request) => {
+				// Optional callback after password reset is successful
+				// Log for audit purposes or trigger additional actions
+				console.log(`Password reset completed for user: ${user.email}`);
+			},
+		},
+		emailVerification: {
+			sendVerificationEmail: async ({ user, url, token }, _request) => {
+				const apiKey = env.MANDRILL_API_KEY;
+				if (!apiKey) {
+					console.error(
+						"[Email Verification] MANDRILL_API_KEY is not configured",
+					);
+					return;
+				}
+
+				// Construct verify URL that points to Better Auth's endpoint
+				// but redirects to the auth frontend after verification
+				const authServiceBaseUrl =
+					env.BETTER_AUTH_URL || "https://auth-svc.janovix.workers.dev";
+				const frontendBaseUrl =
+					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+
+				// The callback URL is where Better Auth redirects after successful verification
+				// It should point to the auth frontend's verify page with success flag
+				const callbackURL = `${frontendBaseUrl}/verify?success=true`;
+
+				// Construct the full verification URL
+				// - Points to Better Auth's verify-email endpoint (does actual verification)
+				// - callbackURL tells Better Auth where to redirect after verification
+				const verifyUrl = `${authServiceBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent(callbackURL)}`;
+
+				// Log the URL transformation for debugging
+				console.log(
+					`[Email Verification] Original URL: ${url}, New URL: ${verifyUrl}`,
+				);
+
+				// Use waitUntil for Cloudflare Workers to ensure async operation completes
+				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
+				const emailPromise = sendVerificationEmail(
+					apiKey,
+					user.email,
+					user.name || user.email,
+					verifyUrl,
+					"janovix-auth-email-verification-template",
+				);
+
+				// Use waitUntil if execution context is available (Cloudflare Workers)
+				if (
+					executionContext &&
+					typeof executionContext.waitUntil === "function"
+				) {
+					executionContext.waitUntil(emailPromise);
+				} else {
+					// Fallback: void for non-Cloudflare environments
+					void emailPromise;
+				}
+			},
 		},
 		plugins: [
 			jwt({
@@ -99,6 +201,45 @@ export function buildResolvedAuthConfig(env: Bindings): ResolvedAuthConfig {
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
+					// Include organization ID in JWT claims for multi-tenant support
+					definePayload: async ({ user, session }) => {
+						return {
+							sub: user.id,
+							email: user.email,
+							name: user.name,
+							// activeOrganizationId is set by better-auth organization plugin
+							// when user switches organizations via setActiveOrganization
+							organizationId: session.activeOrganizationId ?? null,
+						};
+					},
+				},
+			}),
+			organization({
+				// Allow users to create organizations
+				allowUserToCreateOrganization: true,
+				// Organization creator gets "owner" role by default
+				creatorRole: "owner",
+				// Send invitation emails
+				sendInvitationEmail: async ({ email, organization, inviter }) => {
+					const apiKey = env.MANDRILL_API_KEY;
+					if (!apiKey) {
+						console.error(
+							"[Organization Invitation] MANDRILL_API_KEY is not configured",
+						);
+						return;
+					}
+
+					const frontendBaseUrl =
+						env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+					const acceptUrl = `${frontendBaseUrl}/accept-invitation?org=${organization.id}`;
+
+					// Log for now, implement email sending later
+					console.log(
+						`[Organization Invitation] ${inviter.user.email} invited ${email} to ${organization.name}. Accept URL: ${acceptUrl}`,
+					);
+
+					// TODO: Implement actual email sending via Mandrill
+					// Use waitUntil pattern similar to password reset
 				},
 			}),
 		],
