@@ -787,7 +787,6 @@ describe("JWKS decrypt error recovery", () => {
 
 		// Override text() to throw
 		const mockResponse = new Response("", { status: 500 });
-		const originalText = mockResponse.text.bind(mockResponse);
 		mockResponse.text = vi.fn().mockRejectedValue(new Error("Read error"));
 
 		try {
