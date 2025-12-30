@@ -1,3 +1,10 @@
+# [1.1.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.3...v1.1.0-rc.4) (2025-12-30)
+
+
+### Features
+
+* Improve error handling and add org invitation email ([686422a](https://github.com/janovix/auth-svc/commit/686422a280fe3ad0464ba9aabe060160ac2819df))
+
 # [1.1.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2025-12-30)
 
 
