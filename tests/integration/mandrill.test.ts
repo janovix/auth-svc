@@ -4,6 +4,7 @@ import {
 	sendMandrillTemplate,
 	sendPasswordResetEmail,
 	sendVerificationEmail,
+	sendOrganizationInvitationEmail,
 	type MandrillMessage,
 	type MandrillSendResponse,
 } from "../../src/utils/mandrill";
@@ -475,6 +476,170 @@ describe("Mandrill Email Integration", () => {
 				{ name: "env", content: "" },
 				{ name: "url", content: verificationUrl },
 			]);
+		});
+	});
+
+	describe("sendOrganizationInvitationEmail", () => {
+		const apiKey = "test-api-key";
+		const invitation = {
+			email: "[email protected]",
+			inviteUrl: "https://example.com/invite?token=abc123",
+			organizationName: "Test Organization",
+			inviterName: "John Doe",
+			role: "member" as const,
+		};
+
+		it("sends organization invitation email with correct template variables", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: invitation.email,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			const consoleLogSpy = vi
+				.spyOn(console, "log")
+				.mockImplementation(() => {});
+
+			await sendOrganizationInvitationEmail(apiKey, invitation);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+
+			expect(callBody.template_name).toBe("janovix-org-invitation-template");
+			expect(callBody.message.to).toEqual([
+				{ email: invitation.email, type: "to" },
+			]);
+			expect(callBody.message.from_email).toBe("noreply@janovix.algenium.dev");
+			expect(callBody.message.from_name).toBe("Janovix");
+			expect(callBody.message.subject).toBe(
+				`Invitation to join ${invitation.organizationName}`,
+			);
+			expect(callBody.message.global_merge_vars).toEqual([
+				{ name: "org_name", content: invitation.organizationName },
+				{ name: "inviter_name", content: invitation.inviterName },
+				{ name: "invite_url", content: invitation.inviteUrl },
+				{ name: "role", content: invitation.role },
+			]);
+
+			expect(consoleLogSpy).toHaveBeenCalledWith(
+				"[Mandrill] Organization invitation email sent successfully",
+				{
+					toEmail: invitation.email,
+					organizationName: invitation.organizationName,
+				},
+			);
+
+			consoleLogSpy.mockRestore();
+		});
+
+		it("uses default role when role is not provided", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: invitation.email,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			const invitationWithoutRole = {
+				...invitation,
+				role: undefined,
+			};
+
+			await sendOrganizationInvitationEmail(apiKey, invitationWithoutRole);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			const roleVar = callBody.message.global_merge_vars.find(
+				(v: { name: string; content: string }) => v.name === "role",
+			);
+			expect(roleVar.content).toBe("member");
+		});
+
+		it("uses custom template name when provided", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: invitation.email,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			const customTemplate = "custom-org-invitation-template";
+			await sendOrganizationInvitationEmail(apiKey, invitation, customTemplate);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(callBody.template_name).toBe(customTemplate);
+		});
+
+		it("handles errors gracefully without throwing", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error");
+			mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+			await sendOrganizationInvitationEmail(apiKey, invitation);
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				"[Mandrill] Failed to send org invitation email",
+				{
+					toEmail: invitation.email,
+					organizationName: invitation.organizationName,
+					templateName: "janovix-org-invitation-template",
+					error: "Network error",
+				},
+			);
+
+			consoleErrorSpy.mockRestore();
+		});
+
+		it("handles non-Error exceptions gracefully", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error");
+			mockFetch.mockRejectedValueOnce("String error");
+
+			await sendOrganizationInvitationEmail(apiKey, invitation);
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				"[Mandrill] Failed to send org invitation email",
+				{
+					toEmail: invitation.email,
+					organizationName: invitation.organizationName,
+					templateName: "janovix-org-invitation-template",
+					error: "String error",
+				},
+			);
+
+			consoleErrorSpy.mockRestore();
 		});
 	});
 });
