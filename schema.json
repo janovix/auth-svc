@@ -2,7 +2,7 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "auth-svc",
-		"version": "1.1.0",
+		"version": "1.0.0-rc.25",
 		"description": "Complete backend API template using Hono + Chanfana + D1 + Vitest."
 	},
 	"components": {
@@ -355,6 +355,7 @@
 			"post": {
 				"tags": ["Authentication"],
 				"summary": "Request password reset",
+				"description": "Sends a password reset email to the specified address. Requires Turnstile verification for bot protection.",
 				"operationId": "auth-forgot-password",
 				"requestBody": {
 					"content": {
@@ -364,10 +365,15 @@
 								"properties": {
 									"email": {
 										"type": "string",
-										"format": "email"
+										"format": "email",
+										"description": "Email address to send reset link"
+									},
+									"turnstileToken": {
+										"type": "string",
+										"description": "Cloudflare Turnstile verification token"
 									}
 								},
-								"required": ["email"]
+								"required": ["email", "turnstileToken"]
 							}
 						}
 					}
@@ -384,6 +390,40 @@
 											"type": "boolean"
 										},
 										"data": {}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request (missing or invalid turnstile token)",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"message": {
+											"type": "string"
+										},
+										"errors": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"code": {
+														"type": "number"
+													},
+													"message": {
+														"type": "string"
+													}
+												},
+												"required": ["code", "message"]
+											}
+										}
 									},
 									"required": ["success"]
 								}

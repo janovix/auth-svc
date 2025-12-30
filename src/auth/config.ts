@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
+import { organization } from "better-auth/plugins/organization";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
 import {
@@ -200,6 +201,45 @@ export function buildResolvedAuthConfig(
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
+					// Include organization ID in JWT claims for multi-tenant support
+					definePayload: async ({ user, session }) => {
+						return {
+							sub: user.id,
+							email: user.email,
+							name: user.name,
+							// activeOrganizationId is set by better-auth organization plugin
+							// when user switches organizations via setActiveOrganization
+							organizationId: session.activeOrganizationId ?? null,
+						};
+					},
+				},
+			}),
+			organization({
+				// Allow users to create organizations
+				allowUserToCreateOrganization: true,
+				// Organization creator gets "owner" role by default
+				creatorRole: "owner",
+				// Send invitation emails
+				sendInvitationEmail: async ({ email, organization, inviter }) => {
+					const apiKey = env.MANDRILL_API_KEY;
+					if (!apiKey) {
+						console.error(
+							"[Organization Invitation] MANDRILL_API_KEY is not configured",
+						);
+						return;
+					}
+
+					const frontendBaseUrl =
+						env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+					const acceptUrl = `${frontendBaseUrl}/accept-invitation?org=${organization.id}`;
+
+					// Log for now, implement email sending later
+					console.log(
+						`[Organization Invitation] ${inviter.user.email} invited ${email} to ${organization.name}. Accept URL: ${acceptUrl}`,
+					);
+
+					// TODO: Implement actual email sending via Mandrill
+					// Use waitUntil pattern similar to password reset
 				},
 			}),
 		],
