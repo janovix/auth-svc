@@ -84,6 +84,82 @@ describe("Mandrill Email Integration", () => {
 			);
 		});
 
+		it("handles invalid JSON response", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => "invalid json response",
+			});
+
+			await expect(sendMandrillTemplate(apiKey, message)).rejects.toThrow(
+				"Mandrill API returned invalid JSON (200): invalid json response",
+			);
+		});
+
+		it("handles message without global_merge_vars", async () => {
+			const messageWithoutVars: MandrillMessage = {
+				to: [{ email: "[email protected]", type: "to" }],
+				from_email: "[email protected]",
+				subject: "Test",
+				template_name: "test-template",
+			};
+
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: "[email protected]",
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+			});
+
+			await sendMandrillTemplate(apiKey, messageWithoutVars);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("handles non-Error exceptions in sendPasswordResetEmail", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error");
+			mockFetch.mockRejectedValueOnce("String error");
+
+			await sendPasswordResetEmail(apiKey, "[email protected]", "User", "url");
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				"[Mandrill] Failed to send password reset email",
+				expect.objectContaining({
+					toEmail: "[email protected]",
+					error: "String error",
+				}),
+			);
+
+			consoleErrorSpy.mockRestore();
+		});
+
+		it("handles non-Error exceptions in sendVerificationEmail", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error");
+			mockFetch.mockRejectedValueOnce({ message: "Object error" });
+
+			await sendVerificationEmail(apiKey, "[email protected]", "User", "url");
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				"[Mandrill] Failed to send verification email",
+				expect.objectContaining({
+					toEmail: "[email protected]",
+					error: expect.any(String),
+				}),
+			);
+
+			consoleErrorSpy.mockRestore();
+		});
+
 		it("handles rejected emails", async () => {
 			const mockResponse: MandrillSendResponse[] = [
 				{
