@@ -39,8 +39,6 @@ export default defineWorkersConfig({
 				ssr: {
 					include: [
 						"kysely",
-						"zod",
-						"better-call",
 						// Bundle kysely and any kysely-related packages
 						// These are often used by better-auth internally and can fail on Windows
 						// due to module resolution issues or platform-specific code
