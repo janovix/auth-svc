@@ -1,3 +1,10 @@
+# [1.2.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-01-08)
+
+
+### Features
+
+* integrate Sentry for error tracking and monitoring, update deployment scripts, and add new environment variables ([0f560d2](https://github.com/janovix/auth-svc/commit/0f560d24e7fe4a335507a018fe5bda89b1ed79aa))
+
 # [1.2.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0-rc.1) (2026-01-08)
 
 
