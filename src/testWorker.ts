@@ -1,7 +1,10 @@
-import app from "./index";
+/**
+ * Test entry point.
+ * Exports the raw Hono app without Sentry wrapper for use in tests.
+ */
+import { app } from "./app";
 import type { Bindings } from "./types/bindings";
 
-// Export without Sentry wrapper for tests
 export default {
 	async fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
 		return app.fetch(request, env, ctx);

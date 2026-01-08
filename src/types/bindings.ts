@@ -14,6 +14,12 @@ export type Bindings = Env & {
 	KV: KVNamespace;
 
 	/**
+	 * Cloudflare Worker version metadata.
+	 * Used for Sentry release tracking.
+	 */
+	CF_VERSION_METADATA: WorkerVersionMetadata;
+
+	/**
 	 * Environment identifier (local, dev, qa, production, preview, test)
 	 */
 	ENVIRONMENT?: JanovixEnvironment | string;
