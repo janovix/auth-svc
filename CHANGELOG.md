@@ -1,3 +1,17 @@
+# [1.2.0](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0) (2026-01-08)
+
+
+### Bug Fixes
+
+* restore JWT definePayload with organizationId and org plugin options ([9f50b7c](https://github.com/janovix/auth-svc/commit/9f50b7cc74461be5083dfc77011dc14ac9353b4b))
+
+
+### Features
+
+* add admin, emailOTP, openAPI plugins with janovix.com domain ([60f4d57](https://github.com/janovix/auth-svc/commit/60f4d57463b2e8e349977a115384975aa3e9f545))
+* **auth:** enhance organization invitation flow and update test command ([2c3a91f](https://github.com/janovix/auth-svc/commit/2c3a91f0d6ab0abd204f18cee6d53ca8ba2f67a3))
+* Improve error handling and add org invitation email ([686422a](https://github.com/janovix/auth-svc/commit/686422a280fe3ad0464ba9aabe060160ac2819df))
+
 # [1.2.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0-rc.1) (2026-01-08)
 
 
