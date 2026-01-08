@@ -75,7 +75,7 @@ describe("buildResolvedAuthConfig", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "production",
-				BETTER_AUTH_URL: "https://auth-core.janovix.ai",
+				BETTER_AUTH_URL: "https://auth-core.janovix.com",
 				AUTH_COOKIE_DOMAIN: "login.client.com",
 				AUTH_TRUSTED_ORIGINS:
 					"https://portal.client.com,https://*.client-staging.com",
@@ -97,7 +97,9 @@ describe("buildResolvedAuthConfig", () => {
 			]),
 		);
 		// ENVIRONMENT-based default should NOT be included when AUTH_TRUSTED_ORIGINS is set
-		expect(config.options.trustedOrigins).not.toContain("https://*.janovix.ai");
+		expect(config.options.trustedOrigins).not.toContain(
+			"https://*.janovix.com",
+		);
 	});
 
 	it("keeps localhost origins for local env without cross-subdomain cookies", () => {

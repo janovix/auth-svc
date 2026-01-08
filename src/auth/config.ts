@@ -41,14 +41,14 @@ const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
 	preview: ".janovix.workers.dev",
 	dev: ".janovix.workers.dev",
 	qa: ".algenium.qa",
-	production: ".janovix.ai",
+	production: ".janovix.com",
 };
 
 const TRUSTED_ORIGINS_BY_ENV: Partial<Record<JanovixEnvironment, string[]>> = {
 	preview: ["https://*.janovix.workers.dev"],
 	dev: ["https://*.janovix.workers.dev"],
 	qa: ["https://*.algenium.qa"],
-	production: ["https://*.janovix.ai"],
+	production: ["https://*.janovix.com"],
 };
 
 const LOCAL_DEVELOPMENT_ORIGINS = [
