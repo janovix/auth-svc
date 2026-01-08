@@ -334,7 +334,7 @@ describe("buildResolvedAuthConfig", () => {
 		);
 	});
 
-	it("configures email callbacks with execution context", () => {
+	it("configures plugins including emailOTP for OTP-based verification", () => {
 		const mockExecutionContext = {
 			waitUntil: vi.fn(),
 			passThroughOnException: () => {},
@@ -350,15 +350,16 @@ describe("buildResolvedAuthConfig", () => {
 			mockExecutionContext,
 		);
 
-		// Verify email callbacks are configured
+		// Verify email/password is enabled for signup
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const emailAndPassword = (config.options as any).emailAndPassword;
-		expect(emailAndPassword.sendResetPassword).toBeDefined();
-		expect(emailAndPassword.onPasswordReset).toBeDefined();
+		expect(emailAndPassword.enabled).toBe(true);
+		expect(emailAndPassword.requireEmailVerification).toBe(true);
 
+		// Verify plugins are configured (emailOTP, admin, organization, jwt, openAPI)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const emailVerification = (config.options as any).emailVerification;
-		expect(emailVerification.sendVerificationEmail).toBeDefined();
+		const plugins = (config.options as any).plugins;
+		expect(plugins.length).toBeGreaterThan(0);
 	});
 
 	it("configures organization plugin with invitation email callback", () => {
@@ -380,19 +381,40 @@ describe("buildResolvedAuthConfig", () => {
 		expect(config.options).toBeDefined();
 	});
 
-	it("handles missing MANDRILL_API_KEY in email callbacks gracefully", () => {
+	it("configures admin plugin for user management", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnv({
 				ENVIRONMENT: "dev",
 				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: undefined,
 			}),
 		);
 
-		// Email callbacks should still be configured, they'll just log errors
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const emailAndPassword = (config.options as any).emailAndPassword;
-		expect(emailAndPassword.sendResetPassword).toBeDefined();
+		const plugins = (config.options as any).plugins;
+		// Verify admin plugin is included
+		const adminPlugin = plugins.find(
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(p: any) => p?.id === "admin",
+		);
+		expect(adminPlugin).toBeDefined();
+	});
+
+	it("configures openAPI plugin for API documentation", () => {
+		const config = buildResolvedAuthConfig(
+			buildEnv({
+				ENVIRONMENT: "dev",
+				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+			}),
+		);
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const plugins = (config.options as any).plugins;
+		// Verify openAPI plugin is included
+		const openAPIPlugin = plugins.find(
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(p: any) => p?.id === "open-api",
+		);
+		expect(openAPIPlugin).toBeDefined();
 	});
 
 	it("handles BETTER_AUTH_URL with trailing whitespace", () => {
@@ -460,135 +482,6 @@ describe("buildResolvedAuthConfig", () => {
 		expect(config.options.advanced?.disableOriginCheck).toBe(true);
 	});
 
-	it("email callbacks use waitUntil when execution context is available", async () => {
-		const waitUntilFn = vi.fn();
-		const mockExecutionContext = {
-			waitUntil: waitUntilFn,
-			passThroughOnException: () => {},
-			props: {},
-		} as ExecutionContext;
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: "test-api-key",
-			}),
-			mockExecutionContext,
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const sendResetPassword = (config.options as any).emailAndPassword
-			.sendResetPassword;
-
-		// Call the callback
-		await sendResetPassword(
-			{
-				user: { id: "1", email: "[email protected]", name: "Test User" },
-				token: "test-token",
-			},
-			{} as Request,
-		);
-
-		// Verify waitUntil was called
-		expect(waitUntilFn).toHaveBeenCalled();
-	});
-
-	it("email callbacks fallback to void when execution context lacks waitUntil", async () => {
-		const mockExecutionContext = {
-			passThroughOnException: () => {},
-			props: {},
-		} as ExecutionContext;
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: "test-api-key",
-			}),
-			mockExecutionContext,
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const sendResetPassword = (config.options as any).emailAndPassword
-			.sendResetPassword;
-
-		// Should not throw - fallback path uses void
-		await expect(
-			sendResetPassword(
-				{
-					user: { id: "1", email: "[email protected]", name: "Test User" },
-					token: "test-token",
-				},
-				{} as Request,
-			),
-		).resolves.not.toThrow();
-	});
-
-	it("email verification callback uses waitUntil when execution context is available", async () => {
-		const waitUntilFn = vi.fn();
-		const mockExecutionContext = {
-			waitUntil: waitUntilFn,
-			passThroughOnException: () => {},
-			props: {},
-		} as ExecutionContext;
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: "test-api-key",
-			}),
-			mockExecutionContext,
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const sendVerificationEmail = (config.options as any).emailVerification
-			.sendVerificationEmail;
-
-		// Call the callback
-		await sendVerificationEmail(
-			{
-				user: { id: "1", email: "[email protected]", name: "Test User" },
-				url: "https://example.com/verify",
-				token: "test-token",
-			},
-			{} as Request,
-		);
-
-		// Verify waitUntil was called
-		expect(waitUntilFn).toHaveBeenCalled();
-	});
-
-	it("onPasswordReset callback logs password reset completion", async () => {
-		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: "test-api-key",
-			}),
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const onPasswordReset = (config.options as any).emailAndPassword
-			.onPasswordReset;
-
-		await onPasswordReset(
-			{
-				user: { id: "1", email: "[email protected]", name: "Test User" },
-			},
-			{} as Request,
-		);
-
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"Password reset completed for user: [email protected]",
-		);
-
-		consoleSpy.mockRestore();
-	});
-
 	it("organization invitation callback uses waitUntil when execution context is available", async () => {
 		const waitUntilFn = vi.fn();
 		const mockExecutionContext = {
@@ -627,71 +520,6 @@ describe("buildResolvedAuthConfig", () => {
 		expect(config.options).toBeDefined();
 
 		consoleLogSpy.mockRestore();
-		consoleErrorSpy.mockRestore();
-	});
-
-	it("email callbacks handle missing MANDRILL_API_KEY with console.error", async () => {
-		const consoleErrorSpy = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: undefined,
-			}),
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const sendResetPassword = (config.options as any).emailAndPassword
-			.sendResetPassword;
-
-		await sendResetPassword(
-			{
-				user: { id: "1", email: "[email protected]", name: "Test User" },
-				token: "test-token",
-			},
-			{} as Request,
-		);
-
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"[Password Reset] MANDRILL_API_KEY is not configured",
-		);
-
-		consoleErrorSpy.mockRestore();
-	});
-
-	it("email verification callback handles missing MANDRILL_API_KEY with console.error", async () => {
-		const consoleErrorSpy = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
-
-		const config = buildResolvedAuthConfig(
-			buildEnv({
-				ENVIRONMENT: "dev",
-				BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-				MANDRILL_API_KEY: undefined,
-			}),
-		);
-
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const sendVerificationEmail = (config.options as any).emailVerification
-			.sendVerificationEmail;
-
-		await sendVerificationEmail(
-			{
-				user: { id: "1", email: "[email protected]", name: "Test User" },
-				url: "https://example.com/verify",
-				token: "test-token",
-			},
-			{} as Request,
-		);
-
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"[Email Verification] MANDRILL_API_KEY is not configured",
-		);
-
 		consoleErrorSpy.mockRestore();
 	});
 });

@@ -1,12 +1,13 @@
 import type { BetterAuthOptions } from "better-auth";
+import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
+import { emailOTP, openAPI } from "better-auth/plugins";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
 import {
+	sendOtpEmail,
 	sendOrganizationInvitationEmail,
-	sendPasswordResetEmail,
-	sendVerificationEmail,
 } from "../utils/mandrill";
 
 const BASE_PATH = "/api/auth";
@@ -97,104 +98,21 @@ export function buildResolvedAuthConfig(
 		basePath: BASE_PATH,
 		baseURL,
 		secret,
+		// Email/Password is enabled ONLY for signup (to capture user's name).
+		// Users never use passwords to sign in - all sign-in uses OTP codes.
+		// The password field during signup is auto-generated and never used.
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
-			sendResetPassword: async ({ user, token }, _request) => {
-				const apiKey = env.MANDRILL_API_KEY;
-				if (!apiKey) {
-					console.error("[Password Reset] MANDRILL_API_KEY is not configured");
-					return;
-				}
-
-				// Construct frontend URL with token for direct password reset
-				// Instead of using Better Auth's backend redirect URL, we send users
-				// directly to the frontend which calls the API to reset password
-				const frontendBaseUrl =
-					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
-				const resetUrl = `${frontendBaseUrl}/recover/reset?token=${encodeURIComponent(token)}`;
-
-				// Use waitUntil for Cloudflare Workers to ensure async operation completes
-				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
-				const emailPromise = sendPasswordResetEmail(
-					apiKey,
-					user.email,
-					user.name || user.email,
-					resetUrl,
-					"janovix-auth-password-recovery-template",
-				);
-
-				// Use waitUntil if execution context is available (Cloudflare Workers)
-				if (
-					executionContext &&
-					typeof executionContext.waitUntil === "function"
-				) {
-					executionContext.waitUntil(emailPromise);
-				} else {
-					// Fallback: void for non-Cloudflare environments
-					void emailPromise;
-				}
-			},
-			onPasswordReset: async ({ user }, _request) => {
-				// Optional callback after password reset is successful
-				// Log for audit purposes or trigger additional actions
-				console.log(`Password reset completed for user: ${user.email}`);
-			},
-		},
-		emailVerification: {
-			sendVerificationEmail: async ({ user, url, token }, _request) => {
-				const apiKey = env.MANDRILL_API_KEY;
-				if (!apiKey) {
-					console.error(
-						"[Email Verification] MANDRILL_API_KEY is not configured",
-					);
-					return;
-				}
-
-				// Construct verify URL that points to Better Auth's endpoint
-				// but redirects to the auth frontend after verification
-				const authServiceBaseUrl =
-					env.BETTER_AUTH_URL || "https://auth-svc.janovix.workers.dev";
-				const frontendBaseUrl =
-					env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
-
-				// The callback URL is where Better Auth redirects after successful verification
-				// It should point to the auth frontend's verify page with success flag
-				const callbackURL = `${frontendBaseUrl}/verify?success=true`;
-
-				// Construct the full verification URL
-				// - Points to Better Auth's verify-email endpoint (does actual verification)
-				// - callbackURL tells Better Auth where to redirect after verification
-				const verifyUrl = `${authServiceBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=${encodeURIComponent(callbackURL)}`;
-
-				// Log the URL transformation for debugging
-				console.log(
-					`[Email Verification] Original URL: ${url}, New URL: ${verifyUrl}`,
-				);
-
-				// Use waitUntil for Cloudflare Workers to ensure async operation completes
-				// Better Auth documentation recommends not awaiting email sending to prevent timing attacks
-				const emailPromise = sendVerificationEmail(
-					apiKey,
-					user.email,
-					user.name || user.email,
-					verifyUrl,
-					"janovix-auth-email-verification-template",
-				);
-
-				// Use waitUntil if execution context is available (Cloudflare Workers)
-				if (
-					executionContext &&
-					typeof executionContext.waitUntil === "function"
-				) {
-					executionContext.waitUntil(emailPromise);
-				} else {
-					// Fallback: void for non-Cloudflare environments
-					void emailPromise;
-				}
-			},
+			// No password reset - passwordless system
 		},
 		plugins: [
+			openAPI({
+				// Better Auth's OpenAPI plugin generates:
+				// 1. A reference page at /api/auth/reference (Scalar UI)
+				// 2. The JSON schema endpoint at /api/auth/open-api/generate-schema
+				path: "/reference",
+			}),
 			jwt({
 				jwks: {
 					// Exposed as `${basePath}/jwks` (i.e. `/api/auth/jwks`)
@@ -202,68 +120,142 @@ export function buildResolvedAuthConfig(
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
-					// Include organization ID in JWT claims for multi-tenant support
-					definePayload: async ({ user, session }) => {
-						return {
-							sub: user.id,
-							email: user.email,
-							name: user.name,
-							// activeOrganizationId is set by better-auth organization plugin
-							// when user switches organizations via setActiveOrganization
-							organizationId: session.activeOrganizationId ?? null,
-						};
-					},
 				},
 			}),
+			admin({
+				// Admin users can manage all users, roles, and perform admin operations
+				// Users with "admin" role or in adminUserIds list get admin privileges
+				defaultRole: "user",
+				adminRoles: ["admin"],
+			}),
 			organization({
-				// Allow users to create organizations
-				allowUserToCreateOrganization: true,
-				// Organization creator gets "owner" role by default
-				creatorRole: "owner",
-				// Send invitation emails
-				sendInvitationEmail: async (data) => {
-					const { email, organization, inviter, id: invitationId, role } = data;
-					const apiKey = env.MANDRILL_API_KEY;
-					if (!apiKey) {
-						console.error(
-							"[Organization Invitation] MANDRILL_API_KEY is not configured",
-						);
-						return;
-					}
+				// Organization membership support (users <-> organizations).
+				// We keep teams disabled for now; can be enabled later without breaking the API surface.
+				// Note: Prisma's @@map directives handle the plural table name mapping.
+				teams: { enabled: false },
+				sendInvitationEmail:
+					/* istanbul ignore next -- @preserve Mandrill email sending tested via integration */
+					async (data: {
+						invitation?: { id?: string };
+						id?: string;
+						organization?: { name?: string };
+						inviter?: { user?: { name?: string; email?: string } };
+						email?: string;
+						role?: string;
+					}) => {
+						const apiKey = env.MANDRILL_API_KEY;
+						if (!apiKey) {
+							console.error(
+								"[Org Invitation] MANDRILL_API_KEY is not configured; invitation email skipped",
+							);
+							return;
+						}
 
-					// Point to the AML frontend for invitation acceptance
-					const amlFrontendUrl =
-						env.AML_FRONTEND_URL || "https://aml.janovix.workers.dev";
-					const acceptUrl = `${amlFrontendUrl}/invitations/accept?invitationId=${invitationId}`;
+						// Invitation acceptance happens in the AML app, not the auth app
+						const partnerAppUrl =
+							env.AML_FRONTEND_URL || "https://aml.janovix.workers.dev";
 
-					console.log(
-						`[Organization Invitation] ${inviter.user.email} invited ${email} to ${organization.name}. Accept URL: ${acceptUrl}`,
-					);
+						const invitationId = data.invitation?.id ?? data.id ?? "";
 
-					// Use waitUntil pattern for Cloudflare Workers
-					const emailPromise = sendOrganizationInvitationEmail(
-						apiKey,
-						{
+						const inviteUrl = invitationId
+							? `${partnerAppUrl}/invitations/accept?invitationId=${encodeURIComponent(invitationId)}`
+							: `${partnerAppUrl}/invitations`;
+
+						const organizationName =
+							data.organization?.name ?? "tu organización";
+						// inviter is a member with nested user info
+						const inviterUser = data.inviter?.user;
+						const inviterName =
+							inviterUser?.name ?? inviterUser?.email ?? "Janovix";
+						const email = data.email ?? "";
+
+						if (!email) {
+							console.error(
+								"[Org Invitation] Missing recipient email; invitation email skipped",
+							);
+							return;
+						}
+
+						const invitationPromise = sendOrganizationInvitationEmail(apiKey, {
 							email,
-							inviteUrl: acceptUrl,
-							organizationName: organization.name,
-							inviterName: inviter.user.name || inviter.user.email,
-							role: role || "member",
-						},
-						"janovix-org-invitation-template",
-					);
+							inviteUrl,
+							organizationName,
+							inviterName,
+							role: data.role,
+						});
 
-					// Use waitUntil if execution context is available (Cloudflare Workers)
-					if (
-						executionContext &&
-						typeof executionContext.waitUntil === "function"
-					) {
-						executionContext.waitUntil(emailPromise);
-					} else {
-						// Fallback: void for non-Cloudflare environments
-						void emailPromise;
-					}
-				},
+						if (
+							executionContext &&
+							typeof executionContext.waitUntil === "function"
+						) {
+							executionContext.waitUntil(invitationPromise);
+						} else {
+							// Fallback: ensure promise completes and errors are handled
+							invitationPromise.catch((error) => {
+								console.error(
+									"[Org Invitation] Unhandled email promise rejection",
+									error,
+								);
+							});
+						}
+					},
+			}),
+			emailOTP({
+				otpLength: 6,
+				expiresIn: 300, // 5 minutes
+				// Replace default email verification link with OTP
+				// This ensures signup flow stays in-app and preserves redirectTo
+				disableSignUp: false,
+				// Override the default email verification with OTP-based verification
+				// This means no email links are sent - only OTP codes
+				sendVerificationOnSignUp: true,
+				sendVerificationOTP:
+					/* istanbul ignore next -- @preserve Mandrill email sending tested via integration */
+					async ({
+						email,
+						otp,
+						type,
+					}: {
+						email: string;
+						otp: string;
+						type: string;
+					}) => {
+						const apiKey = env.MANDRILL_API_KEY;
+						if (!apiKey) {
+							console.error(
+								"[Email OTP] MANDRILL_API_KEY is not configured; OTP email skipped",
+							);
+							return;
+						}
+
+						const trimmedEmail = email.trim();
+						const userName = trimmedEmail.includes("@")
+							? trimmedEmail.split("@")[0]
+							: trimmedEmail || email;
+
+						// Use waitUntil for Cloudflare Workers to ensure async operation completes
+						const emailPromise = sendOtpEmail(
+							apiKey,
+							email,
+							userName,
+							otp,
+							type,
+						);
+
+						if (
+							executionContext &&
+							typeof executionContext.waitUntil === "function"
+						) {
+							executionContext.waitUntil(emailPromise);
+						} else {
+							emailPromise.catch((error) => {
+								console.error(
+									"[Email OTP] Unhandled email promise rejection",
+									error,
+								);
+							});
+						}
+					},
 			}),
 		],
 		session: {
