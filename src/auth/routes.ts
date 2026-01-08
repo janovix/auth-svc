@@ -130,9 +130,10 @@ async function validateTurnstileForRequest(
 	}
 
 	// Parse the request body to get the turnstile token
+	// Clone the request stream to avoid exhausting it for Better Auth handler
 	let body: { turnstileToken?: string; email?: string };
 	try {
-		body = await c.req.json();
+		body = await c.req.raw.clone().json();
 	} catch {
 		return { valid: false, message: "Invalid request body" };
 	}

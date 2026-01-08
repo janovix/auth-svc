@@ -1,5 +1,18 @@
-# [1.1.0](https://github.com/janovix/auth-svc/compare/v1.0.0...v1.1.0) (2025-12-30)
+# [1.2.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0-rc.1) (2026-01-08)
 
+
+### Bug Fixes
+
+* restore JWT definePayload with organizationId and org plugin options ([9f50b7c](https://github.com/janovix/auth-svc/commit/9f50b7cc74461be5083dfc77011dc14ac9353b4b))
+
+
+### Features
+
+* add admin, emailOTP, openAPI plugins with janovix.com domain ([60f4d57](https://github.com/janovix/auth-svc/commit/60f4d57463b2e8e349977a115384975aa3e9f545))
+* **auth:** enhance organization invitation flow and update test command ([2c3a91f](https://github.com/janovix/auth-svc/commit/2c3a91f0d6ab0abd204f18cee6d53ca8ba2f67a3))
+* Improve error handling and add org invitation email ([686422a](https://github.com/janovix/auth-svc/commit/686422a280fe3ad0464ba9aabe060160ac2819df))
+
+# [1.1.0](https://github.com/janovix/auth-svc/compare/v1.0.0...v1.1.0) (2025-12-30)
 
 ### Bug Fixes
 
@@ -10,7 +23,6 @@
 * from name sending function ([b817a98](https://github.com/janovix/auth-svc/commit/b817a98421be760e7d1c617007b01242527a1885))
 * removed messages in cors middleware ([3d1a92b](https://github.com/janovix/auth-svc/commit/3d1a92b7d29a7696a409c30efe1a9fa41ed6ac82))
 * update Mandrill API endpoint to include .json extension ([23344d1](https://github.com/janovix/auth-svc/commit/23344d1e6f039b5254ecea2ff1fcb9673812ec73))
-
 
 ### Features
 
@@ -31,6 +43,35 @@
 ### Performance Improvements
 
 * add KV secondary storage for Better Auth and remove hot-path queries ([73a408f](https://github.com/janovix/auth-svc/commit/73a408f9723e66322c35a262e75369abf7d25a6a))
+
+# [1.1.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.5...v1.1.0-rc.6) (2026-01-08)
+
+### Bug Fixes
+
+* restore JWT definePayload with organizationId and org plugin options ([9f50b7c](https://github.com/janovix/auth-svc/commit/9f50b7cc74461be5083dfc77011dc14ac9353b4b))
+
+
+# [1.1.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.4...v1.1.0-rc.5) (2026-01-08)
+
+
+### Features
+
+* add admin, emailOTP, openAPI plugins with janovix.com domain ([60f4d57](https://github.com/janovix/auth-svc/commit/60f4d57463b2e8e349977a115384975aa3e9f545))
+
+# [1.1.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.3...v1.1.0-rc.4) (2025-12-30)
+
+
+### Features
+
+* Improve error handling and add org invitation email ([686422a](https://github.com/janovix/auth-svc/commit/686422a280fe3ad0464ba9aabe060160ac2819df))
+
+# [1.1.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2025-12-30)
+
+
+### Features
+
+* **auth:** enhance organization invitation flow and update test command ([2c3a91f](https://github.com/janovix/auth-svc/commit/2c3a91f0d6ab0abd204f18cee6d53ca8ba2f67a3))
+
 
 # [1.1.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2025-12-30)
 

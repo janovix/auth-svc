@@ -62,4 +62,10 @@ export type Bindings = Env & {
 	 * Configured via Cloudflare Dashboard secrets.
 	 */
 	TURNSTILE_SECRET_KEY?: string;
+	/**
+	 * AML Frontend application URL for organization-related flows.
+	 * Used to construct invitation acceptance URLs.
+	 * Example: `https://aml.janovix.workers.dev`
+	 */
+	AML_FRONTEND_URL?: string;
 };

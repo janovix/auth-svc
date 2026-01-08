@@ -4,6 +4,13 @@
  */
 
 import { TEMPLATE_IMAGES } from "./constants";
+export type OrganizationInvitationEmail = {
+	email: string;
+	inviteUrl: string;
+	organizationName: string;
+	inviterName: string;
+	role?: string;
+};
 
 const MANDRILL_API_BASE = "https://mandrillapp.com/api/1.0";
 
@@ -103,79 +110,109 @@ export async function sendMandrillTemplate(
 }
 
 /**
- * Sends a password reset email using Mandrill template.
+ * Sends an email verification OTP email using Mandrill template.
  *
  * @param apiKey - Mandrill API key
  * @param toEmail - Recipient email address
  * @param userName - User's name for personalization
- * @param resetUrl - Password reset URL with token
- * @param templateName - Mandrill template name (default: janovix-auth-password-recovery-template)
+ * @param otp - The one-time password code
+ * @param type - The type of OTP (email-verification, sign-in, etc.)
+ * @param templateName - Mandrill template name (default: janovix-email-otp-template)
  * @returns Promise that resolves when email is sent (use with waitUntil on serverless)
  */
-export async function sendPasswordResetEmail(
+export async function sendOtpEmail(
 	apiKey: string,
 	toEmail: string,
 	userName: string,
-	resetUrl: string,
-	templateName = "janovix-auth-password-recovery-template",
+	otp: string,
+	type: string,
+	templateName = "janovix-email-otp-template",
 ): Promise<void> {
+	// Determine subject based on OTP type
+	const subjectMap: Record<string, string> = {
+		"email-verification": "Tu código de verificación - Janovix",
+		"sign-in": "Tu código de inicio de sesión - Janovix",
+		"forget-password": "Tu código de recuperación - Janovix",
+	};
+	const subject = subjectMap[type] || "Tu código de verificación - Janovix";
+
 	try {
-		await sendMandrillTemplate(apiKey, {
+		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: toEmail, type: "to" }],
-			from_email: "noreply@janovix.algenium.dev",
+			from_email: "noreply@janovix.com",
 			from_name: "Janovix",
-			subject: "Restablecer tu contraseña - Janovix",
+			subject,
 			template_name: templateName,
 			global_merge_vars: [
 				{ name: "env", content: userName },
-				{ name: "recover_url", content: resetUrl },
+				{ name: "otp", content: otp },
+				{ name: "type", content: type },
 			],
 			images: TEMPLATE_IMAGES,
 		});
+		console.log("[Mandrill] OTP email sent successfully", {
+			toEmail,
+			type,
+			messageIds: result.map((r) => r._id),
+			statuses: result.map((r) => r.status),
+		});
 	} catch (error) {
 		// Log error but don't throw - we don't want to expose email sending failures
-		console.error("[Mandrill] Failed to send password reset email", {
+		console.error("[Mandrill] Failed to send OTP email", {
 			toEmail,
+			type,
+			templateName,
 			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
 		});
+		// Don't rethrow - allow the promise to resolve to prevent exposing failures
 	}
 }
 
 /**
- * Sends an email verification email using Mandrill template.
+ * Sends an organization invitation email using Mandrill template.
  *
  * @param apiKey - Mandrill API key
- * @param toEmail - Recipient email address
- * @param userName - User's name for personalization
- * @param verificationUrl - Email verification URL with token
- * @param templateName - Mandrill template name (default: janovix-auth-email-verification-template)
- * @returns Promise that resolves when email is sent (use with waitUntil on serverless)
+ * @param invitation - Invitation email payload (org name, inviter, link)
+ * @param templateName - Mandrill template name (default: janovix-org-invitation-template)
  */
-export async function sendVerificationEmail(
+export async function sendOrganizationInvitationEmail(
 	apiKey: string,
-	toEmail: string,
-	userName: string,
-	verificationUrl: string,
-	templateName = "janovix-auth-email-verification-template",
+	invitation: OrganizationInvitationEmail,
+	templateName = "janovix-org-invitation-template",
 ): Promise<void> {
 	try {
-		await sendMandrillTemplate(apiKey, {
-			to: [{ email: toEmail, type: "to" }],
-			from_email: "noreply@janovix.algenium.dev",
+		const result = await sendMandrillTemplate(apiKey, {
+			to: [{ email: invitation.email, type: "to" }],
+			from_email: "noreply@janovix.com",
 			from_name: "Janovix",
-			subject: "Verifica tu correo electrónico - Janovix",
+			subject: `Invitación a unirse a ${invitation.organizationName}`,
 			template_name: templateName,
 			global_merge_vars: [
-				{ name: "env", content: userName },
-				{ name: "url", content: verificationUrl },
+				{ name: "org_name", content: invitation.organizationName },
+				{ name: "inviter_name", content: invitation.inviterName },
+				{ name: "invite_url", content: invitation.inviteUrl },
+				{ name: "role", content: invitation.role ?? "member" },
 			],
 			images: TEMPLATE_IMAGES,
 		});
+		console.log("[Mandrill] Organization invitation email sent successfully", {
+			toEmail: invitation.email,
+			organizationName: invitation.organizationName,
+			messageIds: result.map((r) => r._id),
+			statuses: result.map((r) => r.status),
+		});
 	} catch (error) {
 		// Log error but don't throw - we don't want to expose email sending failures
-		console.error("[Mandrill] Failed to send verification email", {
-			toEmail,
+		// The error is logged for debugging, but the promise resolves to prevent
+		// exposing email sending failures to users
+		console.error("[Mandrill] Failed to send org invitation email", {
+			toEmail: invitation.email,
+			organizationName: invitation.organizationName,
+			templateName,
 			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
 		});
+		// Don't rethrow - allow the promise to resolve to prevent exposing failures
 	}
 }
