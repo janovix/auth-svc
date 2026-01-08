@@ -1,3 +1,10 @@
+# [1.1.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.4...v1.1.0-rc.5) (2026-01-08)
+
+
+### Features
+
+* add admin, emailOTP, openAPI plugins with janovix.com domain ([60f4d57](https://github.com/janovix/auth-svc/commit/60f4d57463b2e8e349977a115384975aa3e9f545))
+
 # [1.1.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.1.0-rc.3...v1.1.0-rc.4) (2025-12-30)
 
 
