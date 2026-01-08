@@ -120,6 +120,17 @@ export function buildResolvedAuthConfig(
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
+					// Include organization ID in JWT claims for multi-tenant support
+					definePayload: async ({ user, session }) => {
+						return {
+							sub: user.id,
+							email: user.email,
+							name: user.name,
+							// activeOrganizationId is set by better-auth organization plugin
+							// when user switches organizations via setActiveOrganization
+							organizationId: session.activeOrganizationId ?? null,
+						};
+					},
 				},
 			}),
 			admin({
@@ -129,10 +140,13 @@ export function buildResolvedAuthConfig(
 				adminRoles: ["admin"],
 			}),
 			organization({
-				// Organization membership support (users <-> organizations).
+				// Allow users to create organizations
+				allowUserToCreateOrganization: true,
+				// Organization creator gets "owner" role by default
+				creatorRole: "owner",
 				// We keep teams disabled for now; can be enabled later without breaking the API surface.
-				// Note: Prisma's @@map directives handle the plural table name mapping.
 				teams: { enabled: false },
+				// Send invitation emails
 				sendInvitationEmail:
 					/* istanbul ignore next -- @preserve Mandrill email sending tested via integration */
 					async (data: {
