@@ -12,19 +12,22 @@ const createMockDb = () => {
 	const mockRun = vi.fn();
 	const mockAll = vi.fn();
 
-	mockPrepare.mockReturnValue({
-		bind: mockBind.mockReturnValue({
-			first: mockFirst,
-			run: mockRun,
-			all: mockAll,
-		}),
-	});
+	const statement = {
+		bind: mockBind,
+		first: mockFirst,
+		run: mockRun,
+		all: mockAll,
+	};
+
+	mockBind.mockReturnValue(statement);
+	mockPrepare.mockReturnValue(statement);
 
 	return {
 		prepare: mockPrepare,
 		_mockFirst: mockFirst,
 		_mockRun: mockRun,
 		_mockAll: mockAll,
+		_mockBind: mockBind,
 	};
 };
 
