@@ -1,4 +1,10 @@
+# [1.2.0](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0) (2026-01-08)
 # [1.2.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-01-08)
+
+
+### Bug Fixes
+
+* restore JWT definePayload with organizationId and org plugin options ([9f50b7c](https://github.com/janovix/auth-svc/commit/9f50b7cc74461be5083dfc77011dc14ac9353b4b))
 
 
 ### Features
