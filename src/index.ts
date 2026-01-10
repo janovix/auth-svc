@@ -1,6 +1,9 @@
 /**
  * Production entry point.
  * Wraps the Hono app with Sentry for error tracking and monitoring.
+ *
+ * Sentry is enabled only when `SENTRY_DSN` environment variable is set.
+ * Configure it via wrangler secrets: `wrangler secret put SENTRY_DSN`
  */
 import * as Sentry from "@sentry/cloudflare";
 import { app } from "./app";
@@ -10,7 +13,8 @@ import type { Bindings } from "./types/bindings";
 export default Sentry.withSentry((env: Bindings) => {
 	const { id: versionId } = env.CF_VERSION_METADATA;
 	return {
-		dsn: "https://b53d06607ecd38f1ba3197c48f0261ea@o4510105954680832.ingest.us.sentry.io/4510676722515968",
+		// When DSN is undefined/empty, Sentry SDK is disabled (no events sent)
+		dsn: env.SENTRY_DSN,
 		release: versionId,
 		environment: env.ENVIRONMENT,
 		// Adds request headers and IP for users, for more info visit:

@@ -74,4 +74,10 @@ export type Bindings = Env & {
 	 * Example: `https://aml.janovix.workers.dev`
 	 */
 	AML_FRONTEND_URL?: string;
+	/**
+	 * Sentry DSN for error tracking.
+	 * If not set, Sentry will be disabled.
+	 * Configured via Cloudflare Dashboard secrets or wrangler vars.
+	 */
+	SENTRY_DSN?: string;
 };

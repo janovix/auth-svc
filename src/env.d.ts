@@ -42,5 +42,10 @@ declare namespace Cloudflare {
 		 * Configured via Cloudflare Dashboard secrets.
 		 */
 		MANDRILL_API_KEY?: string;
+		/**
+		 * Sentry DSN for error tracking.
+		 * If not set, Sentry will be disabled.
+		 */
+		SENTRY_DSN?: string;
 	}
 }

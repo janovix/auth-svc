@@ -80,7 +80,7 @@
 		"vitest:coverage": "vitest run --coverage --config tests/vitest.config.mts",
 		"test": "node -e \"if(process.platform==='win32'){console.log('⚠️  Skipping auth-svc tests on Windows (vitest-pool-workers module resolution issue)');process.exit(0)}else{process.exit(1)}\" || npm run vitest",
 		"test:force": "npm run vitest",
-		"sentry:sourcemaps": "_SENTRY_RELEASE=$(sentry-cli releases propose-version) && sentry-cli releases new $_SENTRY_RELEASE --org=janovix --project=auth-svc && sentry-cli sourcemaps upload --org=janovix --project=auth-svc --release=$_SENTRY_RELEASE --strip-prefix 'dist/..' dist",
+		"sentry:sourcemaps": "_SENTRY_RELEASE=$(sentry-cli releases propose-version) && sentry-cli releases new $_SENTRY_RELEASE && sentry-cli sourcemaps upload --release=$_SENTRY_RELEASE --strip-prefix 'dist/..' dist",
 		"postdeploy:dev": "pnpm sentry:sourcemaps || true",
 		"postdeploy:prod": "pnpm sentry:sourcemaps || true"
 	},
