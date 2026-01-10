@@ -1,20 +1,18 @@
 {
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_als"],
-	"main": "src/index.ts",
-	"name": "auth-svc",
-	"upload_source_maps": true,
-	"workers_dev": true,
+	"main": "src/testWorker.ts",
+	"name": "auth-svc-test",
 	"version_metadata": {
 		"binding": "CF_VERSION_METADATA",
 	},
 	"observability": {
-		"enabled": true,
+		"enabled": false,
 	},
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "auth-dev",
+			"database_name": "auth-test",
 			"database_id": "80ca9ee0-571c-452d-a9ed-cffb4cc00975",
 		},
 	],
@@ -25,9 +23,9 @@
 		},
 	],
 	"vars": {
-		"ENVIRONMENT": "dev",
-		"BETTER_AUTH_URL": "https://auth-svc.janovix.workers.dev",
+		"ENVIRONMENT": "test",
+		"BETTER_AUTH_URL": "https://auth-svc.test.local",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
-		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
+		"AUTH_FRONTEND_URL": "https://auth.test.local",
 	},
 }

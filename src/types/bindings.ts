@@ -14,6 +14,12 @@ export type Bindings = Env & {
 	KV: KVNamespace;
 
 	/**
+	 * Cloudflare Worker version metadata.
+	 * Used for Sentry release tracking.
+	 */
+	CF_VERSION_METADATA: WorkerVersionMetadata;
+
+	/**
 	 * Environment identifier (local, dev, qa, production, preview, test)
 	 */
 	ENVIRONMENT?: JanovixEnvironment | string;
@@ -68,4 +74,10 @@ export type Bindings = Env & {
 	 * Example: `https://aml.janovix.workers.dev`
 	 */
 	AML_FRONTEND_URL?: string;
+	/**
+	 * Sentry DSN for error tracking.
+	 * If not set, Sentry will be disabled.
+	 * Configured via Cloudflare Dashboard secrets or wrangler vars.
+	 */
+	SENTRY_DSN?: string;
 };

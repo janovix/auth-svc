@@ -1,4 +1,5 @@
 # [1.2.0](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0) (2026-01-08)
+# [1.2.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.2.0-rc.1...v1.2.0-rc.2) (2026-01-08)
 
 
 ### Bug Fixes
@@ -8,9 +9,7 @@
 
 ### Features
 
-* add admin, emailOTP, openAPI plugins with janovix.com domain ([60f4d57](https://github.com/janovix/auth-svc/commit/60f4d57463b2e8e349977a115384975aa3e9f545))
-* **auth:** enhance organization invitation flow and update test command ([2c3a91f](https://github.com/janovix/auth-svc/commit/2c3a91f0d6ab0abd204f18cee6d53ca8ba2f67a3))
-* Improve error handling and add org invitation email ([686422a](https://github.com/janovix/auth-svc/commit/686422a280fe3ad0464ba9aabe060160ac2819df))
+* integrate Sentry for error tracking and monitoring, update deployment scripts, and add new environment variables ([0f560d2](https://github.com/janovix/auth-svc/commit/0f560d24e7fe4a335507a018fe5bda89b1ed79aa))
 
 # [1.2.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.1.0...v1.2.0-rc.1) (2026-01-08)
 

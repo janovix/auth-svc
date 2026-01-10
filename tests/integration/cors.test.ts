@@ -16,11 +16,13 @@ const typedWorker = worker as unknown as {
 	) => Promise<Response>;
 };
 
-const baseEnv: Bindings = {
+const baseEnv = {
 	DB: {} as D1Database,
+	KV: {} as KVNamespace,
 	ENVIRONMENT: "local",
 	BETTER_AUTH_SECRET: SECRET,
-} as Bindings;
+	CF_VERSION_METADATA: { id: "test-version" } as WorkerVersionMetadata,
+} as unknown as Bindings;
 
 describe("getTrustedOriginPatterns", () => {
 	it("returns localhost origins for local environment", () => {
@@ -46,7 +48,7 @@ describe("getTrustedOriginPatterns", () => {
 			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
 			AUTH_TRUSTED_ORIGINS: "https://custom.example.com,https://*.custom.com",
-		});
+		} as unknown as Bindings);
 		expect(patterns).toContain("https://custom.example.com");
 		expect(patterns).toContain("https://*.custom.com");
 	});
@@ -57,13 +59,13 @@ describe("getTrustedOriginPatterns", () => {
 			ENVIRONMENT: "dev",
 			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
-		};
+		} as unknown as Bindings;
 		const env2 = {
 			...baseEnv,
 			ENVIRONMENT: "dev",
 			BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
 			AUTH_INTERNAL_TOKEN: "test-token-123456",
-		};
+		} as unknown as Bindings;
 		const patterns1 = getTrustedOriginPatterns(env1);
 		const patterns2 = getTrustedOriginPatterns(env2);
 		expect(patterns1).toBe(patterns2); // Same reference due to caching

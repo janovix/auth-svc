@@ -13,6 +13,9 @@ importers:
       "@prisma/client":
         specifier: ^6.17.1
         version: 6.19.1(prisma@6.19.1(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
+      "@sentry/cloudflare":
+        specifier: ^10.32.1
+        version: 10.32.1(@cloudflare/workers-types@4.20251213.0)
       better-auth:
         specifier: 1.4.5
         version: 1.4.5
@@ -59,6 +62,9 @@ importers:
       "@semantic-release/release-notes-generator":
         specifier: 14.1.0
         version: 14.1.0(semantic-release@24.2.1(typescript@5.9.3))
+      "@sentry/cli":
+        specifier: ^2.58.4
+        version: 2.58.4
       "@types/node":
         specifier: 24.10.1
         version: 24.10.1
@@ -1351,6 +1357,13 @@ packages:
         integrity: sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg==,
       }
 
+  "@opentelemetry/api@1.9.0":
+    resolution:
+      {
+        integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==,
+      }
+    engines: { node: ">=8.0.0" }
+
   "@pkgjs/parseargs@0.11.0":
     resolution:
       {
@@ -1710,6 +1723,104 @@ packages:
     peerDependencies:
       semantic-release: ">=20.1.0"
 
+  "@sentry/cli-darwin@2.58.4":
+    resolution:
+      {
+        integrity: sha512-kbTD+P4X8O+nsNwPxCywtj3q22ecyRHWff98rdcmtRrvwz8CKi/T4Jxn/fnn2i4VEchy08OWBuZAqaA5Kh2hRQ==,
+      }
+    engines: { node: ">=10" }
+    os: [darwin]
+
+  "@sentry/cli-linux-arm64@2.58.4":
+    resolution:
+      {
+        integrity: sha512-0g0KwsOozkLtzN8/0+oMZoOuQ0o7W6O+hx+ydVU1bktaMGKEJLMAWxOQNjsh1TcBbNIXVOKM/I8l0ROhaAb8Ig==,
+      }
+    engines: { node: ">=10" }
+    cpu: [arm64]
+    os: [linux, freebsd, android]
+
+  "@sentry/cli-linux-arm@2.58.4":
+    resolution:
+      {
+        integrity: sha512-rdQ8beTwnN48hv7iV7e7ZKucPec5NJkRdrrycMJMZlzGBPi56LqnclgsHySJ6Kfq506A2MNuQnKGaf/sBC9REA==,
+      }
+    engines: { node: ">=10" }
+    cpu: [arm]
+    os: [linux, freebsd, android]
+
+  "@sentry/cli-linux-i686@2.58.4":
+    resolution:
+      {
+        integrity: sha512-NseoIQAFtkziHyjZNPTu1Gm1opeQHt7Wm1LbLrGWVIRvUOzlslO9/8i6wETUZ6TjlQxBVRgd3Q0lRBG2A8rFYA==,
+      }
+    engines: { node: ">=10" }
+    cpu: [x86, ia32]
+    os: [linux, freebsd, android]
+
+  "@sentry/cli-linux-x64@2.58.4":
+    resolution:
+      {
+        integrity: sha512-d3Arz+OO/wJYTqCYlSN3Ktm+W8rynQ/IMtSZLK8nu0ryh5mJOh+9XlXY6oDXw4YlsM8qCRrNquR8iEI1Y/IH+Q==,
+      }
+    engines: { node: ">=10" }
+    cpu: [x64]
+    os: [linux, freebsd, android]
+
+  "@sentry/cli-win32-arm64@2.58.4":
+    resolution:
+      {
+        integrity: sha512-bqYrF43+jXdDBh0f8HIJU3tbvlOFtGyRjHB8AoRuMQv9TEDUfENZyCelhdjA+KwDKYl48R1Yasb4EHNzsoO83w==,
+      }
+    engines: { node: ">=10" }
+    cpu: [arm64]
+    os: [win32]
+
+  "@sentry/cli-win32-i686@2.58.4":
+    resolution:
+      {
+        integrity: sha512-3triFD6jyvhVcXOmGyttf+deKZcC1tURdhnmDUIBkiDPJKGT/N5xa4qAtHJlAB/h8L9jgYih9bvJnvvFVM7yug==,
+      }
+    engines: { node: ">=10" }
+    cpu: [x86, ia32]
+    os: [win32]
+
+  "@sentry/cli-win32-x64@2.58.4":
+    resolution:
+      {
+        integrity: sha512-cSzN4PjM1RsCZ4pxMjI0VI7yNCkxiJ5jmWncyiwHXGiXrV1eXYdQ3n1LhUYLZ91CafyprR0OhDcE+RVZ26Qb5w==,
+      }
+    engines: { node: ">=10" }
+    cpu: [x64]
+    os: [win32]
+
+  "@sentry/cli@2.58.4":
+    resolution:
+      {
+        integrity: sha512-ArDrpuS8JtDYEvwGleVE+FgR+qHaOp77IgdGSacz6SZy6Lv90uX0Nu4UrHCQJz8/xwIcNxSqnN22lq0dH4IqTg==,
+      }
+    engines: { node: ">= 10" }
+    hasBin: true
+
+  "@sentry/cloudflare@10.32.1":
+    resolution:
+      {
+        integrity: sha512-LP5p+OyCjZ+eT2WEso4YHj8b9+9Z8sx15tQcyxP6SWdYPuu54AmbgNS5zxG5z7+q2neF5HA/TtEhr/t/l5ph2g==,
+      }
+    engines: { node: ">=18" }
+    peerDependencies:
+      "@cloudflare/workers-types": ^4.x
+    peerDependenciesMeta:
+      "@cloudflare/workers-types":
+        optional: true
+
+  "@sentry/core@10.32.1":
+    resolution:
+      {
+        integrity: sha512-PH2ldpSJlhqsMj2vCTyU0BI2Fx1oIDhm7Izo5xFALvjVCS0gmlqHt1udu6YlKn8BtpGH6bGzssvv5APrk+OdPQ==,
+      }
+    engines: { node: ">=18" }
+
   "@sindresorhus/is@4.6.0":
     resolution:
       {
@@ -1969,6 +2080,13 @@ packages:
       }
     engines: { node: ">=0.4.0" }
     hasBin: true
+
+  agent-base@6.0.2:
+    resolution:
+      {
+        integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==,
+      }
+    engines: { node: ">= 6.0.0" }
 
   agent-base@7.1.4:
     resolution:
@@ -3258,6 +3376,13 @@ packages:
       }
     engines: { node: ">= 14" }
 
+  https-proxy-agent@5.0.1:
+    resolution:
+      {
+        integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==,
+      }
+    engines: { node: ">= 6" }
+
   https-proxy-agent@7.0.6:
     resolution:
       {
@@ -4060,6 +4185,18 @@ packages:
         integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==,
       }
 
+  node-fetch@2.7.0:
+    resolution:
+      {
+        integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==,
+      }
+    engines: { node: 4.x || >=6.0.0 }
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+
   node-releases@2.0.27:
     resolution:
       {
@@ -4567,10 +4704,23 @@ packages:
         integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==,
       }
 
+  progress@2.0.3:
+    resolution:
+      {
+        integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==,
+      }
+    engines: { node: ">=0.4.0" }
+
   proto-list@1.2.4:
     resolution:
       {
         integrity: sha512-vtK/94akxsTMhe0/cbfpR+syPuszcuwhqVjJq26CuNDgFGj682oRBXOP5MJpv2r7JtE8MsiepGIqvvOTBwn2vA==,
+      }
+
+  proxy-from-env@1.1.0:
+    resolution:
+      {
+        integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==,
       }
 
   punycode@2.3.1:
@@ -5138,6 +5288,12 @@ packages:
       }
     engines: { node: ">=8.0" }
 
+  tr46@0.0.3:
+    resolution:
+      {
+        integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==,
+      }
+
   traverse@0.6.8:
     resolution:
       {
@@ -5394,6 +5550,18 @@ packages:
     resolution:
       {
         integrity: sha512-PgF341avzqyx60neE9DD+XS26MMNMoUQRz9NOZwW32nPQrF6p77f1htcnjBSEV8BGMKZ16choqUG4hyI0Hx7mA==,
+      }
+
+  webidl-conversions@3.0.1:
+    resolution:
+      {
+        integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==,
+      }
+
+  whatwg-url@5.0.0:
+    resolution:
+      {
+        integrity: sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==,
       }
 
   which@2.0.2:
@@ -6286,6 +6454,8 @@ snapshots:
     dependencies:
       "@octokit/openapi-types": 27.0.0
 
+  "@opentelemetry/api@1.9.0": {}
+
   "@pkgjs/parseargs@0.11.0":
     optional: true
 
@@ -6521,6 +6691,59 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  "@sentry/cli-darwin@2.58.4":
+    optional: true
+
+  "@sentry/cli-linux-arm64@2.58.4":
+    optional: true
+
+  "@sentry/cli-linux-arm@2.58.4":
+    optional: true
+
+  "@sentry/cli-linux-i686@2.58.4":
+    optional: true
+
+  "@sentry/cli-linux-x64@2.58.4":
+    optional: true
+
+  "@sentry/cli-win32-arm64@2.58.4":
+    optional: true
+
+  "@sentry/cli-win32-i686@2.58.4":
+    optional: true
+
+  "@sentry/cli-win32-x64@2.58.4":
+    optional: true
+
+  "@sentry/cli@2.58.4":
+    dependencies:
+      https-proxy-agent: 5.0.1
+      node-fetch: 2.7.0
+      progress: 2.0.3
+      proxy-from-env: 1.1.0
+      which: 2.0.2
+    optionalDependencies:
+      "@sentry/cli-darwin": 2.58.4
+      "@sentry/cli-linux-arm": 2.58.4
+      "@sentry/cli-linux-arm64": 2.58.4
+      "@sentry/cli-linux-i686": 2.58.4
+      "@sentry/cli-linux-x64": 2.58.4
+      "@sentry/cli-win32-arm64": 2.58.4
+      "@sentry/cli-win32-i686": 2.58.4
+      "@sentry/cli-win32-x64": 2.58.4
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
+  "@sentry/cloudflare@10.32.1(@cloudflare/workers-types@4.20251213.0)":
+    dependencies:
+      "@opentelemetry/api": 1.9.0
+      "@sentry/core": 10.32.1
+    optionalDependencies:
+      "@cloudflare/workers-types": 4.20251213.0
+
+  "@sentry/core@10.32.1": {}
+
   "@sindresorhus/is@4.6.0": {}
 
   "@sindresorhus/is@7.1.1": {}
@@ -6715,6 +6938,12 @@ snapshots:
   acorn@8.14.0: {}
 
   acorn@8.15.0: {}
+
+  agent-base@6.0.2:
+    dependencies:
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
 
   agent-base@7.1.4: {}
 
@@ -7494,6 +7723,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  https-proxy-agent@5.0.1:
+    dependencies:
+      agent-base: 6.0.2
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
+
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.4
@@ -7891,6 +8127,10 @@ snapshots:
 
   node-fetch-native@1.6.7: {}
 
+  node-fetch@2.7.0:
+    dependencies:
+      whatwg-url: 5.0.0
+
   node-releases@2.0.27: {}
 
   normalize-package-data@6.0.2:
@@ -8104,7 +8344,11 @@ snapshots:
 
   process-nextick-args@2.0.1: {}
 
+  progress@2.0.3: {}
+
   proto-list@1.2.4: {}
+
+  proxy-from-env@1.1.0: {}
 
   punycode@2.3.1: {}
 
@@ -8471,6 +8715,8 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
+  tr46@0.0.3: {}
+
   traverse@0.6.8: {}
 
   ts-api-utils@2.1.0(typescript@5.9.3):
@@ -8624,6 +8870,13 @@ snapshots:
       - yaml
 
   web-worker@1.2.0: {}
+
+  webidl-conversions@3.0.1: {}
+
+  whatwg-url@5.0.0:
+    dependencies:
+      tr46: 0.0.3
+      webidl-conversions: 3.0.1
 
   which@2.0.2:
     dependencies:
