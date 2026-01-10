@@ -21,6 +21,23 @@ import {
 	AuthForgotPasswordEndpoint,
 	AuthResetPasswordEndpoint,
 } from "./endpoints/auth/openapi";
+import {
+	GetUserSettingsEndpoint,
+	UpdateUserSettingsEndpoint,
+	GetOrganizationSettingsEndpoint,
+	UpdateOrganizationSettingsEndpoint,
+	GetResolvedSettingsEndpoint,
+} from "./endpoints/settings/openapi";
+import {
+	ListAuditLogsEndpoint,
+	GetAuditLogEndpoint,
+	VerifyAuditChainEndpoint,
+	ExportAuditLogsEndpoint,
+} from "./endpoints/audit/openapi";
+import { settingsRoutes } from "./routes/settings";
+import { internalSettingsRoutes } from "./routes/internal-settings";
+import { auditRoutes } from "./routes/audit";
+import { internalAuditRoutes } from "./routes/internal-audit";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -100,6 +117,37 @@ openapi.get("/api/auth/session", AuthSessionEndpoint);
 openapi.get("/api/auth/jwks", AuthJwksEndpoint);
 openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
 openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
+
+// Register Settings routes (actual implementation)
+app.route("/api/settings", settingsRoutes);
+
+// Register Internal routes for service bindings
+app.route("/internal/settings", internalSettingsRoutes);
+
+// Register Settings OpenAPI documentation
+openapi.get("/api/settings/user", GetUserSettingsEndpoint);
+openapi.patch("/api/settings/user", UpdateUserSettingsEndpoint);
+openapi.get(
+	"/api/settings/organization/:orgId",
+	GetOrganizationSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/organization/:orgId",
+	UpdateOrganizationSettingsEndpoint,
+);
+openapi.get("/api/settings/resolved", GetResolvedSettingsEndpoint);
+
+// Register Audit routes (actual implementation)
+app.route("/api/audit", auditRoutes);
+
+// Register Internal Audit routes for service bindings
+app.route("/internal/audit", internalAuditRoutes);
+
+// Register Audit OpenAPI documentation
+openapi.get("/api/audit", ListAuditLogsEndpoint);
+openapi.get("/api/audit/verify", VerifyAuditChainEndpoint);
+openapi.get("/api/audit/:id", GetAuditLogEndpoint);
+openapi.post("/api/audit/export", ExportAuditLogsEndpoint);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
