@@ -1,3 +1,10 @@
+## [1.3.1-rc.1](https://github.com/janovix/auth-svc/compare/v1.3.0...v1.3.1-rc.1) (2026-01-10)
+
+
+### Bug Fixes
+
+* wrong name for sourcemaps uploading ([7e659b1](https://github.com/janovix/auth-svc/commit/7e659b197595398c106a43d0afc9feac405362dc))
+
 # [1.3.0](https://github.com/janovix/auth-svc/compare/v1.2.0...v1.3.0) (2026-01-10)
 
 
