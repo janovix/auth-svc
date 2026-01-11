@@ -48,7 +48,9 @@ const sampleUserRow = {
 	language: "es",
 	date_format: "DD/MM/YYYY",
 	avatar_url: null,
-	payment_methods: JSON.stringify([{ id: "pm-1", type: "card", label: "Visa" }]),
+	payment_methods: JSON.stringify([
+		{ id: "pm-1", type: "card", label: "Visa" },
+	]),
 	metadata: JSON.stringify({ beta: true }),
 	created_at: "2024-01-01T00:00:00.000Z",
 	updated_at: "2024-01-02T00:00:00.000Z",
@@ -138,7 +140,9 @@ describe("SettingsRepository", () => {
 
 		const result = await repository.getUserSettings("user-1");
 
-		expect(result?.paymentMethods).toEqual([{ id: "pm-1", type: "card", label: "Visa" }]);
+		expect(result?.paymentMethods).toEqual([
+			{ id: "pm-1", type: "card", label: "Visa" },
+		]);
 		expect(result?.metadata).toEqual({ beta: true });
 	});
 
@@ -194,4 +198,3 @@ describe("SettingsRepository", () => {
 		expect(orgDeleted).toBe(false);
 	});
 });
-

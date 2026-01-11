@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SettingsService } from "./service";
-import type { BrowserHints } from "./types";
+import type { BrowserHints, UserSettings, OrganizationSettings } from "./types";
 
 // Mock D1Database
 const createMockDb = () => {
@@ -155,6 +155,119 @@ describe("SettingsService", () => {
 			expect(result.sources.theme).toBe("user");
 			expect(result.timezone).toBe("America/Chicago");
 			expect(result.sources.timezone).toBe("organization");
+		});
+	});
+
+	describe("repository helpers", () => {
+		it("getOrCreateOrganizationSettings returns existing record", async () => {
+			const repoMock = {
+				getOrganizationSettings: vi
+					.fn()
+					.mockResolvedValue({ id: "org-settings-1" } as OrganizationSettings),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			const result = await service.getOrCreateOrganizationSettings("org-123");
+
+			expect(result.id).toBe("org-settings-1");
+			expect(repoMock.getOrganizationSettings).toHaveBeenCalledWith("org-123");
+		});
+
+		it("getOrCreateOrganizationSettings creates defaults when missing", async () => {
+			const repoMock = {
+				getOrganizationSettings: vi.fn().mockResolvedValue(null),
+				createOrganizationSettings: vi
+					.fn()
+					.mockResolvedValue({ id: "org-settings-2" } as OrganizationSettings),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			const result = await service.getOrCreateOrganizationSettings("org-456");
+
+			expect(result.id).toBe("org-settings-2");
+			expect(repoMock.createOrganizationSettings).toHaveBeenCalled();
+		});
+
+		it("updateOrganizationSettings delegates to upsert with generated id", async () => {
+			const uuidSpy = vi
+				.spyOn(crypto, "randomUUID")
+				.mockReturnValue("generated-id");
+			const repoMock = {
+				upsertOrganizationSettings: vi
+					.fn()
+					.mockResolvedValue({ id: "org-settings-3" } as OrganizationSettings),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			const result = await service.updateOrganizationSettings("org-789", {
+				theme: "dark",
+			});
+
+			expect(result.id).toBe("org-settings-3");
+			expect(repoMock.upsertOrganizationSettings).toHaveBeenCalledWith(
+				"generated-id",
+				"org-789",
+				{ theme: "dark" },
+			);
+			uuidSpy.mockRestore();
+		});
+
+		it("getOrCreateUserSettings falls back to creation", async () => {
+			const repoMock = {
+				getUserSettings: vi.fn().mockResolvedValue(null),
+				createUserSettings: vi.fn().mockResolvedValue({
+					id: "user-settings-1",
+				} as UserSettings),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			const result = await service.getOrCreateUserSettings("user-1");
+
+			expect(result.id).toBe("user-settings-1");
+			expect(repoMock.createUserSettings).toHaveBeenCalled();
+		});
+
+		it("updateUserSettings delegates to upsert", async () => {
+			const uuidSpy = vi.spyOn(crypto, "randomUUID").mockReturnValue("user-id");
+			const repoMock = {
+				upsertUserSettings: vi
+					.fn()
+					.mockResolvedValue({ id: "user-settings-2" } as UserSettings),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			const result = await service.updateUserSettings("user-2", {
+				theme: "light",
+			});
+
+			expect(result.id).toBe("user-settings-2");
+			expect(repoMock.upsertUserSettings).toHaveBeenCalledWith(
+				"user-id",
+				"user-2",
+				{
+					theme: "light",
+				},
+			);
+			uuidSpy.mockRestore();
+		});
+
+		it("delete helpers forward to repository", async () => {
+			const repoMock = {
+				deleteUserSettings: vi.fn().mockResolvedValue(true),
+				deleteOrganizationSettings: vi.fn().mockResolvedValue(false),
+			};
+			(service as unknown as { repository: typeof repoMock }).repository =
+				repoMock;
+
+			expect(await service.deleteUserSettings("user-1")).toBe(true);
+			expect(await service.deleteOrganizationSettings("org-1")).toBe(false);
+			expect(repoMock.deleteUserSettings).toHaveBeenCalledWith("user-1");
+			expect(repoMock.deleteOrganizationSettings).toHaveBeenCalledWith("org-1");
 		});
 	});
 });
