@@ -1,3 +1,10 @@
+# [1.4.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.1...v1.4.0-rc.2) (2026-01-11)
+
+
+### Features
+
+* add AML compliance settings proxy routes and update service bindings ([7b4cd8d](https://github.com/janovix/auth-svc/commit/7b4cd8d514ff86b60eb6013cb3e6151dd2ee36f2))
+
 # [1.4.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.3.1...v1.4.0-rc.1) (2026-01-11)
 
 
