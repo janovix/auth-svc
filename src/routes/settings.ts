@@ -45,9 +45,9 @@ async function getAuthenticatedUser(
 }
 
 /**
- * Helper to check if user is admin of organization
+ * Helper to check if user is owner of organization (only owners can edit org settings)
  */
-async function isOrgAdmin(
+async function isOrgOwner(
 	c: SettingsContext,
 	userId: string,
 	organizationId: string,
@@ -58,9 +58,30 @@ async function isOrgAdmin(
 		)
 			.bind(userId, organizationId)
 			.first<{ role: string }>();
-		return result?.role === "owner" || result?.role === "admin";
+		return result?.role === "owner";
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * Helper to get user's membership in organization
+ */
+async function getUserOrgMembership(
+	c: SettingsContext,
+	userId: string,
+	organizationId: string,
+): Promise<{ role: string; organizationId: string } | null> {
+	try {
+		const result = await c.env.DB.prepare(
+			`SELECT role FROM members WHERE user_id = ? AND organization_id = ? LIMIT 1`,
+		)
+			.bind(userId, organizationId)
+			.first<{ role: string }>();
+		if (!result) return null;
+		return { role: result.role, organizationId };
+	} catch {
+		return null;
 	}
 }
 
@@ -143,8 +164,27 @@ settingsRoutes.get("/organization/:orgId", async (c) => {
 });
 
 /**
+ * GET /api/settings/organization/:orgId/membership
+ * Get user's membership/role in organization
+ */
+settingsRoutes.get("/organization/:orgId/membership", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const orgId = c.req.param("orgId");
+	const membership = await getUserOrgMembership(c, user.id, orgId);
+
+	return c.json({
+		success: true,
+		data: membership,
+	});
+});
+
+/**
  * PATCH /api/settings/organization/:orgId
- * Update organization settings (admin only)
+ * Update organization settings (owner only)
  */
 settingsRoutes.patch("/organization/:orgId", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -154,11 +194,11 @@ settingsRoutes.patch("/organization/:orgId", async (c) => {
 
 	const orgId = c.req.param("orgId");
 
-	// Check if user is admin of this org
-	const adminCheck = await isOrgAdmin(c, user.id, orgId);
-	if (!adminCheck) {
+	// Check if user is owner of this org (only owners can edit org settings)
+	const ownerCheck = await isOrgOwner(c, user.id, orgId);
+	if (!ownerCheck) {
 		return c.json(
-			{ success: false, error: "Forbidden: Admin access required" },
+			{ success: false, error: "Forbidden: Owner access required" },
 			403,
 		);
 	}
