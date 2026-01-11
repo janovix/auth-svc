@@ -54,12 +54,16 @@ async function isOrgOwner(
 ): Promise<boolean> {
 	try {
 		const result = await c.env.DB.prepare(
-			`SELECT role FROM members WHERE user_id = ? AND organization_id = ? LIMIT 1`,
+			`SELECT role FROM members WHERE userId = ? AND organizationId = ? LIMIT 1`,
 		)
 			.bind(userId, organizationId)
 			.first<{ role: string }>();
 		return result?.role === "owner";
-	} catch {
+	} catch (error) {
+		console.error(
+			`[Settings] Error checking org owner for user ${userId}, org ${organizationId}:`,
+			error,
+		);
 		return false;
 	}
 }
@@ -74,13 +78,17 @@ async function getUserOrgMembership(
 ): Promise<{ role: string; organizationId: string } | null> {
 	try {
 		const result = await c.env.DB.prepare(
-			`SELECT role FROM members WHERE user_id = ? AND organization_id = ? LIMIT 1`,
+			`SELECT role FROM members WHERE userId = ? AND organizationId = ? LIMIT 1`,
 		)
 			.bind(userId, organizationId)
 			.first<{ role: string }>();
 		if (!result) return null;
 		return { role: result.role, organizationId };
-	} catch {
+	} catch (error) {
+		console.error(
+			`[Settings] Error getting org membership for user ${userId}, org ${organizationId}:`,
+			error,
+		);
 		return null;
 	}
 }

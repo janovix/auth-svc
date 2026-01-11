@@ -52,32 +52,79 @@ async function isOrgOwnerOrAdmin(
 ): Promise<boolean> {
 	try {
 		const result = await c.env.DB.prepare(
-			`SELECT role FROM members WHERE user_id = ? AND organization_id = ? LIMIT 1`,
+			`SELECT role FROM members WHERE userId = ? AND organizationId = ? LIMIT 1`,
 		)
 			.bind(userId, organizationId)
 			.first<{ role: string }>();
 		return result?.role === "owner" || result?.role === "admin";
-	} catch {
+	} catch (error) {
+		console.error(
+			`[AmlProxy] Error checking org owner/admin for user ${userId}, org ${organizationId}:`,
+			error,
+		);
 		return false;
 	}
 }
 
 /**
  * Helper to check if user is member of organization
+ * Uses Better Auth API and database for reliable membership verification
  */
 async function isOrgMember(
 	c: AmlProxyContext,
 	userId: string,
 	organizationId: string,
+	activeOrgId?: string,
 ): Promise<boolean> {
 	try {
-		const result = await c.env.DB.prepare(
-			`SELECT 1 FROM members WHERE user_id = ? AND organization_id = ? LIMIT 1`,
-		)
-			.bind(userId, organizationId)
-			.first();
-		return !!result;
-	} catch {
+		// Fast path: if this is the user's active organization, they're definitely a member
+		if (activeOrgId === organizationId) {
+			return true;
+		}
+
+		// Check database directly - this is the source of truth
+		// Note: Column names are camelCase (userId, organizationId) not snake_case
+		const query = c.env.DB.prepare(
+			`SELECT 1 FROM members WHERE userId = ? AND organizationId = ? LIMIT 1`,
+		);
+		const result = await query.bind(userId, organizationId).first();
+
+		if (result) {
+			console.log(
+				`[AmlProxy] User ${userId} confirmed as member of org ${organizationId}`,
+			);
+			return true;
+		}
+
+		// If not found, log for debugging - also try to see what orgs the user IS a member of
+		try {
+			const userOrgs = await c.env.DB.prepare(
+				`SELECT organizationId FROM members WHERE userId = ?`,
+			)
+				.bind(userId)
+				.all<{ organizationId: string }>();
+			console.warn(
+				`[AmlProxy] User ${userId} not found in members table for org ${organizationId}. User is member of: ${userOrgs.results.map((r) => r.organizationId).join(", ") || "none"}`,
+			);
+		} catch (debugError) {
+			console.error(
+				`[AmlProxy] Error checking user's organizations for debugging:`,
+				debugError,
+			);
+		}
+		return false;
+	} catch (error) {
+		console.error(
+			`[AmlProxy] Error checking org membership for user ${userId}, org ${organizationId}:`,
+			error,
+		);
+		// On error, if user has this as active org, trust it
+		if (activeOrgId === organizationId) {
+			console.warn(
+				`[AmlProxy] Database check failed but user has active org ${organizationId}, allowing access`,
+			);
+			return true;
+		}
 		return false;
 	}
 }
@@ -95,10 +142,18 @@ amlSettingsProxyRoutes.get("/:orgId", async (c) => {
 	const orgId = c.req.param("orgId");
 
 	// Check if user is a member of this organization
-	const isMember = await isOrgMember(c, user.id, orgId);
+	// Pass activeOrgId for fast path check
+	const isMember = await isOrgMember(c, user.id, orgId, user.organizationId);
 	if (!isMember) {
+		console.error(
+			`[AmlProxy] User ${user.id} is not a member of organization ${orgId}. Active org: ${user.organizationId}`,
+		);
 		return c.json(
-			{ success: false, error: "Forbidden: Not a member of this organization" },
+			{
+				success: false,
+				error: "Forbidden: Not a member of this organization",
+				message: `User ${user.id} is not a member of organization ${orgId}`,
+			},
 			403,
 		);
 	}
@@ -119,8 +174,36 @@ amlSettingsProxyRoutes.get("/:orgId", async (c) => {
 			}),
 		);
 
+		// Handle 404 - organization settings not found (this is expected for new orgs)
+		if (response.status === 404) {
+			return c.json({ success: true, data: null }, 404);
+		}
+
+		// Handle other error statuses
+		if (!response.ok) {
+			const errorResult = (await response.json().catch(() => ({
+				success: false,
+				error: "Unknown error",
+				message: undefined,
+			}))) as {
+				success?: boolean;
+				error?: string;
+				message?: string;
+			};
+			const statusCode = (response.status as 400 | 500) || 500;
+			return c.json(
+				{
+					success: false,
+					error: errorResult.error || "Failed to fetch AML compliance settings",
+					message: errorResult.message,
+				},
+				statusCode,
+			);
+		}
+
+		// Success response - pass through the data
 		const result = await response.json();
-		return c.json(result, response.status as 200 | 404 | 500);
+		return c.json(result, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error fetching AML settings:", error);
 		return c.json(
@@ -175,8 +258,34 @@ amlSettingsProxyRoutes.put("/:orgId", async (c) => {
 			}),
 		);
 
+		// Handle error responses
+		if (!response.ok) {
+			const errorResult = (await response.json().catch(() => ({
+				success: false,
+				error: "Unknown error",
+				message: undefined,
+				details: undefined,
+			}))) as {
+				success?: boolean;
+				error?: string;
+				message?: string;
+				details?: unknown;
+			};
+			const statusCode = (response.status as 400 | 500) || 500;
+			return c.json(
+				{
+					success: false,
+					error:
+						errorResult.error || "Failed to update AML compliance settings",
+					message: errorResult.message || (errorResult.details as string),
+				},
+				statusCode,
+			);
+		}
+
+		// Success response - pass through the data
 		const result = await response.json();
-		return c.json(result, response.status as 200 | 400 | 500);
+		return c.json(result, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error updating AML settings:", error);
 		return c.json(
@@ -231,8 +340,34 @@ amlSettingsProxyRoutes.patch("/:orgId", async (c) => {
 			}),
 		);
 
+		// Handle error responses
+		if (!response.ok) {
+			const errorResult = (await response.json().catch(() => ({
+				success: false,
+				error: "Unknown error",
+				message: undefined,
+				details: undefined,
+			}))) as {
+				success?: boolean;
+				error?: string;
+				message?: string;
+				details?: unknown;
+			};
+			const statusCode = (response.status as 400 | 500) || 500;
+			return c.json(
+				{
+					success: false,
+					error:
+						errorResult.error || "Failed to update AML compliance settings",
+					message: errorResult.message || (errorResult.details as string),
+				},
+				statusCode,
+			);
+		}
+
+		// Success response - pass through the data
 		const result = await response.json();
-		return c.json(result, response.status as 200 | 400 | 404 | 500);
+		return c.json(result, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error patching AML settings:", error);
 		return c.json(
