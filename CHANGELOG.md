@@ -1,3 +1,10 @@
+# [1.4.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.3.1...v1.4.0-rc.1) (2026-01-11)
+
+
+### Features
+
+* add user and organization settings management with audit logging ([0168963](https://github.com/janovix/auth-svc/commit/0168963dd2da88459a82e6e33fa2e19559695d1b))
+
 ## [1.3.1](https://github.com/janovix/auth-svc/compare/v1.3.0...v1.3.1) (2026-01-10)
 
 
