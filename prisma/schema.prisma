@@ -161,3 +161,81 @@ model Invitation {
   @@index([email])
   @@index([status])
 }
+
+// Organization-level default settings
+model OrganizationSettings {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  theme          String   @default("system")      // light/dark/system
+  timezone       String   @default("UTC")         // IANA timezone
+  language       String   @default("en")          // ISO 639-1 code
+  dateFormat     String   @default("MM/DD/YYYY")  @map("date_format")
+  avatarUrl      String?  @map("avatar_url")
+  metadata       String?                          // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("organization_settings")
+  @@index([organizationId])
+}
+
+// User-level settings (overrides org defaults when set)
+model UserSettings {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  theme          String?                          // NULL = use org/browser default
+  timezone       String?                          // NULL = use org/browser default
+  language       String?                          // NULL = use org/browser default
+  dateFormat     String?  @map("date_format")     // NULL = use org default
+  avatarUrl      String?  @map("avatar_url")
+  paymentMethods String?  @map("payment_methods") // JSON array of payment method refs
+  metadata       String?                          // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("user_settings")
+  @@index([userId])
+}
+
+// Audit log entry with signature chain for integrity verification
+model AuditLog {
+  id                    String   @id @default(uuid())
+  
+  // Event identification
+  eventType             String   @map("event_type")      // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entityType            String   @map("entity_type")     // user, organization, transaction, etc.
+  entityId              String?  @map("entity_id")       // ID of affected entity
+  
+  // Actor information
+  actorUserId           String?  @map("actor_user_id")
+  actorOrganizationId   String?  @map("actor_organization_id")
+  actorIp               String?  @map("actor_ip")
+  actorUserAgent        String?  @map("actor_user_agent")
+  
+  // Change data (immutable snapshot)
+  previousState         String?  @map("previous_state")  // JSON
+  newState              String?  @map("new_state")       // JSON
+  changeSummary         String?  @map("change_summary")  // JSON field-level diff
+  
+  // Context
+  sourceService         String   @map("source_service")  // aml-svc, auth-svc, etc.
+  requestId             String?  @map("request_id")      // Correlation ID
+  metadata              String?                          // JSON additional context
+  
+  // Integrity chain
+  signature             String                           // SHA-256 hash
+  previousSignature     String?  @map("previous_signature")
+  
+  // Timestamps
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([actorOrganizationId])
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([sourceService])
+  @@index([signature])
+  @@index([previousSignature])
+}
