@@ -80,4 +80,9 @@ export type Bindings = Env & {
 	 * Configured via Cloudflare Dashboard secrets or wrangler vars.
 	 */
 	SENTRY_DSN?: string;
+	/**
+	 * Service binding to aml-svc for worker-to-worker communication.
+	 * Used to proxy AML compliance settings requests securely.
+	 */
+	AML_SERVICE?: Fetcher;
 };

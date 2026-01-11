@@ -36,6 +36,7 @@ import {
 } from "./endpoints/audit/openapi";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
+import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { auditRoutes } from "./routes/audit";
 import { internalAuditRoutes } from "./routes/internal-audit";
 
@@ -120,6 +121,9 @@ openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
 
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);
+
+// Register AML Compliance Settings proxy routes (proxies to aml-svc via service binding)
+app.route("/api/settings/aml-compliance", amlSettingsProxyRoutes);
 
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
