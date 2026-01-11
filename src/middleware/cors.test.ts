@@ -9,6 +9,8 @@ const baseEnv: Bindings = {
 	KV: {} as KVNamespace,
 	ENVIRONMENT: "local",
 	BETTER_AUTH_SECRET: SECRET,
+	BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
+	AUTH_INTERNAL_TOKEN: "test-internal-token-value",
 	CF_VERSION_METADATA: { id: "test-version" } as WorkerVersionMetadata,
 } as unknown as Bindings;
 
@@ -89,14 +91,14 @@ describe("CORS Middleware", () => {
 				...baseEnv,
 				ENVIRONMENT: "dev",
 				BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
-				AUTH_INTERNAL_TOKEN: "token1",
+				AUTH_INTERNAL_TOKEN: "token-1-1234567890",
 			} as unknown as Bindings;
 
 			const env2 = {
 				...baseEnv,
 				ENVIRONMENT: "prod",
 				BETTER_AUTH_URL: "https://auth-svc.janovix.com",
-				AUTH_INTERNAL_TOKEN: "token2",
+				AUTH_INTERNAL_TOKEN: "token-2-1234567890",
 			} as unknown as Bindings;
 
 			const patterns1 = getTrustedOriginPatterns(env1);
