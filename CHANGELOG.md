@@ -1,3 +1,10 @@
+# [1.4.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.2...v1.4.0-rc.3) (2026-01-11)
+
+
+### Bug Fixes
+
+* refactor AML settings proxy routes to improve error handling and logging ([84188f8](https://github.com/janovix/auth-svc/commit/84188f840a08bf71922ef669fba5596c4b618c2f))
+
 # [1.4.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.1...v1.4.0-rc.2) (2026-01-11)
 
 
