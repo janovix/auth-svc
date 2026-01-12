@@ -39,6 +39,10 @@ import { internalSettingsRoutes } from "./routes/internal-settings";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { auditRoutes } from "./routes/audit";
 import { internalAuditRoutes } from "./routes/internal-audit";
+import { subscriptionRoutes } from "./routes/subscription";
+import { licenseRoutes } from "./routes/license";
+import { webhookRoutes } from "./routes/webhooks";
+import { internalSubscriptionRoutes } from "./routes/internal-subscription";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -152,6 +156,18 @@ openapi.get("/api/audit", ListAuditLogsEndpoint);
 openapi.get("/api/audit/verify", VerifyAuditChainEndpoint);
 openapi.get("/api/audit/:id", GetAuditLogEndpoint);
 openapi.post("/api/audit/export", ExportAuditLogsEndpoint);
+
+// Register Subscription routes (billing management)
+app.route("/api/subscription", subscriptionRoutes);
+
+// Register License routes (enterprise license management)
+app.route("/api/licenses", licenseRoutes);
+
+// Register Stripe Webhooks
+app.route("/webhooks", webhookRoutes);
+
+// Register Internal Subscription routes for service bindings
+app.route("/internal/subscription", internalSubscriptionRoutes);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

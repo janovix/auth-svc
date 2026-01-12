@@ -85,4 +85,44 @@ export type Bindings = Env & {
 	 * Used to proxy AML compliance settings requests securely.
 	 */
 	AML_SERVICE?: Fetcher;
+
+	// =========================================================================
+	// STRIPE BILLING
+	// =========================================================================
+
+	/**
+	 * Stripe secret key for server-side API calls.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	STRIPE_SECRET_KEY?: string;
+
+	/**
+	 * Stripe publishable key for client-side use.
+	 * Can be public, configured via wrangler vars.
+	 */
+	STRIPE_PUBLISHABLE_KEY?: string;
+
+	/**
+	 * Stripe webhook signing secret for verifying webhook events.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	STRIPE_WEBHOOK_SECRET?: string;
+
+	// =========================================================================
+	// ENTERPRISE LICENSING
+	// =========================================================================
+
+	/**
+	 * Ed25519 private key for signing enterprise license JWTs.
+	 * Configured via Cloudflare Dashboard secrets.
+	 * PEM format with headers.
+	 */
+	LICENSE_PRIVATE_KEY?: string;
+
+	/**
+	 * Ed25519 public key for verifying enterprise license JWTs.
+	 * Can be public, used by other services for offline verification.
+	 * PEM format with headers.
+	 */
+	LICENSE_PUBLIC_KEY?: string;
 };

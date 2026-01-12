@@ -1,5 +1,6 @@
 // Prisma schema for D1 database
 // Learn more about it in the docs: https://pris.ly/d/prisma-schema
+// NOTE: All column names use snake_case via @map directives for consistency
 
 generator client {
   provider = "prisma-client-js"
@@ -12,22 +13,22 @@ datasource db {
 
 // Better Auth User model
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
+  id            String    @id @default(uuid())
+  email         String    @unique
   phone         String?
   name          String?
-  emailVerified Boolean  @default(false)
+  emailVerified Boolean   @default(false) @map("email_verified")
   image         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
   // Better Auth admin plugin fields
-  role          String   @default("user")
-  banned        Boolean  @default(false)
-  banReason     String?
-  banExpires    DateTime?
+  role          String    @default("user")
+  banned        Boolean   @default(false)
+  banReason     String?   @map("ban_reason")
+  banExpires    DateTime? @map("ban_expires")
 
-  sessions Session[]
-  accounts Account[]
+  sessions        Session[]
+  accounts        Account[]
   // Better Auth organization plugin relations
   memberships     Member[]
   invitationsSent Invitation[]
@@ -37,18 +38,18 @@ model User {
 
 // Better Auth Session model
 model Session {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
+  id                   String   @id @default(uuid())
+  token                String   @unique
+  expiresAt            DateTime @map("expires_at")
+  ipAddress            String?  @map("ip_address")
+  userAgent            String?  @map("user_agent")
   // Better Auth Organization plugin: current "active" org for the session.
-  activeOrganizationId String?
+  activeOrganizationId String?  @map("active_organization_id")
   // Better Auth admin plugin: ID of admin user impersonating this session.
-  impersonatedBy String?
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  impersonatedBy       String?  @map("impersonated_by")
+  userId               String   @map("user_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -58,19 +59,19 @@ model Session {
 
 // Better Auth Account model
 model Account {
-  id                     String   @id @default(uuid())
-  accountId              String
-  providerId             String
-  userId                 String
-  accessToken            String?
-  refreshToken           String?
-  idToken                String?
-  accessTokenExpiresAt   DateTime?
-  refreshTokenExpiresAt  DateTime?
-  scope                  String?
-  password               String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -83,9 +84,9 @@ model Verification {
   id         String   @id @default(uuid())
   identifier String
   value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("verifications")
   @@index([identifier])
@@ -93,13 +94,13 @@ model Verification {
 
 // Used by the Better Auth JWT plugin to persist key pairs for JWKS.
 model Jwks {
-  id        String   @id @default(uuid())
-  publicKey String
-  privateKey String
-  createdAt DateTime @default(now())
-  expiresAt DateTime?
-  alg       String?
-  crv       String?
+  id         String    @id @default(uuid())
+  publicKey  String    @map("public_key")
+  privateKey String    @map("private_key")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime? @map("expires_at")
+  alg        String?
+  crv        String?
 
   @@map("jwks")
   @@index([createdAt])
@@ -108,13 +109,13 @@ model Jwks {
 
 // Better Auth Organization model
 model Organization {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  logo        String?
-  metadata    String?  // JSON string for organization settings (RFC, vulnerable activity, etc.)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   members     Member[]
   invitations Invitation[]
@@ -126,11 +127,11 @@ model Organization {
 // Better Auth Organization Member model
 model Member {
   id             String   @id @default(uuid())
-  organizationId String
-  userId         String
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
   role           String   @default("member") // owner, admin, member
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -144,14 +145,14 @@ model Member {
 // Better Auth Organization Invitation model
 model Invitation {
   id             String   @id @default(uuid())
-  organizationId String
+  organizationId String   @map("organization_id")
   email          String
   role           String   @default("member")
   status         String   @default("pending") // pending, accepted, rejected, expired
-  inviterId      String
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  inviterId      String   @map("inviter_id")
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviter      User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
@@ -165,13 +166,13 @@ model Invitation {
 // Organization-level default settings
 model OrganizationSettings {
   id             String   @id @default(uuid())
-  organizationId String   @unique
-  theme          String   @default("system")      // light/dark/system
-  timezone       String   @default("UTC")         // IANA timezone
-  language       String   @default("en")          // ISO 639-1 code
-  dateFormat     String   @default("MM/DD/YYYY")  @map("date_format")
+  organizationId String   @unique @map("organization_id")
+  theme          String   @default("system") // light/dark/system
+  timezone       String   @default("UTC") // IANA timezone
+  language       String   @default("en") // ISO 639-1 code
+  dateFormat     String   @default("MM/DD/YYYY") @map("date_format")
   avatarUrl      String?  @map("avatar_url")
-  metadata       String?                          // JSON for extensibility
+  metadata       String? // JSON for extensibility
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -183,13 +184,13 @@ model OrganizationSettings {
 model UserSettings {
   id             String   @id @default(uuid())
   userId         String   @unique @map("user_id")
-  theme          String?                          // NULL = use org/browser default
-  timezone       String?                          // NULL = use org/browser default
-  language       String?                          // NULL = use org/browser default
-  dateFormat     String?  @map("date_format")     // NULL = use org default
+  theme          String? // NULL = use org/browser default
+  timezone       String? // NULL = use org/browser default
+  language       String? // NULL = use org/browser default
+  dateFormat     String?  @map("date_format") // NULL = use org default
   avatarUrl      String?  @map("avatar_url")
   paymentMethods String?  @map("payment_methods") // JSON array of payment method refs
-  metadata       String?                          // JSON for extensibility
+  metadata       String? // JSON for extensibility
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -199,35 +200,29 @@ model UserSettings {
 
 // Audit log entry with signature chain for integrity verification
 model AuditLog {
-  id                    String   @id @default(uuid())
-  
+  id                  String   @id @default(uuid())
   // Event identification
-  eventType             String   @map("event_type")      // CREATE, UPDATE, DELETE, LOGIN, etc.
-  entityType            String   @map("entity_type")     // user, organization, transaction, etc.
-  entityId              String?  @map("entity_id")       // ID of affected entity
-  
+  eventType           String   @map("event_type") // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entityType          String   @map("entity_type") // user, organization, transaction, etc.
+  entityId            String?  @map("entity_id") // ID of affected entity
   // Actor information
-  actorUserId           String?  @map("actor_user_id")
-  actorOrganizationId   String?  @map("actor_organization_id")
-  actorIp               String?  @map("actor_ip")
-  actorUserAgent        String?  @map("actor_user_agent")
-  
+  actorUserId         String?  @map("actor_user_id")
+  actorOrganizationId String?  @map("actor_organization_id")
+  actorIp             String?  @map("actor_ip")
+  actorUserAgent      String?  @map("actor_user_agent")
   // Change data (immutable snapshot)
-  previousState         String?  @map("previous_state")  // JSON
-  newState              String?  @map("new_state")       // JSON
-  changeSummary         String?  @map("change_summary")  // JSON field-level diff
-  
+  previousState       String?  @map("previous_state") // JSON
+  newState            String?  @map("new_state") // JSON
+  changeSummary       String?  @map("change_summary") // JSON field-level diff
   // Context
-  sourceService         String   @map("source_service")  // aml-svc, auth-svc, etc.
-  requestId             String?  @map("request_id")      // Correlation ID
-  metadata              String?                          // JSON additional context
-  
+  sourceService       String   @map("source_service") // aml-svc, auth-svc, etc.
+  requestId           String?  @map("request_id") // Correlation ID
+  metadata            String? // JSON additional context
   // Integrity chain
-  signature             String                           // SHA-256 hash
-  previousSignature     String?  @map("previous_signature")
-  
+  signature           String // SHA-256 hash
+  previousSignature   String?  @map("previous_signature")
   // Timestamps
-  createdAt             DateTime @default(now()) @map("created_at")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   @@map("audit_logs")
   @@index([entityType, entityId])
@@ -238,4 +233,134 @@ model AuditLog {
   @@index([sourceService])
   @@index([signature])
   @@index([previousSignature])
+}
+
+// ============================================================================
+// STRIPE BILLING & SUBSCRIPTION MODELS
+// ============================================================================
+
+// Subscription plan definitions (synced with Stripe Products)
+model SubscriptionPlan {
+  id                   String   @id // Stripe Product ID
+  name                 String // "Business", "Pro", or "Enterprise"
+  tier                 String // "business", "pro", "enterprise"
+  billingInterval      String   @default("month") @map("billing_interval") // "month" or "year"
+  stripePriceId        String   @unique @map("stripe_price_id") // Stripe Price ID for base subscription
+  basePrice            Decimal  @map("base_price") // Base price in MXN
+  noticesIncluded      Int      @map("notices_included") // Notices included per period
+  usersIncluded        Int      @map("users_included") // Users included
+  transactionsIncluded Int?     @map("transactions_included") // Optional transaction limit (enterprise)
+  alertsIncluded       Int?     @map("alerts_included") // Optional alert limit (enterprise)
+  overagePriceId       String?  @map("overage_price_id") // Stripe Price ID for metered overage
+  overagePrice         Decimal? @map("overage_price") // Price per overage unit
+  features             String // JSON array of feature flags
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  subscriptions OrganizationSubscription[]
+
+  @@map("subscription_plans")
+  @@index([tier])
+  @@index([active])
+}
+
+// Organization billing (Stripe Customer + Subscription)
+model OrganizationSubscription {
+  id                       String    @id @default(uuid())
+  organizationId           String    @unique @map("organization_id")
+  // Stripe Customer (created for ALL orgs)
+  stripeCustomerId         String    @unique @map("stripe_customer_id")
+  // Stripe Subscription (NULL until they subscribe)
+  planId                   String?   @map("plan_id")
+  stripeSubscriptionId     String?   @unique @map("stripe_subscription_id")
+  stripeSubscriptionItemId String?   @map("stripe_subscription_item_id") // For metered billing
+  status                   String    @default("inactive") // inactive, trialing, active, past_due, canceled, unpaid
+  currentPeriodStart       DateTime? @map("current_period_start")
+  currentPeriodEnd         DateTime? @map("current_period_end")
+  cancelAtPeriodEnd        Boolean   @default(false) @map("cancel_at_period_end")
+  // Current period usage tracking
+  noticesUsed              Int       @default(0) @map("notices_used")
+  alertsUsed               Int       @default(0) @map("alerts_used")
+  transactionsUsed         Int       @default(0) @map("transactions_used")
+  usersCount               Int       @default(0) @map("users_count")
+  // Enterprise license (for offline JWT verification)
+  licenseId                String?   @unique @map("license_id")
+  // Billing contact (can differ from org owner)
+  billingEmail             String?   @map("billing_email")
+  billingName              String?   @map("billing_name")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  plan         SubscriptionPlan?  @relation(fields: [planId], references: [id])
+  license      EnterpriseLicense? @relation(fields: [licenseId], references: [id])
+  usageRecords UsageRecord[]
+
+  @@map("organization_subscriptions")
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
+}
+
+// Enterprise licenses (JWT for offline verification, backed by Stripe yearly sub)
+model EnterpriseLicense {
+  id                   String    @id @default(uuid())
+  organizationId       String?   @unique @map("organization_id") // NULL until activated
+  // The signed JWT license key (for offline verification)
+  licenseKey           String    @unique @map("license_key")
+  // Limits (also encoded in JWT payload)
+  noticesPerMonth      Int       @map("notices_per_month")
+  maxUsers             Int       @map("max_users")
+  maxTransactions      Int?      @map("max_transactions")
+  maxAlerts            Int?      @map("max_alerts")
+  features             String // JSON array of enabled features
+  // Stripe tracking
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id") // Yearly enterprise subscription
+  stripeInvoiceId      String?   @map("stripe_invoice_id") // Initial invoice reference
+  // Validity
+  issuedAt             DateTime  @default(now()) @map("issued_at")
+  activatedAt          DateTime? @map("activated_at") // When org activated the license
+  expiresAt            DateTime  @map("expires_at") // 1 year from issuance
+  revokedAt            DateTime? @map("revoked_at")
+  // Metadata
+  issuedBy             String    @map("issued_by") // Admin user ID who created
+  customerName         String?   @map("customer_name") // Company name for the license
+  notes                String?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  subscription OrganizationSubscription?
+
+  @@map("enterprise_licenses")
+  @@index([organizationId])
+  @@index([stripeSubscriptionId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+// Usage tracking per billing period (for analytics and Stripe reporting)
+model UsageRecord {
+  id                   String    @id @default(uuid())
+  organizationId       String    @map("organization_id")
+  subscriptionId       String    @map("subscription_id")
+  periodStart          DateTime  @map("period_start")
+  periodEnd            DateTime  @map("period_end")
+  // Counts for the period
+  noticesCreated       Int       @default(0) @map("notices_created")
+  alertsCreated        Int       @default(0) @map("alerts_created")
+  transactionsCreated  Int       @default(0) @map("transactions_created")
+  // Overage tracking
+  noticesOverage       Int       @default(0) @map("notices_overage")
+  overageReportedAt    DateTime? @map("overage_reported_at") // Last time overage was reported to Stripe
+  stripeUsageRecordIds String?   @map("stripe_usage_record_ids") // JSON array of Stripe usage record IDs
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  subscription OrganizationSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([organizationId, periodStart])
+  @@map("usage_records")
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([periodStart])
 }
