@@ -3,6 +3,7 @@ import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { emailOTP, openAPI } from "better-auth/plugins";
+import Stripe from "stripe";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
 import {
@@ -286,6 +287,90 @@ export function buildResolvedAuthConfig(
 		rateLimit: RATE_LIMITS[resolvedEnv],
 		advanced: buildAdvancedOptions(resolvedEnv, cookieDomain),
 		trustedOrigins,
+		// Database hooks to create Stripe Customer when organization is created
+		databaseHooks: {
+			organization: {
+				create: {
+					after: async (organization: {
+						id: string;
+						name: string;
+						slug: string;
+					}) => {
+						// Skip Stripe customer creation if Stripe is not configured
+						if (!env.STRIPE_SECRET_KEY) {
+							console.warn(
+								"[Org Created] STRIPE_SECRET_KEY not configured, skipping Stripe customer creation",
+							);
+							return;
+						}
+
+						const stripeSecretKey = env.STRIPE_SECRET_KEY;
+
+						// Create Stripe customer for the organization
+						const createStripeCustomerPromise = (async () => {
+							try {
+								const stripe = new Stripe(stripeSecretKey);
+
+								// Create the Stripe Customer
+								const stripeCustomer = await stripe.customers.create({
+									name: organization.name,
+									metadata: {
+										organizationId: organization.id,
+										organizationName: organization.name,
+										organizationSlug: organization.slug,
+										planType: "free",
+										isEnterprise: "false",
+									},
+								});
+
+								// Create the organization_subscriptions record with "free" status
+								console.log(
+									`[Org Created] Created Stripe customer ${stripeCustomer.id} for org ${organization.id}`,
+								);
+
+								// Insert the subscription record
+								const subscriptionId = crypto.randomUUID();
+								await env.DB.prepare(
+									`
+									INSERT INTO organization_subscriptions (
+										id, organization_id, stripe_customer_id, status, created_at, updated_at
+									) VALUES (?, ?, ?, 'inactive', datetime('now'), datetime('now'))
+								`,
+								)
+									.bind(subscriptionId, organization.id, stripeCustomer.id)
+									.run();
+
+								console.log(
+									`[Org Created] Created subscription record for org ${organization.id}`,
+								);
+							} catch (error) {
+								console.error(
+									"[Org Created] Failed to create Stripe customer:",
+									error,
+								);
+							}
+						})();
+
+						// Use waitUntil if available to ensure async operation completes
+						if (
+							executionContext &&
+							typeof executionContext.waitUntil === "function"
+						) {
+							executionContext.waitUntil(createStripeCustomerPromise);
+						} else {
+							// Fallback: let the promise run in background
+							createStripeCustomerPromise.catch((error) => {
+								console.error(
+									"[Org Created] Unhandled Stripe customer creation error:",
+									error,
+								);
+							});
+						}
+					},
+				},
+			},
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} as any, // Type assertion needed as Better Auth types don't include organization hooks
 	};
 
 	return {

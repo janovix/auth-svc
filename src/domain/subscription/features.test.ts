@@ -15,6 +15,11 @@ describe("Subscription Features", () => {
 			expect(PLAN_FEATURES.none).toEqual([]);
 		});
 
+		it("should have basic features for 'free' tier", () => {
+			expect(PLAN_FEATURES.free).toContain("data_capture");
+			expect(PLAN_FEATURES.free).toHaveLength(1);
+		});
+
 		it("should have business features", () => {
 			expect(PLAN_FEATURES.business).toContain("data_capture");
 			expect(PLAN_FEATURES.business).toContain("compliance_validation");
@@ -50,6 +55,13 @@ describe("Subscription Features", () => {
 			});
 		});
 
+		it("should have limited free tier limits", () => {
+			expect(PLAN_LIMITS.free.notices).toBe(5);
+			expect(PLAN_LIMITS.free.users).toBe(2);
+			expect(PLAN_LIMITS.free.transactions).toBe(10);
+			expect(PLAN_LIMITS.free.alerts).toBe(5);
+		});
+
 		it("should have correct business limits", () => {
 			expect(PLAN_LIMITS.business.notices).toBe(50);
 			expect(PLAN_LIMITS.business.users).toBe(5);
@@ -76,6 +88,12 @@ describe("Subscription Features", () => {
 		it("should return false for 'none' tier with any feature", () => {
 			expect(planHasFeature("none", "data_capture")).toBe(false);
 			expect(planHasFeature("none", "sso")).toBe(false);
+		});
+
+		it("should return true for 'free' tier with data_capture only", () => {
+			expect(planHasFeature("free", "data_capture")).toBe(true);
+			expect(planHasFeature("free", "compliance_validation")).toBe(false);
+			expect(planHasFeature("free", "sso")).toBe(false);
 		});
 
 		it("should return true for business tier with basic features", () => {
@@ -106,14 +124,14 @@ describe("Subscription Features", () => {
 	});
 
 	describe("getRequiredTierForFeature", () => {
-		it("should return business for basic features", () => {
-			expect(getRequiredTierForFeature("data_capture")).toBe("business");
+		it("should return free for data_capture feature", () => {
+			expect(getRequiredTierForFeature("data_capture")).toBe("free");
+		});
+
+		it("should return business for compliance features", () => {
 			expect(getRequiredTierForFeature("compliance_validation")).toBe(
 				"business",
 			);
-		});
-
-		it("should return business for features available in all tiers", () => {
 			expect(getRequiredTierForFeature("report_generation")).toBe("business");
 		});
 
@@ -155,7 +173,13 @@ describe("Subscription Features", () => {
 		});
 
 		it("should correctly order all tiers", () => {
-			const tiers: PlanTier[] = ["none", "business", "pro", "enterprise"];
+			const tiers: PlanTier[] = [
+				"none",
+				"free",
+				"business",
+				"pro",
+				"enterprise",
+			];
 			for (let i = 0; i < tiers.length; i++) {
 				for (let j = 0; j < tiers.length; j++) {
 					if (i < j) {
@@ -168,17 +192,26 @@ describe("Subscription Features", () => {
 				}
 			}
 		});
+
+		it("should compare free tier correctly", () => {
+			expect(comparePlanTiers("free", "none")).toBeGreaterThan(0);
+			expect(comparePlanTiers("free", "business")).toBeLessThan(0);
+			expect(comparePlanTiers("free", "free")).toBe(0);
+		});
 	});
 
 	describe("tierAtLeast", () => {
 		it("should return true when current tier equals required", () => {
 			expect(tierAtLeast("none", "none")).toBe(true);
+			expect(tierAtLeast("free", "free")).toBe(true);
 			expect(tierAtLeast("business", "business")).toBe(true);
 			expect(tierAtLeast("enterprise", "enterprise")).toBe(true);
 		});
 
 		it("should return true when current tier is higher than required", () => {
+			expect(tierAtLeast("free", "none")).toBe(true);
 			expect(tierAtLeast("business", "none")).toBe(true);
+			expect(tierAtLeast("business", "free")).toBe(true);
 			expect(tierAtLeast("pro", "business")).toBe(true);
 			expect(tierAtLeast("enterprise", "none")).toBe(true);
 			expect(tierAtLeast("enterprise", "business")).toBe(true);
@@ -186,7 +219,9 @@ describe("Subscription Features", () => {
 		});
 
 		it("should return false when current tier is lower than required", () => {
+			expect(tierAtLeast("none", "free")).toBe(false);
 			expect(tierAtLeast("none", "business")).toBe(false);
+			expect(tierAtLeast("free", "business")).toBe(false);
 			expect(tierAtLeast("business", "pro")).toBe(false);
 			expect(tierAtLeast("pro", "enterprise")).toBe(false);
 			expect(tierAtLeast("none", "enterprise")).toBe(false);

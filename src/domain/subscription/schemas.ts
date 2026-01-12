@@ -7,7 +7,13 @@ import { z } from "zod";
 /**
  * Plan tier enum
  */
-export const planTierSchema = z.enum(["none", "business", "pro", "enterprise"]);
+export const planTierSchema = z.enum([
+	"none",
+	"free",
+	"business",
+	"pro",
+	"enterprise",
+]);
 
 /**
  * Subscription status enum

@@ -4,8 +4,13 @@
 
 /**
  * Plan tier
+ * - "none": No subscription (before any plan selected)
+ * - "free": Free tier with limited features (default for new orgs)
+ * - "business": Paid business tier
+ * - "pro": Paid professional tier
+ * - "enterprise": Custom enterprise licenses
  */
-export type PlanTier = "none" | "business" | "pro" | "enterprise";
+export type PlanTier = "none" | "free" | "business" | "pro" | "enterprise";
 
 /**
  * Subscription status

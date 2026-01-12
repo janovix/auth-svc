@@ -12,7 +12,7 @@ export interface StripeCustomerMetadata {
 	organizationName: string;
 	organizationSlug: string;
 	rfc?: string;
-	planType?: "none" | "business" | "pro" | "enterprise";
+	planType?: "none" | "free" | "business" | "pro" | "enterprise";
 	isEnterprise?: "true" | "false";
 }
 
@@ -50,7 +50,7 @@ export interface UpdateCustomerInput {
 	organizationName?: string;
 	organizationSlug?: string;
 	rfc?: string;
-	planType?: "none" | "business" | "pro" | "enterprise";
+	planType?: "none" | "free" | "business" | "pro" | "enterprise";
 }
 
 /**
@@ -102,4 +102,4 @@ export type SubscriptionStatus =
 /**
  * Plan tier enum
  */
-export type PlanTier = "none" | "business" | "pro" | "enterprise";
+export type PlanTier = "none" | "free" | "business" | "pro" | "enterprise";

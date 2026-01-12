@@ -9,6 +9,10 @@ import type { Feature, PlanTier } from "./types";
  */
 export const PLAN_FEATURES: Record<PlanTier, Feature[]> = {
 	none: [],
+	free: [
+		// Free tier gets basic data capture only
+		"data_capture",
+	],
 	business: [
 		"data_capture",
 		"compliance_validation",
@@ -63,6 +67,12 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 		transactions: 0,
 		alerts: 0,
 	},
+	free: {
+		notices: 5, // 5 notices per month for free tier
+		users: 2, // Max 2 users
+		transactions: 10, // Limited transactions
+		alerts: 5, // Limited alerts
+	},
 	business: {
 		notices: 50,
 		users: 5,
@@ -94,7 +104,7 @@ export function planHasFeature(tier: PlanTier, feature: Feature): boolean {
  * Get the minimum plan tier required for a feature
  */
 export function getRequiredTierForFeature(feature: Feature): PlanTier | null {
-	const tiers: PlanTier[] = ["business", "pro", "enterprise"];
+	const tiers: PlanTier[] = ["free", "business", "pro", "enterprise"];
 	for (const tier of tiers) {
 		if (PLAN_FEATURES[tier].includes(feature)) {
 			return tier;
@@ -109,9 +119,10 @@ export function getRequiredTierForFeature(feature: Feature): PlanTier | null {
 export function comparePlanTiers(a: PlanTier, b: PlanTier): number {
 	const order: Record<PlanTier, number> = {
 		none: 0,
-		business: 1,
-		pro: 2,
-		enterprise: 3,
+		free: 1,
+		business: 2,
+		pro: 3,
+		enterprise: 4,
 	};
 	return order[a] - order[b];
 }

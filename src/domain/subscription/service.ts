@@ -81,9 +81,15 @@ export class SubscriptionService {
 
 		const plan = subscription.plan;
 		const isEnterprise = !!subscription.licenseId;
+
+		// Determine plan tier:
+		// - Enterprise license takes precedence
+		// - If has paid plan, use that tier
+		// - If has Stripe customer but no paid plan, use "free" tier
+		// - Otherwise "none" (shouldn't happen with auto-customer creation)
 		const planTier: PlanTier = isEnterprise
 			? "enterprise"
-			: plan?.tier || "none";
+			: plan?.tier || (subscription.stripeCustomerId ? "free" : "none");
 
 		// Get features based on plan or enterprise license
 		const features = PLAN_FEATURES[planTier];
@@ -91,13 +97,21 @@ export class SubscriptionService {
 		// Calculate usage
 		const limits = this.getPlanLimits(subscription);
 
+		// hasSubscription is true if user has paid plan OR is on free tier
+		// This allows free tier users to access the app with limited features
+		const hasActiveAccess =
+			subscription.status === "active" ||
+			subscription.status === "trialing" ||
+			planTier === "free"; // Free tier always has access
+
 		return {
-			hasSubscription:
-				subscription.status === "active" || subscription.status === "trialing",
+			hasSubscription: hasActiveAccess,
 			isEnterprise,
 			status: subscription.status,
 			planTier,
-			planName: plan?.name || (isEnterprise ? "Enterprise" : null),
+			planName:
+				plan?.name ||
+				(isEnterprise ? "Enterprise" : planTier === "free" ? "Free" : null),
 			currentPeriodStart:
 				subscription.currentPeriodStart?.toISOString() || null,
 			currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || null,
@@ -180,6 +194,13 @@ export class SubscriptionService {
 			line_items: lineItems,
 			success_url: successUrl,
 			cancel_url: cancelUrl,
+			// Enable Stripe Link for accelerated checkout (remembers payment methods)
+			// Also enable cards for fallback
+			payment_method_types: ["card", "link"],
+			// Allow promotion codes for discounts
+			allow_promotion_codes: true,
+			// Collect billing address for invoicing
+			billing_address_collection: "required",
 			subscription_data: {
 				metadata: {
 					organizationId,
@@ -340,9 +361,11 @@ export class SubscriptionService {
 		}
 
 		const limits = this.getPlanLimits(subscription);
+		// Determine tier: enterprise > paid plan > free (if has Stripe customer) > none
 		const planTier: PlanTier = subscription.licenseId
 			? "enterprise"
-			: subscription.plan?.tier || "none";
+			: subscription.plan?.tier ||
+				(subscription.stripeCustomerId ? "free" : "none");
 
 		let used: number;
 		let included: number | null;
@@ -387,9 +410,11 @@ export class SubscriptionService {
 			};
 		}
 
+		// Determine tier: enterprise > paid plan > free (if has Stripe customer) > none
 		const planTier: PlanTier = subscription.licenseId
 			? "enterprise"
-			: subscription.plan?.tier || "none";
+			: subscription.plan?.tier ||
+				(subscription.stripeCustomerId ? "free" : "none");
 
 		const hasFeature = PLAN_FEATURES[planTier].includes(feature);
 
@@ -535,6 +560,11 @@ export class SubscriptionService {
 		// TODO: Load license limits from EnterpriseLicense table
 		if (subscription.licenseId) {
 			return PLAN_LIMITS.enterprise;
+		}
+
+		// If org has Stripe customer but no paid plan, use free tier limits
+		if (subscription.stripeCustomerId) {
+			return PLAN_LIMITS.free;
 		}
 
 		return PLAN_LIMITS.none;
