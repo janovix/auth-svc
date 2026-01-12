@@ -70,6 +70,7 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { licenseRoutes } from "./routes/license";
 import { webhookRoutes } from "./routes/webhooks";
 import { internalSubscriptionRoutes } from "./routes/internal-subscription";
+import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -234,6 +235,9 @@ app.route("/webhooks", webhookRoutes);
 
 // Register Internal Subscription routes for service bindings
 app.route("/internal/subscription", internalSubscriptionRoutes);
+
+// Register Internal Organizations routes for admin panel
+app.route("/internal/organizations", internalOrganizationsRoutes);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
