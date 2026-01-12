@@ -229,6 +229,46 @@ export class UpdateOrganizationSettingsEndpoint extends OpenAPIRoute {
 }
 
 /**
+ * GET /api/settings/organization/:orgId/membership - Get user's membership in organization
+ */
+export class GetOrganizationMembershipEndpoint extends OpenAPIRoute {
+	public schema = {
+		tags: ["Settings"],
+		summary: "Get user's membership/role in organization",
+		operationId: "settings-get-organization-membership",
+		request: {
+			params: z.object({
+				orgId: z.string().uuid(),
+			}),
+		},
+		responses: {
+			"200": {
+				description: "User's membership information",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						data: z
+							.object({
+								role: z.string(),
+								organizationId: z.string().uuid(),
+							})
+							.nullable(),
+					}),
+				),
+			},
+			"401": {
+				description: "Unauthorized",
+				...contentJson(ErrorResponseSchema),
+			},
+		},
+	};
+
+	public async handle(_c: AppContext) {
+		throw new Error("This endpoint is handled by settings routes");
+	}
+}
+
+/**
  * GET /api/settings/resolved - Get merged settings
  */
 export class GetResolvedSettingsEndpoint extends OpenAPIRoute {
