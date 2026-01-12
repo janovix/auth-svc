@@ -27,6 +27,7 @@ import {
 	GetOrganizationSettingsEndpoint,
 	UpdateOrganizationSettingsEndpoint,
 	GetResolvedSettingsEndpoint,
+	GetOrganizationMembershipEndpoint,
 } from "./endpoints/settings/openapi";
 import {
 	ListAuditLogsEndpoint,
@@ -34,6 +35,32 @@ import {
 	VerifyAuditChainEndpoint,
 	ExportAuditLogsEndpoint,
 } from "./endpoints/audit/openapi";
+import {
+	GetSubscriptionStatusEndpoint,
+	GetSubscriptionPlansEndpoint,
+	CreateCheckoutSessionEndpoint,
+	ChangeSubscriptionPlanEndpoint,
+	CancelSubscriptionEndpoint,
+	ReactivateSubscriptionEndpoint,
+	GetSubscriptionInvoicesEndpoint,
+	GetCustomerPortalEndpoint,
+	GetSubscriptionUsageEndpoint,
+} from "./endpoints/subscription/openapi";
+import {
+	ListLicensesEndpoint,
+	GenerateLicenseEndpoint,
+	GetLicenseEndpoint,
+	RevokeLicenseEndpoint,
+	RenewLicenseEndpoint,
+	ActivateLicenseEndpoint,
+	VerifyLicenseEndpoint,
+	GetCurrentLicenseEndpoint,
+} from "./endpoints/license/openapi";
+import {
+	GetAmlComplianceSettingsEndpoint,
+	PutAmlComplianceSettingsEndpoint,
+	PatchAmlComplianceSettingsEndpoint,
+} from "./endpoints/aml-settings/openapi";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
@@ -129,6 +156,20 @@ app.route("/api/settings", settingsRoutes);
 // Register AML Compliance Settings proxy routes (proxies to aml-svc via service binding)
 app.route("/api/settings/aml-compliance", amlSettingsProxyRoutes);
 
+// Register AML Settings OpenAPI documentation
+openapi.get(
+	"/api/settings/aml-compliance/:orgId",
+	GetAmlComplianceSettingsEndpoint,
+);
+openapi.put(
+	"/api/settings/aml-compliance/:orgId",
+	PutAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId",
+	PatchAmlComplianceSettingsEndpoint,
+);
+
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
 
@@ -142,6 +183,10 @@ openapi.get(
 openapi.patch(
 	"/api/settings/organization/:orgId",
 	UpdateOrganizationSettingsEndpoint,
+);
+openapi.get(
+	"/api/settings/organization/:orgId/membership",
+	GetOrganizationMembershipEndpoint,
 );
 openapi.get("/api/settings/resolved", GetResolvedSettingsEndpoint);
 
@@ -160,8 +205,29 @@ openapi.post("/api/audit/export", ExportAuditLogsEndpoint);
 // Register Subscription routes (billing management)
 app.route("/api/subscription", subscriptionRoutes);
 
+// Register Subscription OpenAPI documentation
+openapi.get("/api/subscription", GetSubscriptionStatusEndpoint);
+openapi.get("/api/subscription/plans", GetSubscriptionPlansEndpoint);
+openapi.post("/api/subscription/checkout", CreateCheckoutSessionEndpoint);
+openapi.post("/api/subscription/change", ChangeSubscriptionPlanEndpoint);
+openapi.post("/api/subscription/cancel", CancelSubscriptionEndpoint);
+openapi.post("/api/subscription/reactivate", ReactivateSubscriptionEndpoint);
+openapi.get("/api/subscription/invoices", GetSubscriptionInvoicesEndpoint);
+openapi.post("/api/subscription/portal", GetCustomerPortalEndpoint);
+openapi.get("/api/subscription/usage", GetSubscriptionUsageEndpoint);
+
 // Register License routes (enterprise license management)
 app.route("/api/licenses", licenseRoutes);
+
+// Register License OpenAPI documentation
+openapi.get("/api/licenses", ListLicensesEndpoint);
+openapi.post("/api/licenses/generate", GenerateLicenseEndpoint);
+openapi.get("/api/licenses/:id", GetLicenseEndpoint);
+openapi.post("/api/licenses/:id/revoke", RevokeLicenseEndpoint);
+openapi.post("/api/licenses/:id/renew", RenewLicenseEndpoint);
+openapi.post("/api/licenses/activate", ActivateLicenseEndpoint);
+openapi.post("/api/licenses/verify", VerifyLicenseEndpoint);
+openapi.get("/api/licenses/current", GetCurrentLicenseEndpoint);
 
 // Register Stripe Webhooks
 app.route("/webhooks", webhookRoutes);

@@ -2,7 +2,7 @@
 	"openapi": "3.1.0",
 	"info": {
 		"title": "auth-svc",
-		"version": "1.1.0-rc.1",
+		"version": "1.4.0-rc.3",
 		"description": "Complete backend API template using Hono + Chanfana + D1 + Vitest."
 	},
 	"components": {
@@ -502,6 +502,4314 @@
 												},
 												"required": ["code", "message"]
 											}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/settings/aml-compliance/{orgId}": {
+			"get": {
+				"tags": ["AML Settings"],
+				"summary": "Get AML compliance settings for an organization",
+				"operationId": "aml-settings-get",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "AML compliance settings",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": ["object", "null"],
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"rfc": {
+													"type": ["string", "null"]
+												},
+												"vulnerableActivity": {
+													"type": "boolean"
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"organizationId",
+												"rfc",
+												"vulnerableActivity"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Not a member of this organization",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Settings not found",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "null"
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "AML service not available",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"tags": ["AML Settings"],
+				"summary": "Create or update AML compliance settings (owner/admin only)",
+				"operationId": "aml-settings-put",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"rfc": {
+										"type": ["string", "null"]
+									},
+									"vulnerableActivity": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "AML compliance settings updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"rfc": {
+													"type": ["string", "null"]
+												},
+												"vulnerableActivity": {
+													"type": "boolean"
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"organizationId",
+												"rfc",
+												"vulnerableActivity"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner or admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "AML service not available",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["AML Settings"],
+				"summary": "Partial update AML compliance settings (owner/admin only)",
+				"operationId": "aml-settings-patch",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"rfc": {
+										"type": ["string", "null"]
+									},
+									"vulnerableActivity": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "AML compliance settings updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"rfc": {
+													"type": ["string", "null"]
+												},
+												"vulnerableActivity": {
+													"type": "boolean"
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"organizationId",
+												"rfc",
+												"vulnerableActivity"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner or admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "AML service not available",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/settings/user": {
+			"get": {
+				"tags": ["Settings"],
+				"summary": "Get current user's settings",
+				"operationId": "settings-get-user",
+				"responses": {
+					"200": {
+						"description": "User settings",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": ["object", "null"],
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"userId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"theme": {
+													"type": ["string", "null"],
+													"enum": ["light", "dark", "system"]
+												},
+												"timezone": {
+													"type": ["string", "null"]
+												},
+												"language": {
+													"type": ["string", "null"],
+													"enum": ["en", "es"]
+												},
+												"dateFormat": {
+													"type": ["string", "null"],
+													"enum": [
+														"MM/DD/YYYY",
+														"DD/MM/YYYY",
+														"YYYY-MM-DD",
+														"DD.MM.YYYY"
+													]
+												},
+												"avatarUrl": {
+													"type": ["string", "null"],
+													"format": "uri"
+												},
+												"paymentMethods": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"properties": {
+															"id": {
+																"type": "string",
+																"format": "uuid"
+															},
+															"type": {
+																"type": "string",
+																"enum": ["card", "bank_account", "paypal"]
+															},
+															"label": {
+																"type": "string"
+															},
+															"last4": {
+																"type": "string"
+															},
+															"isDefault": {
+																"type": "boolean"
+															}
+														},
+														"required": ["id", "type", "label"]
+													}
+												},
+												"metadata": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"id",
+												"userId",
+												"theme",
+												"timezone",
+												"language",
+												"dateFormat",
+												"avatarUrl",
+												"paymentMethods",
+												"metadata",
+												"createdAt",
+												"updatedAt"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["Settings"],
+				"summary": "Update current user's settings",
+				"operationId": "settings-update-user",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"theme": {
+										"type": ["string", "null"],
+										"enum": ["light", "dark", "system"]
+									},
+									"timezone": {
+										"type": ["string", "null"]
+									},
+									"language": {
+										"type": ["string", "null"],
+										"enum": ["en", "es"]
+									},
+									"dateFormat": {
+										"type": ["string", "null"],
+										"enum": [
+											"MM/DD/YYYY",
+											"DD/MM/YYYY",
+											"YYYY-MM-DD",
+											"DD.MM.YYYY"
+										]
+									},
+									"avatarUrl": {
+										"type": ["string", "null"],
+										"format": "uri"
+									},
+									"paymentMethods": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"type": {
+													"type": "string",
+													"enum": ["card", "bank_account", "paypal"]
+												},
+												"label": {
+													"type": "string"
+												},
+												"last4": {
+													"type": "string"
+												},
+												"isDefault": {
+													"type": "boolean"
+												}
+											},
+											"required": ["id", "type", "label"]
+										}
+									},
+									"metadata": {
+										"type": "object",
+										"additionalProperties": {}
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated user settings",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"userId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"theme": {
+													"type": ["string", "null"],
+													"enum": ["light", "dark", "system"]
+												},
+												"timezone": {
+													"type": ["string", "null"]
+												},
+												"language": {
+													"type": ["string", "null"],
+													"enum": ["en", "es"]
+												},
+												"dateFormat": {
+													"type": ["string", "null"],
+													"enum": [
+														"MM/DD/YYYY",
+														"DD/MM/YYYY",
+														"YYYY-MM-DD",
+														"DD.MM.YYYY"
+													]
+												},
+												"avatarUrl": {
+													"type": ["string", "null"],
+													"format": "uri"
+												},
+												"paymentMethods": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"properties": {
+															"id": {
+																"type": "string",
+																"format": "uuid"
+															},
+															"type": {
+																"type": "string",
+																"enum": ["card", "bank_account", "paypal"]
+															},
+															"label": {
+																"type": "string"
+															},
+															"last4": {
+																"type": "string"
+															},
+															"isDefault": {
+																"type": "boolean"
+															}
+														},
+														"required": ["id", "type", "label"]
+													}
+												},
+												"metadata": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"id",
+												"userId",
+												"theme",
+												"timezone",
+												"language",
+												"dateFormat",
+												"avatarUrl",
+												"paymentMethods",
+												"metadata",
+												"createdAt",
+												"updatedAt"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/settings/organization/{orgId}": {
+			"get": {
+				"tags": ["Settings"],
+				"summary": "Get organization default settings",
+				"operationId": "settings-get-organization",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Organization settings",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": ["object", "null"],
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"theme": {
+													"type": "string",
+													"enum": ["light", "dark", "system"]
+												},
+												"timezone": {
+													"type": "string"
+												},
+												"language": {
+													"type": "string",
+													"enum": ["en", "es"]
+												},
+												"dateFormat": {
+													"type": "string",
+													"enum": [
+														"MM/DD/YYYY",
+														"DD/MM/YYYY",
+														"YYYY-MM-DD",
+														"DD.MM.YYYY"
+													]
+												},
+												"avatarUrl": {
+													"type": ["string", "null"],
+													"format": "uri"
+												},
+												"metadata": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"id",
+												"organizationId",
+												"theme",
+												"timezone",
+												"language",
+												"dateFormat",
+												"avatarUrl",
+												"metadata",
+												"createdAt",
+												"updatedAt"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"tags": ["Settings"],
+				"summary": "Update organization settings (admin only)",
+				"operationId": "settings-update-organization",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"theme": {
+										"type": "string",
+										"enum": ["light", "dark", "system"]
+									},
+									"timezone": {
+										"type": "string"
+									},
+									"language": {
+										"type": "string",
+										"enum": ["en", "es"]
+									},
+									"dateFormat": {
+										"type": "string",
+										"enum": [
+											"MM/DD/YYYY",
+											"DD/MM/YYYY",
+											"YYYY-MM-DD",
+											"DD.MM.YYYY"
+										]
+									},
+									"avatarUrl": {
+										"type": ["string", "null"],
+										"format": "uri"
+									},
+									"metadata": {
+										"type": "object",
+										"additionalProperties": {}
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated organization settings",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"theme": {
+													"type": "string",
+													"enum": ["light", "dark", "system"]
+												},
+												"timezone": {
+													"type": "string"
+												},
+												"language": {
+													"type": "string",
+													"enum": ["en", "es"]
+												},
+												"dateFormat": {
+													"type": "string",
+													"enum": [
+														"MM/DD/YYYY",
+														"DD/MM/YYYY",
+														"YYYY-MM-DD",
+														"DD.MM.YYYY"
+													]
+												},
+												"avatarUrl": {
+													"type": ["string", "null"],
+													"format": "uri"
+												},
+												"metadata": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"updatedAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"id",
+												"organizationId",
+												"theme",
+												"timezone",
+												"language",
+												"dateFormat",
+												"avatarUrl",
+												"metadata",
+												"createdAt",
+												"updatedAt"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/settings/organization/{orgId}/membership": {
+			"get": {
+				"tags": ["Settings"],
+				"summary": "Get user's membership/role in organization",
+				"operationId": "settings-get-organization-membership",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "orgId",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "User's membership information",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": ["object", "null"],
+											"properties": {
+												"role": {
+													"type": "string"
+												},
+												"organizationId": {
+													"type": "string",
+													"format": "uuid"
+												}
+											},
+											"required": ["role", "organizationId"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/settings/resolved": {
+			"get": {
+				"tags": ["Settings"],
+				"summary": "Get merged settings (org defaults + user overrides + browser hints)",
+				"operationId": "settings-get-resolved",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"description": "Base64-encoded JSON of browser headers for smart defaults"
+						},
+						"required": false,
+						"description": "Base64-encoded JSON of browser headers for smart defaults",
+						"name": "headers",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Resolved settings with sources",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"theme": {
+													"type": "string",
+													"enum": ["light", "dark", "system"]
+												},
+												"timezone": {
+													"type": "string"
+												},
+												"language": {
+													"type": "string",
+													"enum": ["en", "es"]
+												},
+												"dateFormat": {
+													"type": "string",
+													"enum": [
+														"MM/DD/YYYY",
+														"DD/MM/YYYY",
+														"YYYY-MM-DD",
+														"DD.MM.YYYY"
+													]
+												},
+												"avatarUrl": {
+													"type": ["string", "null"],
+													"format": "uri"
+												},
+												"paymentMethods": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"properties": {
+															"id": {
+																"type": "string",
+																"format": "uuid"
+															},
+															"type": {
+																"type": "string",
+																"enum": ["card", "bank_account", "paypal"]
+															},
+															"label": {
+																"type": "string"
+															},
+															"last4": {
+																"type": "string"
+															},
+															"isDefault": {
+																"type": "boolean"
+															}
+														},
+														"required": ["id", "type", "label"]
+													}
+												},
+												"sources": {
+													"type": "object",
+													"properties": {
+														"theme": {
+															"type": "string",
+															"enum": [
+																"user",
+																"organization",
+																"browser",
+																"default"
+															]
+														},
+														"timezone": {
+															"type": "string",
+															"enum": [
+																"user",
+																"organization",
+																"browser",
+																"default"
+															]
+														},
+														"language": {
+															"type": "string",
+															"enum": [
+																"user",
+																"organization",
+																"browser",
+																"default"
+															]
+														},
+														"dateFormat": {
+															"type": "string",
+															"enum": [
+																"user",
+																"organization",
+																"browser",
+																"default"
+															]
+														}
+													},
+													"required": [
+														"theme",
+														"timezone",
+														"language",
+														"dateFormat"
+													]
+												}
+											},
+											"required": [
+												"theme",
+												"timezone",
+												"language",
+												"dateFormat",
+												"avatarUrl",
+												"paymentMethods",
+												"sources"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/audit": {
+			"get": {
+				"tags": ["Audit"],
+				"summary": "List audit logs with filters and pagination (admin only)",
+				"operationId": "audit-list",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string"
+						},
+						"required": false,
+						"name": "eventType",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string"
+						},
+						"required": false,
+						"name": "entityType",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string"
+						},
+						"required": false,
+						"name": "entityId",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": false,
+						"name": "actorUserId",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": false,
+						"name": "actorOrganizationId",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string"
+						},
+						"required": false,
+						"name": "sourceService",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"required": false,
+						"name": "startDate",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"required": false,
+						"name": "endDate",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string"
+						},
+						"required": false,
+						"name": "search",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"default": 1
+						},
+						"required": false,
+						"name": "page",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 20
+						},
+						"required": false,
+						"name": "limit",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Paginated list of audit logs",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string",
+														"format": "uuid"
+													},
+													"eventType": {
+														"type": "string"
+													},
+													"entityType": {
+														"type": "string"
+													},
+													"entityId": {
+														"type": ["string", "null"]
+													},
+													"actorUserId": {
+														"type": ["string", "null"],
+														"format": "uuid"
+													},
+													"actorOrganizationId": {
+														"type": ["string", "null"],
+														"format": "uuid"
+													},
+													"actorIp": {
+														"type": ["string", "null"]
+													},
+													"actorUserAgent": {
+														"type": ["string", "null"]
+													},
+													"previousState": {
+														"type": ["object", "null"],
+														"additionalProperties": {}
+													},
+													"newState": {
+														"type": ["object", "null"],
+														"additionalProperties": {}
+													},
+													"changeSummary": {
+														"type": ["object", "null"],
+														"additionalProperties": {}
+													},
+													"sourceService": {
+														"type": "string"
+													},
+													"requestId": {
+														"type": ["string", "null"]
+													},
+													"metadata": {
+														"type": ["object", "null"],
+														"additionalProperties": {}
+													},
+													"signature": {
+														"type": "string"
+													},
+													"previousSignature": {
+														"type": ["string", "null"]
+													},
+													"createdAt": {
+														"type": "string",
+														"format": "date-time"
+													}
+												},
+												"required": [
+													"id",
+													"eventType",
+													"entityType",
+													"entityId",
+													"actorUserId",
+													"actorOrganizationId",
+													"actorIp",
+													"actorUserAgent",
+													"previousState",
+													"newState",
+													"changeSummary",
+													"sourceService",
+													"requestId",
+													"metadata",
+													"signature",
+													"previousSignature",
+													"createdAt"
+												]
+											}
+										},
+										"pagination": {
+											"type": "object",
+											"properties": {
+												"page": {
+													"type": "number"
+												},
+												"limit": {
+													"type": "number"
+												},
+												"total": {
+													"type": "number"
+												},
+												"totalPages": {
+													"type": "number"
+												}
+											},
+											"required": ["page", "limit", "total", "totalPages"]
+										}
+									},
+									"required": ["success", "data", "pagination"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/audit/verify": {
+			"get": {
+				"tags": ["Audit"],
+				"summary": "Verify audit log chain integrity (admin only)",
+				"operationId": "audit-verify",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid",
+							"description": "Start verification from this entry ID"
+						},
+						"required": false,
+						"description": "Start verification from this entry ID",
+						"name": "startId",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid",
+							"description": "End verification at this entry ID"
+						},
+						"required": false,
+						"description": "End verification at this entry ID",
+						"name": "endId",
+						"in": "query"
+					},
+					{
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000,
+							"default": 1000,
+							"description": "Maximum entries to verify"
+						},
+						"required": false,
+						"description": "Maximum entries to verify",
+						"name": "limit",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Chain integrity verification result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"valid": {
+													"type": "boolean"
+												},
+												"totalVerified": {
+													"type": "number"
+												},
+												"brokenAt": {
+													"type": "string"
+												},
+												"brokenSignature": {
+													"type": "string"
+												},
+												"expectedSignature": {
+													"type": "string"
+												},
+												"error": {
+													"type": "string"
+												}
+											},
+											"required": ["valid", "totalVerified"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/audit/{id}": {
+			"get": {
+				"tags": ["Audit"],
+				"summary": "Get single audit log entry (admin only)",
+				"operationId": "audit-get",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "id",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Audit log entry",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"eventType": {
+													"type": "string"
+												},
+												"entityType": {
+													"type": "string"
+												},
+												"entityId": {
+													"type": ["string", "null"]
+												},
+												"actorUserId": {
+													"type": ["string", "null"],
+													"format": "uuid"
+												},
+												"actorOrganizationId": {
+													"type": ["string", "null"],
+													"format": "uuid"
+												},
+												"actorIp": {
+													"type": ["string", "null"]
+												},
+												"actorUserAgent": {
+													"type": ["string", "null"]
+												},
+												"previousState": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"newState": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"changeSummary": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"sourceService": {
+													"type": "string"
+												},
+												"requestId": {
+													"type": ["string", "null"]
+												},
+												"metadata": {
+													"type": ["object", "null"],
+													"additionalProperties": {}
+												},
+												"signature": {
+													"type": "string"
+												},
+												"previousSignature": {
+													"type": ["string", "null"]
+												},
+												"createdAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": [
+												"id",
+												"eventType",
+												"entityType",
+												"entityId",
+												"actorUserId",
+												"actorOrganizationId",
+												"actorIp",
+												"actorUserAgent",
+												"previousState",
+												"newState",
+												"changeSummary",
+												"sourceService",
+												"requestId",
+												"metadata",
+												"signature",
+												"previousSignature",
+												"createdAt"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Audit log not found",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/audit/export": {
+			"post": {
+				"tags": ["Audit"],
+				"summary": "Export audit logs as JSON or CSV (admin only)",
+				"operationId": "audit-export",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"format": {
+										"type": "string",
+										"enum": ["json", "csv"],
+										"default": "json"
+									},
+									"filters": {
+										"type": "object",
+										"properties": {
+											"eventType": {
+												"type": "string"
+											},
+											"entityType": {
+												"type": "string"
+											},
+											"entityId": {
+												"type": "string"
+											},
+											"actorUserId": {
+												"type": "string",
+												"format": "uuid"
+											},
+											"actorOrganizationId": {
+												"type": "string",
+												"format": "uuid"
+											},
+											"sourceService": {
+												"type": "string"
+											},
+											"startDate": {
+												"type": "string",
+												"format": "date-time"
+											},
+											"endDate": {
+												"type": "string",
+												"format": "date-time"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Exported audit logs file",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								}
+							},
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription": {
+			"get": {
+				"tags": ["Subscription"],
+				"summary": "Get current organization's subscription status and usage",
+				"operationId": "subscription-get-status",
+				"responses": {
+					"200": {
+						"description": "Subscription status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"hasSubscription": {
+													"type": "boolean"
+												},
+												"isEnterprise": {
+													"type": "boolean"
+												},
+												"status": {
+													"type": "string",
+													"enum": [
+														"inactive",
+														"trialing",
+														"active",
+														"past_due",
+														"canceled",
+														"unpaid"
+													]
+												},
+												"planTier": {
+													"type": "string",
+													"enum": ["none", "business", "pro", "enterprise"]
+												},
+												"planName": {
+													"type": ["string", "null"]
+												},
+												"currentPeriodStart": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"currentPeriodEnd": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"cancelAtPeriodEnd": {
+													"type": "boolean"
+												},
+												"usage": {
+													"type": ["object", "null"],
+													"properties": {
+														"notices": {
+															"type": "number"
+														},
+														"alerts": {
+															"type": "number"
+														},
+														"transactions": {
+															"type": "number"
+														},
+														"users": {
+															"type": "number"
+														}
+													},
+													"required": [
+														"notices",
+														"alerts",
+														"transactions",
+														"users"
+													]
+												},
+												"features": {
+													"type": "array",
+													"items": {
+														"type": "string",
+														"enum": [
+															"data_capture",
+															"compliance_validation",
+															"report_generation",
+															"acknowledgment_tracking",
+															"advanced_roles",
+															"approval_flows",
+															"report_templates",
+															"priority_support",
+															"sso",
+															"custom_branding",
+															"audit_export",
+															"api_access",
+															"dedicated_support",
+															"custom_integrations"
+														]
+													}
+												}
+											},
+											"required": [
+												"hasSubscription",
+												"isEnterprise",
+												"status",
+												"planTier",
+												"planName",
+												"currentPeriodStart",
+												"currentPeriodEnd",
+												"cancelAtPeriodEnd",
+												"usage",
+												"features"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/plans": {
+			"get": {
+				"tags": ["Subscription"],
+				"summary": "Get available subscription plans",
+				"operationId": "subscription-get-plans",
+				"responses": {
+					"200": {
+						"description": "List of available plans",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"tier": {
+														"type": "string",
+														"enum": ["none", "business", "pro", "enterprise"]
+													},
+													"price": {
+														"type": "number"
+													},
+													"currency": {
+														"type": "string"
+													},
+													"interval": {
+														"type": "string",
+														"enum": ["month", "year"]
+													},
+													"features": {
+														"type": "array",
+														"items": {
+															"type": "string",
+															"enum": [
+																"data_capture",
+																"compliance_validation",
+																"report_generation",
+																"acknowledgment_tracking",
+																"advanced_roles",
+																"approval_flows",
+																"report_templates",
+																"priority_support",
+																"sso",
+																"custom_branding",
+																"audit_export",
+																"api_access",
+																"dedicated_support",
+																"custom_integrations"
+															]
+														}
+													},
+													"limits": {
+														"type": "object",
+														"properties": {
+															"notices": {
+																"type": ["number", "null"]
+															},
+															"alerts": {
+																"type": ["number", "null"]
+															},
+															"transactions": {
+																"type": ["number", "null"]
+															},
+															"users": {
+																"type": ["number", "null"]
+															}
+														},
+														"required": [
+															"notices",
+															"alerts",
+															"transactions",
+															"users"
+														]
+													}
+												},
+												"required": [
+													"id",
+													"name",
+													"tier",
+													"price",
+													"currency",
+													"interval",
+													"features",
+													"limits"
+												]
+											}
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/checkout": {
+			"post": {
+				"tags": ["Subscription"],
+				"summary": "Create a Stripe Checkout session for subscribing to a plan",
+				"operationId": "subscription-create-checkout",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"planId": {
+										"type": "string",
+										"minLength": 1
+									},
+									"successUrl": {
+										"type": "string",
+										"format": "uri"
+									},
+									"cancelUrl": {
+										"type": "string",
+										"format": "uri"
+									}
+								},
+								"required": ["planId", "successUrl", "cancelUrl"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Checkout session created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"sessionId": {
+													"type": "string"
+												},
+												"url": {
+													"type": "string",
+													"format": "uri"
+												}
+											},
+											"required": ["sessionId", "url"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/change": {
+			"post": {
+				"tags": ["Subscription"],
+				"summary": "Change (upgrade/downgrade) the current plan",
+				"operationId": "subscription-change-plan",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"newPlanId": {
+										"type": "string",
+										"minLength": 1
+									}
+								},
+								"required": ["newPlanId"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Plan changed successfully",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success", "message"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/cancel": {
+			"post": {
+				"tags": ["Subscription"],
+				"summary": "Cancel subscription at period end",
+				"operationId": "subscription-cancel",
+				"responses": {
+					"200": {
+						"description": "Subscription cancellation scheduled",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success", "message"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/reactivate": {
+			"post": {
+				"tags": ["Subscription"],
+				"summary": "Reactivate a canceled subscription",
+				"operationId": "subscription-reactivate",
+				"responses": {
+					"200": {
+						"description": "Subscription reactivated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success", "message"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/invoices": {
+			"get": {
+				"tags": ["Subscription"],
+				"summary": "Get invoice history",
+				"operationId": "subscription-get-invoices",
+				"parameters": [
+					{
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 10
+						},
+						"required": false,
+						"name": "limit",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "List of invoices",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"amount": {
+														"type": "number"
+													},
+													"currency": {
+														"type": "string"
+													},
+													"status": {
+														"type": "string"
+													},
+													"created": {
+														"type": "number"
+													},
+													"periodStart": {
+														"type": ["number", "null"]
+													},
+													"periodEnd": {
+														"type": ["number", "null"]
+													},
+													"pdf": {
+														"type": ["string", "null"],
+														"format": "uri"
+													},
+													"hostedInvoiceUrl": {
+														"type": ["string", "null"],
+														"format": "uri"
+													}
+												},
+												"required": [
+													"id",
+													"amount",
+													"currency",
+													"status",
+													"created",
+													"periodStart",
+													"periodEnd",
+													"pdf",
+													"hostedInvoiceUrl"
+												]
+											}
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/portal": {
+			"post": {
+				"tags": ["Subscription"],
+				"summary": "Get Stripe Customer Portal URL",
+				"operationId": "subscription-get-portal",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"returnUrl": {
+										"type": "string",
+										"format": "uri"
+									}
+								},
+								"required": ["returnUrl"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Portal session URL",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"url": {
+													"type": "string",
+													"format": "uri"
+												}
+											},
+											"required": ["url"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No billing account found",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/subscription/usage": {
+			"get": {
+				"tags": ["Subscription"],
+				"summary": "Get current usage for the billing period",
+				"operationId": "subscription-get-usage",
+				"responses": {
+					"200": {
+						"description": "Current usage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"notices": {
+													"type": "number"
+												},
+												"alerts": {
+													"type": "number"
+												},
+												"transactions": {
+													"type": "number"
+												},
+												"users": {
+													"type": "number"
+												}
+											},
+											"required": ["notices", "alerts", "transactions", "users"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses": {
+			"get": {
+				"tags": ["License"],
+				"summary": "List all enterprise licenses (admin only)",
+				"operationId": "license-list",
+				"responses": {
+					"200": {
+						"description": "List of licenses",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string",
+														"format": "uuid"
+													},
+													"customerName": {
+														"type": ["string", "null"]
+													},
+													"organizationId": {
+														"type": ["string", "null"],
+														"format": "uuid"
+													},
+													"noticesPerMonth": {
+														"type": "number"
+													},
+													"maxUsers": {
+														"type": "number"
+													},
+													"maxTransactions": {
+														"type": ["number", "null"]
+													},
+													"maxAlerts": {
+														"type": ["number", "null"]
+													},
+													"features": {
+														"type": "array",
+														"items": {
+															"type": "string",
+															"enum": [
+																"data_capture",
+																"compliance_validation",
+																"report_generation",
+																"acknowledgment_tracking",
+																"advanced_roles",
+																"approval_flows",
+																"report_templates",
+																"priority_support",
+																"sso",
+																"custom_branding",
+																"audit_export",
+																"api_access",
+																"dedicated_support",
+																"custom_integrations"
+															]
+														}
+													},
+													"issuedAt": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"activatedAt": {
+														"type": ["string", "null"],
+														"format": "date-time"
+													},
+													"expiresAt": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"revokedAt": {
+														"type": ["string", "null"],
+														"format": "date-time"
+													},
+													"stripeSubscriptionId": {
+														"type": ["string", "null"]
+													}
+												},
+												"required": [
+													"id",
+													"customerName",
+													"organizationId",
+													"noticesPerMonth",
+													"maxUsers",
+													"maxTransactions",
+													"maxAlerts",
+													"features",
+													"issuedAt",
+													"activatedAt",
+													"expiresAt",
+													"revokedAt",
+													"stripeSubscriptionId"
+												]
+											}
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/generate": {
+			"post": {
+				"tags": ["License"],
+				"summary": "Generate a new enterprise license (admin only)",
+				"operationId": "license-generate",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"customerName": {
+										"type": "string",
+										"minLength": 1
+									},
+									"limits": {
+										"type": "object",
+										"properties": {
+											"noticesPerMonth": {
+												"type": "integer",
+												"exclusiveMinimum": 0
+											},
+											"maxUsers": {
+												"type": "integer",
+												"exclusiveMinimum": 0
+											},
+											"maxTransactions": {
+												"type": "integer",
+												"exclusiveMinimum": 0
+											},
+											"maxAlerts": {
+												"type": "integer",
+												"exclusiveMinimum": 0
+											}
+										},
+										"required": ["noticesPerMonth", "maxUsers"]
+									},
+									"features": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"enum": [
+												"data_capture",
+												"compliance_validation",
+												"report_generation",
+												"acknowledgment_tracking",
+												"advanced_roles",
+												"approval_flows",
+												"report_templates",
+												"priority_support",
+												"sso",
+												"custom_branding",
+												"audit_export",
+												"api_access",
+												"dedicated_support",
+												"custom_integrations"
+											]
+										},
+										"minItems": 1
+									},
+									"notes": {
+										"type": "string"
+									},
+									"stripeCustomerId": {
+										"type": "string"
+									},
+									"stripeYearlyPrice": {
+										"type": "integer",
+										"exclusiveMinimum": 0
+									}
+								},
+								"required": ["customerName", "limits", "features"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "License generated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"licenseKey": {
+													"type": "string"
+												},
+												"customerName": {
+													"type": ["string", "null"]
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"stripeSubscriptionId": {
+													"type": ["string", "null"]
+												},
+												"stripeInvoiceId": {
+													"type": ["string", "null"]
+												}
+											},
+											"required": [
+												"id",
+												"licenseKey",
+												"customerName",
+												"expiresAt",
+												"stripeSubscriptionId",
+												"stripeInvoiceId"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/{id}": {
+			"get": {
+				"tags": ["License"],
+				"summary": "Get license details (admin only)",
+				"operationId": "license-get",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "id",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "License details",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"customerName": {
+													"type": ["string", "null"]
+												},
+												"organizationId": {
+													"type": ["string", "null"],
+													"format": "uuid"
+												},
+												"noticesPerMonth": {
+													"type": "number"
+												},
+												"maxUsers": {
+													"type": "number"
+												},
+												"maxTransactions": {
+													"type": ["number", "null"]
+												},
+												"maxAlerts": {
+													"type": ["number", "null"]
+												},
+												"features": {
+													"type": "array",
+													"items": {
+														"type": "string",
+														"enum": [
+															"data_capture",
+															"compliance_validation",
+															"report_generation",
+															"acknowledgment_tracking",
+															"advanced_roles",
+															"approval_flows",
+															"report_templates",
+															"priority_support",
+															"sso",
+															"custom_branding",
+															"audit_export",
+															"api_access",
+															"dedicated_support",
+															"custom_integrations"
+														]
+													}
+												},
+												"issuedAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"activatedAt": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"revokedAt": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"stripeSubscriptionId": {
+													"type": ["string", "null"]
+												},
+												"isActive": {
+													"type": "boolean"
+												},
+												"isExpired": {
+													"type": "boolean"
+												},
+												"isRevoked": {
+													"type": "boolean"
+												}
+											},
+											"required": [
+												"id",
+												"customerName",
+												"organizationId",
+												"noticesPerMonth",
+												"maxUsers",
+												"maxTransactions",
+												"maxAlerts",
+												"features",
+												"issuedAt",
+												"activatedAt",
+												"expiresAt",
+												"revokedAt",
+												"stripeSubscriptionId",
+												"isActive",
+												"isExpired",
+												"isRevoked"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "License not found",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/{id}/revoke": {
+			"post": {
+				"tags": ["License"],
+				"summary": "Revoke a license (admin only)",
+				"operationId": "license-revoke",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "id",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "License revoked successfully",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"message": {
+											"type": "string"
+										}
+									},
+									"required": ["success", "message"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/{id}/renew": {
+			"post": {
+				"tags": ["License"],
+				"summary": "Renew a license for another year (admin only)",
+				"operationId": "license-renew",
+				"parameters": [
+					{
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						},
+						"required": true,
+						"name": "id",
+						"in": "path"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "License renewed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": ["id", "expiresAt"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Admin access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/activate": {
+			"post": {
+				"tags": ["License"],
+				"summary": "Activate a license for the current organization (org owner only)",
+				"operationId": "license-activate",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"licenseKey": {
+										"type": "string",
+										"minLength": 100
+									}
+								},
+								"required": ["licenseKey"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "License activated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"customerName": {
+													"type": ["string", "null"]
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"limits": {
+													"type": "object",
+													"properties": {
+														"noticesPerMonth": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxUsers": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxTransactions": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxAlerts": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														}
+													},
+													"required": ["noticesPerMonth", "maxUsers"]
+												},
+												"features": {
+													"type": "array",
+													"items": {
+														"type": "string",
+														"enum": [
+															"data_capture",
+															"compliance_validation",
+															"report_generation",
+															"acknowledgment_tracking",
+															"advanced_roles",
+															"approval_flows",
+															"report_templates",
+															"priority_support",
+															"sso",
+															"custom_branding",
+															"audit_export",
+															"api_access",
+															"dedicated_support",
+															"custom_integrations"
+														]
+													}
+												}
+											},
+											"required": [
+												"id",
+												"customerName",
+												"expiresAt",
+												"limits",
+												"features"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"403": {
+						"description": "Forbidden - Owner access required",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/verify": {
+			"post": {
+				"tags": ["License"],
+				"summary": "Verify a license key (public endpoint for offline verification)",
+				"operationId": "license-verify",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"licenseKey": {
+										"type": "string",
+										"minLength": 100
+									}
+								},
+								"required": ["licenseKey"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "License verification result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": "object",
+											"properties": {
+												"valid": {
+													"type": "boolean"
+												},
+												"expired": {
+													"type": "boolean"
+												},
+												"revoked": {
+													"type": "boolean"
+												},
+												"error": {
+													"type": ["string", "null"]
+												},
+												"limits": {
+													"type": "object",
+													"properties": {
+														"noticesPerMonth": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxUsers": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxTransactions": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														},
+														"maxAlerts": {
+															"type": "integer",
+															"exclusiveMinimum": 0
+														}
+													},
+													"required": ["noticesPerMonth", "maxUsers"]
+												},
+												"features": {
+													"type": "array",
+													"items": {
+														"type": "string",
+														"enum": [
+															"data_capture",
+															"compliance_validation",
+															"report_generation",
+															"acknowledgment_tracking",
+															"advanced_roles",
+															"approval_flows",
+															"report_templates",
+															"priority_support",
+															"sso",
+															"custom_branding",
+															"audit_export",
+															"api_access",
+															"dedicated_support",
+															"custom_integrations"
+														]
+													}
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												}
+											},
+											"required": ["valid", "expired", "revoked", "error"]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/licenses/current": {
+			"get": {
+				"tags": ["License"],
+				"summary": "Get the current organization's license status",
+				"operationId": "license-get-current",
+				"responses": {
+					"200": {
+						"description": "Current license status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"data": {
+											"type": ["object", "null"],
+											"properties": {
+												"id": {
+													"type": "string",
+													"format": "uuid"
+												},
+												"customerName": {
+													"type": ["string", "null"]
+												},
+												"organizationId": {
+													"type": ["string", "null"],
+													"format": "uuid"
+												},
+												"noticesPerMonth": {
+													"type": "number"
+												},
+												"maxUsers": {
+													"type": "number"
+												},
+												"maxTransactions": {
+													"type": ["number", "null"]
+												},
+												"maxAlerts": {
+													"type": ["number", "null"]
+												},
+												"features": {
+													"type": "array",
+													"items": {
+														"type": "string",
+														"enum": [
+															"data_capture",
+															"compliance_validation",
+															"report_generation",
+															"acknowledgment_tracking",
+															"advanced_roles",
+															"approval_flows",
+															"report_templates",
+															"priority_support",
+															"sso",
+															"custom_branding",
+															"audit_export",
+															"api_access",
+															"dedicated_support",
+															"custom_integrations"
+														]
+													}
+												},
+												"issuedAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"activatedAt": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"expiresAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"revokedAt": {
+													"type": ["string", "null"],
+													"format": "date-time"
+												},
+												"stripeSubscriptionId": {
+													"type": ["string", "null"]
+												},
+												"isActive": {
+													"type": "boolean"
+												},
+												"isExpired": {
+													"type": "boolean"
+												},
+												"isRevoked": {
+													"type": "boolean"
+												}
+											},
+											"required": [
+												"id",
+												"customerName",
+												"organizationId",
+												"noticesPerMonth",
+												"maxUsers",
+												"maxTransactions",
+												"maxAlerts",
+												"features",
+												"issuedAt",
+												"activatedAt",
+												"expiresAt",
+												"revokedAt",
+												"stripeSubscriptionId",
+												"isActive",
+												"isExpired",
+												"isRevoked"
+											]
+										}
+									},
+									"required": ["success", "data"]
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "No active organization",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
+										}
+									},
+									"required": ["success"]
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"success": {
+											"type": "boolean"
+										},
+										"error": {
+											"type": "string"
+										},
+										"message": {
+											"type": "string"
+										},
+										"details": {
+											"type": "array",
+											"items": {}
 										}
 									},
 									"required": ["success"]
