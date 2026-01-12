@@ -1,3 +1,10 @@
+# [1.4.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.5...v1.4.0-rc.6) (2026-01-12)
+
+
+### Features
+
+* add seeding script for subscription plans and update SQL seed file ([e216af6](https://github.com/janovix/auth-svc/commit/e216af6d45ba843cebc797f6d936a272c28289b2))
+
 # [1.4.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.4...v1.4.0-rc.5) (2026-01-12)
 
 
