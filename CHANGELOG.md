@@ -1,3 +1,10 @@
+# [1.4.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.7...v1.4.0-rc.8) (2026-01-12)
+
+
+### Bug Fixes
+
+* correct subscription status test for none tier case ([5b0176d](https://github.com/janovix/auth-svc/commit/5b0176dc4bc4ac999b63c469cc4f0feaef58068e))
+
 # [1.4.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.6...v1.4.0-rc.7) (2026-01-12)
 
 
