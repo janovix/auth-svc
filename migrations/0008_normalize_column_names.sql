@@ -77,9 +77,9 @@ ALTER TABLE invitations RENAME COLUMN updatedAt TO updated_at;
 
 --------------------------------------------------------------------------------
 -- ORGANIZATION_SETTINGS TABLE
--- Note: Already had some snake_case columns, only rename missing ones
+-- Note: Already created with snake_case columns in 0006
 --------------------------------------------------------------------------------
-ALTER TABLE organization_settings RENAME COLUMN organizationId TO organization_id;
+-- No changes needed, already using snake_case (organization_id)
 
 --------------------------------------------------------------------------------
 -- USER_SETTINGS TABLE  
