@@ -194,11 +194,12 @@ describe("SubscriptionService", () => {
 			expect(result?.planName).toBe("Enterprise");
 		});
 
-		it("should return none tier when no plan and no license", async () => {
+		it("should return none tier when no plan, no license, and no Stripe customer", async () => {
 			const mockSubscription = createMockSubscription({
 				planId: null,
 				plan: null,
 				licenseId: null,
+				stripeCustomerId: null,
 				status: "inactive",
 			});
 			mockRepository.getByOrganizationId.mockResolvedValue(mockSubscription);
@@ -207,6 +208,22 @@ describe("SubscriptionService", () => {
 
 			expect(result?.planTier).toBe("none");
 			expect(result?.hasSubscription).toBe(false);
+		});
+
+		it("should return free tier when no plan but has Stripe customer", async () => {
+			const mockSubscription = createMockSubscription({
+				planId: null,
+				plan: null,
+				licenseId: null,
+				stripeCustomerId: "cus_123",
+				status: "inactive",
+			});
+			mockRepository.getByOrganizationId.mockResolvedValue(mockSubscription);
+
+			const result = await service.getSubscriptionStatus("org-456");
+
+			expect(result?.planTier).toBe("free");
+			expect(result?.hasSubscription).toBe(true); // free tier always has access
 		});
 
 		it("should calculate usage correctly", async () => {
