@@ -1,3 +1,10 @@
+# [1.4.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.4...v1.4.0-rc.5) (2026-01-12)
+
+
+### Features
+
+* update OpenAPI documentation and add subscription and license management endpoints ([97f3559](https://github.com/janovix/auth-svc/commit/97f3559dee7ba6ab9ba04a222c591c0853ffc7b2))
+
 # [1.4.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.3...v1.4.0-rc.4) (2026-01-12)
 
 
