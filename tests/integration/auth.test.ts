@@ -817,7 +817,7 @@ describe("JWKS decrypt error recovery", () => {
 	it("handles purgePlaintextJwks database error gracefully", async () => {
 		const mockDb = {
 			prepare: vi.fn((query: string) => {
-				if (query.includes("TRIM(privateKey)")) {
+				if (query.includes("TRIM(private_key)")) {
 					// Simulate database error for purgePlaintextJwks
 					return {
 						run: vi.fn().mockRejectedValue(new Error("DB error")),

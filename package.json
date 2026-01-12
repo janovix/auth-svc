@@ -20,10 +20,12 @@
 		"@prisma/adapter-d1": "^6.17.1",
 		"@prisma/client": "^6.17.1",
 		"@sentry/cloudflare": "^10.32.1",
+		"@types/stripe": "^8.0.417",
 		"better-auth": "1.4.5",
 		"chanfana": "2.8.3",
 		"hono": "4.10.7",
 		"kysely": "^0.28.9",
+		"stripe": "^20.1.2",
 		"zod": "3.25.67"
 	},
 	"devDependencies": {
