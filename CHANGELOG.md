@@ -1,3 +1,15 @@
+# [1.4.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.3...v1.4.0-rc.4) (2026-01-12)
+
+
+### Bug Fixes
+
+* remove invalid column rename in migration 0008 ([6fb8782](https://github.com/janovix/auth-svc/commit/6fb8782c4a937f3e0cbc7e809fca035a1c96599f))
+
+
+### Features
+
+* implement subscription and license management with Stripe integration ([e91716e](https://github.com/janovix/auth-svc/commit/e91716e5ace466cd307e745edac73b95a76864ae))
+
 # [1.4.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.2...v1.4.0-rc.3) (2026-01-11)
 
 
