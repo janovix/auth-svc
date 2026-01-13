@@ -39,6 +39,7 @@ const RATE_LIMITS: Record<
 };
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
+	local: ".janovix.workers.dev",
 	preview: ".janovix.workers.dev",
 	dev: ".janovix.workers.dev",
 	qa: ".algenium.qa",
@@ -46,6 +47,7 @@ const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
 };
 
 const TRUSTED_ORIGINS_BY_ENV: Partial<Record<JanovixEnvironment, string[]>> = {
+	local: ["https://*.janovix.workers.dev"],
 	preview: ["https://*.janovix.workers.dev"],
 	dev: ["https://*.janovix.workers.dev"],
 	qa: ["https://*.algenium.qa"],
@@ -60,6 +62,7 @@ const LOCAL_DEVELOPMENT_ORIGINS = [
 ];
 
 const CROSS_SUBDOMAIN_ENVS: ReadonlySet<JanovixEnvironment> = new Set([
+	"local",
 	"preview",
 	"dev",
 	"qa",

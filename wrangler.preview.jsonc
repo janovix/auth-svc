@@ -30,10 +30,17 @@
 			"service": "aml-svc",
 		},
 	],
+	"r2_buckets": [
+		{
+			"binding": "AVATARS_BUCKET",
+			"bucket_name": "avatar",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "preview",
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.workers.dev",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
+		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
 	},
 }

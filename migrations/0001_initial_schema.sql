@@ -1,6 +1,16 @@
 -- Migration: Initial Auth Service Schema
 -- Description: Complete auth service schema with Better Auth, organizations, settings, audit logs, and billing
--- All column names use snake_case for consistency across all services
+--
+-- IMPORTANT: Column naming convention
+-- ============================================================================
+-- Better Auth managed tables use camelCase column names because Better Auth
+-- generates its own SQL queries that bypass Prisma's @map directives.
+-- Tables affected: users, sessions, accounts, verifications, jwks, organizations, members, invitations
+--
+-- Custom auth-svc tables use snake_case column names (standard convention).
+-- Tables affected: organization_settings, user_settings, audit_logs, subscription_plans,
+--                  organization_subscriptions, enterprise_licenses, usage_records
+-- ============================================================================
 
 -- Drop legacy tables if they exist
 DROP TABLE IF EXISTS tasks;
@@ -23,149 +33,150 @@ DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS users;
 
 -- ============================================================================
--- Better Auth Core Tables
+-- Better Auth Core Tables (camelCase columns - required by Better Auth)
 -- ============================================================================
 
--- Users table
+-- Users table (Better Auth managed)
 CREATE TABLE users (
     id TEXT PRIMARY KEY NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT,
     name TEXT,
-    email_verified INTEGER NOT NULL DEFAULT 0,
+    emailVerified INTEGER NOT NULL DEFAULT 0,
     image TEXT,
     role TEXT NOT NULL DEFAULT 'user',
     banned INTEGER NOT NULL DEFAULT 0,
-    ban_reason TEXT,
-    ban_expires DATETIME,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    banReason TEXT,
+    banExpires DATETIME,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- Sessions table
+-- Sessions table (Better Auth managed)
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY NOT NULL,
     token TEXT NOT NULL UNIQUE,
-    expires_at DATETIME NOT NULL,
-    ip_address TEXT,
-    user_agent TEXT,
-    active_organization_id TEXT,
-    impersonated_by TEXT,
-    user_id TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    expiresAt DATETIME NOT NULL,
+    ipAddress TEXT,
+    userAgent TEXT,
+    activeOrganizationId TEXT,
+    impersonatedBy TEXT,
+    userId TEXT NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_userId ON sessions(userId);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-CREATE INDEX IF NOT EXISTS idx_sessions_active_organization_id ON sessions(active_organization_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_activeOrganizationId ON sessions(activeOrganizationId);
 
--- Accounts table
+-- Accounts table (Better Auth managed)
 CREATE TABLE accounts (
     id TEXT PRIMARY KEY NOT NULL,
-    account_id TEXT NOT NULL,
-    provider_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    access_token TEXT,
-    refresh_token TEXT,
-    id_token TEXT,
-    access_token_expires_at DATETIME,
-    refresh_token_expires_at DATETIME,
+    accountId TEXT NOT NULL,
+    providerId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    accessToken TEXT,
+    refreshToken TEXT,
+    idToken TEXT,
+    accessTokenExpiresAt DATETIME,
+    refreshTokenExpiresAt DATETIME,
     scope TEXT,
     password TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_userId ON accounts(userId);
 
--- Verifications table
+-- Verifications table (Better Auth managed)
 CREATE TABLE verifications (
     id TEXT PRIMARY KEY NOT NULL,
     identifier TEXT NOT NULL,
     value TEXT NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    expiresAt DATETIME NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_verifications_identifier ON verifications(identifier);
 
--- JWKS table (Better Auth JWT plugin)
+-- JWKS table (Better Auth JWT plugin managed)
 CREATE TABLE jwks (
     id TEXT PRIMARY KEY NOT NULL,
-    public_key TEXT NOT NULL,
-    private_key TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME,
+    publicKey TEXT NOT NULL,
+    privateKey TEXT NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expiresAt DATETIME,
     alg TEXT,
     crv TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_jwks_created_at ON jwks(created_at);
-CREATE INDEX IF NOT EXISTS idx_jwks_expires_at ON jwks(expires_at);
+CREATE INDEX IF NOT EXISTS idx_jwks_createdAt ON jwks(createdAt);
+CREATE INDEX IF NOT EXISTS idx_jwks_expiresAt ON jwks(expiresAt);
 
 -- ============================================================================
--- Organizations Domain
+-- Better Auth Organizations Plugin Tables (camelCase columns - required by Better Auth)
 -- ============================================================================
 
--- Organizations table
+-- Organizations table (Better Auth managed)
 CREATE TABLE organizations (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     logo TEXT,
     metadata TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
 
--- Members table (organization memberships)
+-- Members table (Better Auth managed - organization memberships)
 CREATE TABLE members (
     id TEXT PRIMARY KEY NOT NULL,
-    organization_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
+    organizationId TEXT NOT NULL,
+    userId TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(organization_id, user_id)
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organizationId) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(organizationId, userId)
 );
 
-CREATE INDEX IF NOT EXISTS idx_members_organization_id ON members(organization_id);
-CREATE INDEX IF NOT EXISTS idx_members_user_id ON members(user_id);
+CREATE INDEX IF NOT EXISTS idx_members_organizationId ON members(organizationId);
+CREATE INDEX IF NOT EXISTS idx_members_userId ON members(userId);
 
--- Invitations table (organization invitations)
+-- Invitations table (Better Auth managed - organization invitations)
 CREATE TABLE invitations (
     id TEXT PRIMARY KEY NOT NULL,
-    organization_id TEXT NOT NULL,
+    organizationId TEXT NOT NULL,
     email TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member',
     status TEXT NOT NULL DEFAULT 'pending',
-    inviter_id TEXT NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (inviter_id) REFERENCES users(id) ON DELETE CASCADE
+    inviterId TEXT NOT NULL,
+    expiresAt DATETIME NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organizationId) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (inviterId) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_invitations_organization_id ON invitations(organization_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_organizationId ON invitations(organizationId);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email);
 CREATE INDEX IF NOT EXISTS idx_invitations_status ON invitations(status);
 
 -- ============================================================================
--- Settings Domain
+-- Custom Auth-SVC Tables (snake_case columns - standard convention)
+-- These tables are NOT managed by Better Auth and use Prisma's @map directives
 -- ============================================================================
 
--- Organization settings table
+-- Organization settings table (custom - snake_case)
 CREATE TABLE organization_settings (
     id TEXT PRIMARY KEY NOT NULL,
     organization_id TEXT NOT NULL UNIQUE,
@@ -182,7 +193,7 @@ CREATE TABLE organization_settings (
 
 CREATE INDEX IF NOT EXISTS idx_organization_settings_organization_id ON organization_settings(organization_id);
 
--- User settings table
+-- User settings table (custom - snake_case)
 CREATE TABLE user_settings (
     id TEXT PRIMARY KEY NOT NULL,
     user_id TEXT NOT NULL UNIQUE,
@@ -201,7 +212,7 @@ CREATE TABLE user_settings (
 CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
 
 -- ============================================================================
--- Audit Logs Domain
+-- Audit Logs Domain (custom - snake_case)
 -- ============================================================================
 
 CREATE TABLE audit_logs (
@@ -234,7 +245,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_signature ON audit_logs(signature);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_previous_signature ON audit_logs(previous_signature);
 
 -- ============================================================================
--- Billing & Subscriptions Domain
+-- Billing & Subscriptions Domain (custom - snake_case)
 -- ============================================================================
 
 -- Subscription plans table

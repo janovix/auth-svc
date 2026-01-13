@@ -125,4 +125,20 @@ export type Bindings = Env & {
 	 * PEM format with headers.
 	 */
 	LICENSE_PUBLIC_KEY?: string;
+
+	// =========================================================================
+	// R2 STORAGE
+	// =========================================================================
+
+	/**
+	 * R2 bucket for storing user avatar images.
+	 * Used for onboarding and profile avatar uploads.
+	 */
+	AVATARS_BUCKET?: R2Bucket;
+
+	/**
+	 * Public URL prefix for accessing avatar images.
+	 * Example: `https://avatars.janovix.com` or `https://pub-xxx.r2.dev`
+	 */
+	AVATARS_PUBLIC_URL?: string;
 };

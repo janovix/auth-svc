@@ -61,6 +61,11 @@ import {
 	PutAmlComplianceSettingsEndpoint,
 	PatchAmlComplianceSettingsEndpoint,
 } from "./endpoints/aml-settings/openapi";
+import {
+	PrepareAvatarUploadEndpoint,
+	UploadAvatarEndpoint,
+	DeleteAvatarEndpoint,
+} from "./endpoints/upload/openapi";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
@@ -70,6 +75,7 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { licenseRoutes } from "./routes/license";
 import { webhookRoutes } from "./routes/webhooks";
 import { internalSubscriptionRoutes } from "./routes/internal-subscription";
+import { uploadRoutes } from "./routes/upload";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -234,6 +240,14 @@ app.route("/webhooks", webhookRoutes);
 
 // Register Internal Subscription routes for service bindings
 app.route("/internal/subscription", internalSubscriptionRoutes);
+
+// Register Upload routes (avatar uploads via R2)
+app.route("/api/upload", uploadRoutes);
+
+// Register Upload OpenAPI documentation
+openapi.post("/api/upload/avatar/prepare", PrepareAvatarUploadEndpoint);
+openapi.post("/api/upload/avatar", UploadAvatarEndpoint);
+openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

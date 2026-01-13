@@ -22,10 +22,17 @@
 			"id": "bc9ed2441eaa4660a619e64e603cdccc",
 		},
 	],
+	"r2_buckets": [
+		{
+			"binding": "AVATARS_BUCKET",
+			"bucket_name": "avatar",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "test",
 		"BETTER_AUTH_URL": "https://auth-svc.test.local",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.test.local",
+		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
 	},
 }

@@ -33,8 +33,10 @@ export function createKVSecondaryStorage(
 		set: async (key: string, value: string, ttl?: number) => {
 			const options: KVNamespacePutOptions = {};
 			if (ttl && ttl > 0) {
-				// KV expirationTtl is in seconds
-				options.expirationTtl = ttl;
+				// Cloudflare KV requires minimum TTL of 60 seconds
+				// If Better Auth requests a shorter TTL, use the minimum
+				const MIN_KV_TTL = 60;
+				options.expirationTtl = Math.max(ttl, MIN_KV_TTL);
 			}
 			await kv.put(`${KEY_PREFIX}${key}`, value, options);
 		},

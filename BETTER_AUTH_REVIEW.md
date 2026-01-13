@@ -134,6 +134,22 @@ Based on the official Better Auth installation guide, here's what should be pres
 2. **Documentation**: Consider adding inline comments explaining Better Auth-specific configurations
 3. **Testing**: Tests exist but could be expanded to cover more edge cases
 
+## ⚠️ Column Naming Convention
+
+**Status**: ✅ **Documented Exception**
+
+Better Auth's Prisma adapter generates its own SQL queries that **bypass Prisma's `@map` directives**. This means Better Auth managed tables MUST use camelCase column names:
+
+- `users`, `sessions`, `accounts`, `verifications`, `jwks` (core Better Auth)
+- `organizations`, `members`, `invitations` (Better Auth organization plugin)
+
+Custom auth-svc tables (not managed by Better Auth) continue to use snake_case via `@map` directives:
+
+- `organization_settings`, `user_settings`, `audit_logs`
+- `subscription_plans`, `organization_subscriptions`, `enterprise_licenses`, `usage_records`
+
+See `.cursorrules` in this directory for detailed documentation.
+
 ## 🎯 Final Verdict
 
 **Overall Status**: ✅ **Setup is Correct**
