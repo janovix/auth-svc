@@ -1,3 +1,10 @@
+# [1.4.0-rc.15](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.14...v1.4.0-rc.15) (2026-01-14)
+
+
+### Features
+
+* implement dynamic execution context handling for background tasks ([c0d8940](https://github.com/janovix/auth-svc/commit/c0d8940d7ae6ba9bb0a0dc47c8c52eabf65c9ddd))
+
 # [1.4.0-rc.14](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.13...v1.4.0-rc.14) (2026-01-14)
 
 
