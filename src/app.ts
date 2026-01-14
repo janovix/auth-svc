@@ -56,6 +56,7 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
+import { adminRoutes } from "./routes/admin";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -200,6 +201,9 @@ app.route("/webhooks", webhookRoutes);
 
 // Register Upload routes (avatar uploads via R2)
 app.route("/api/upload", uploadRoutes);
+
+// Register Admin routes (admin-only operations)
+app.route("/api/admin", adminRoutes);
 
 // Register Upload OpenAPI documentation
 openapi.post("/api/upload/avatar/prepare", PrepareAvatarUploadEndpoint);

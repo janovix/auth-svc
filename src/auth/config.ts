@@ -66,7 +66,7 @@ const RATE_LIMITS: Record<
 };
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
-	local: ".janovix.workers.dev",
+	// Note: local env intentionally omitted - uses localhost without cross-subdomain cookies
 	preview: ".janovix.workers.dev",
 	dev: ".janovix.workers.dev",
 	qa: ".algenium.qa",
