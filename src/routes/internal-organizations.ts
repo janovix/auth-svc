@@ -6,12 +6,18 @@
  */
 import { Hono } from "hono";
 import type { Bindings } from "../types/bindings";
+import { sendOrganizationInvitationEmail } from "../utils/mandrill";
 
 type InternalBindings = {
 	Bindings: Bindings;
 };
 
 const internalOrganizationsRoutes = new Hono<InternalBindings>();
+
+/**
+ * Default invitation expiration: 48 hours
+ */
+const DEFAULT_INVITATION_EXPIRATION_HOURS = 48;
 
 /**
  * Organization row from database
@@ -316,6 +322,375 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 				success: false,
 				error:
 					error instanceof Error ? error.message : "Failed to list invitations",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * POST /internal/organizations/:id/invitations
+ * Create an invitation to join an organization (admin panel only)
+ *
+ * Body: { email: string, role: "admin" | "member", inviterUserId?: string }
+ */
+internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
+	const orgId = c.req.param("id");
+	const body = await c.req.json<{
+		email: string;
+		role: "admin" | "member";
+		inviterUserId?: string;
+	}>();
+
+	// Validate email
+	if (!body.email || !body.email.includes("@")) {
+		return c.json(
+			{ success: false, error: "Valid email address is required" },
+			400,
+		);
+	}
+
+	// Validate role
+	if (!body.role || !["admin", "member"].includes(body.role)) {
+		return c.json(
+			{ success: false, error: "Role must be 'admin' or 'member'" },
+			400,
+		);
+	}
+
+	const email = body.email.toLowerCase().trim();
+	const role = body.role;
+
+	try {
+		// Check if organization exists
+		const org = await c.env.DB.prepare(
+			"SELECT id, name FROM organizations WHERE id = ?",
+		)
+			.bind(orgId)
+			.first<{ id: string; name: string }>();
+
+		if (!org) {
+			return c.json({ success: false, error: "Organization not found" }, 404);
+		}
+
+		// Check if user is already a member
+		const existingMember = await c.env.DB.prepare(
+			`SELECT m.id FROM members m
+			 JOIN users u ON u.id = m.userId
+			 WHERE m.organizationId = ? AND LOWER(u.email) = ?`,
+		)
+			.bind(orgId, email)
+			.first<{ id: string }>();
+
+		if (existingMember) {
+			return c.json(
+				{
+					success: false,
+					error: "User is already a member of this organization",
+				},
+				400,
+			);
+		}
+
+		// Check for existing pending invitation
+		const existingInvitation = await c.env.DB.prepare(
+			`SELECT id FROM invitations 
+			 WHERE organizationId = ? AND LOWER(email) = ? AND status = 'pending'`,
+		)
+			.bind(orgId, email)
+			.first<{ id: string }>();
+
+		if (existingInvitation) {
+			return c.json(
+				{
+					success: false,
+					error: "An invitation is already pending for this email",
+				},
+				400,
+			);
+		}
+
+		// Get inviter information (if inviterUserId provided)
+		// If not provided, use a system admin placeholder
+		let inviterName = "Janovix Admin";
+		let inviterId = body.inviterUserId;
+
+		if (inviterId) {
+			const inviter = await c.env.DB.prepare(
+				"SELECT id, name, email FROM users WHERE id = ?",
+			)
+				.bind(inviterId)
+				.first<{ id: string; name: string | null; email: string }>();
+
+			if (inviter) {
+				inviterName = inviter.name || inviter.email.split("@")[0];
+			}
+		} else {
+			// Use the first admin user as inviter (required field in DB)
+			const adminUser = await c.env.DB.prepare(
+				"SELECT id, name, email FROM users WHERE role = 'admin' LIMIT 1",
+			).first<{ id: string; name: string | null; email: string }>();
+
+			if (adminUser) {
+				inviterId = adminUser.id;
+				inviterName = adminUser.name || adminUser.email.split("@")[0];
+			} else {
+				// Fallback: use the organization owner
+				const owner = await c.env.DB.prepare(
+					`SELECT u.id, u.name, u.email FROM members m
+					 JOIN users u ON u.id = m.userId
+					 WHERE m.organizationId = ? AND m.role = 'owner'
+					 LIMIT 1`,
+				)
+					.bind(orgId)
+					.first<{ id: string; name: string | null; email: string }>();
+
+				if (!owner) {
+					return c.json(
+						{ success: false, error: "Could not find an inviter user" },
+						500,
+					);
+				}
+				inviterId = owner.id;
+				inviterName = owner.name || owner.email.split("@")[0];
+			}
+		}
+
+		// Generate invitation ID and expiration
+		const invitationId = crypto.randomUUID();
+		const expiresAt = new Date(
+			Date.now() + DEFAULT_INVITATION_EXPIRATION_HOURS * 60 * 60 * 1000,
+		).toISOString();
+
+		// Create the invitation
+		await c.env.DB.prepare(
+			`INSERT INTO invitations (id, organizationId, email, role, status, inviterId, expiresAt, createdAt, updatedAt)
+			 VALUES (?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))`,
+		)
+			.bind(invitationId, orgId, email, role, inviterId, expiresAt)
+			.run();
+
+		// Send invitation email
+		const apiKey = c.env.MANDRILL_API_KEY;
+		if (apiKey) {
+			const authAppUrl =
+				c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+			const inviteUrl = `${authAppUrl}/invite?invitationId=${encodeURIComponent(invitationId)}`;
+
+			// Fire and forget - don't block on email sending
+			sendOrganizationInvitationEmail(apiKey, {
+				email,
+				inviteUrl,
+				organizationName: org.name,
+				inviterName,
+				role,
+			}).catch((error) => {
+				console.error(
+					"[Internal Organizations] Failed to send invitation email:",
+					error,
+				);
+			});
+		} else {
+			console.warn(
+				"[Internal Organizations] MANDRILL_API_KEY not configured; invitation email skipped",
+			);
+		}
+
+		return c.json({
+			success: true,
+			data: {
+				id: invitationId,
+				organizationId: orgId,
+				email,
+				role,
+				status: "pending",
+				expiresAt,
+			},
+		});
+	} catch (error) {
+		console.error("[Internal Organizations] Create invitation error:", error);
+		return c.json(
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to create invitation",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * PATCH /internal/organizations/:id
+ * Update an organization's details (admin only)
+ *
+ * Body: { name?: string, slug?: string, logo?: string | null, metadata?: Record<string, unknown> | null }
+ */
+internalOrganizationsRoutes.patch("/:id", async (c) => {
+	const id = c.req.param("id");
+	const body = await c.req.json<{
+		name?: string;
+		slug?: string;
+		logo?: string | null;
+		metadata?: Record<string, unknown> | null;
+	}>();
+
+	// Validate that at least one field is being updated
+	if (
+		body.name === undefined &&
+		body.slug === undefined &&
+		body.logo === undefined &&
+		body.metadata === undefined
+	) {
+		return c.json(
+			{
+				success: false,
+				error:
+					"At least one field (name, slug, logo, metadata) must be provided",
+			},
+			400,
+		);
+	}
+
+	// Validate name if provided
+	if (
+		body.name !== undefined &&
+		(!body.name || body.name.trim().length === 0)
+	) {
+		return c.json(
+			{ success: false, error: "Organization name cannot be empty" },
+			400,
+		);
+	}
+
+	// Validate slug if provided
+	if (body.slug !== undefined) {
+		if (!body.slug || body.slug.trim().length === 0) {
+			return c.json(
+				{ success: false, error: "Organization slug cannot be empty" },
+				400,
+			);
+		}
+		// Validate slug format (lowercase, alphanumeric, hyphens only)
+		const slugRegex = /^[a-z0-9-]+$/;
+		if (!slugRegex.test(body.slug)) {
+			return c.json(
+				{
+					success: false,
+					error:
+						"Slug must be lowercase and contain only letters, numbers, and hyphens",
+				},
+				400,
+			);
+		}
+	}
+
+	try {
+		// Check if organization exists
+		const existingOrg = await c.env.DB.prepare(
+			"SELECT id, slug FROM organizations WHERE id = ?",
+		)
+			.bind(id)
+			.first<{ id: string; slug: string }>();
+
+		if (!existingOrg) {
+			return c.json({ success: false, error: "Organization not found" }, 404);
+		}
+
+		// Check slug uniqueness if slug is being changed
+		if (body.slug && body.slug !== existingOrg.slug) {
+			const slugExists = await c.env.DB.prepare(
+				"SELECT id FROM organizations WHERE slug = ? AND id != ?",
+			)
+				.bind(body.slug, id)
+				.first<{ id: string }>();
+
+			if (slugExists) {
+				return c.json(
+					{ success: false, error: "Organization slug is already taken" },
+					400,
+				);
+			}
+		}
+
+		// Build update query dynamically
+		const updates: string[] = [];
+		const values: (string | null)[] = [];
+
+		if (body.name !== undefined) {
+			updates.push("name = ?");
+			values.push(body.name.trim());
+		}
+
+		if (body.slug !== undefined) {
+			updates.push("slug = ?");
+			values.push(body.slug.toLowerCase().trim());
+		}
+
+		if (body.logo !== undefined) {
+			updates.push("logo = ?");
+			values.push(body.logo);
+		}
+
+		if (body.metadata !== undefined) {
+			updates.push("metadata = ?");
+			values.push(body.metadata ? JSON.stringify(body.metadata) : null);
+		}
+
+		updates.push("updatedAt = datetime('now')");
+
+		// Execute update
+		await c.env.DB.prepare(
+			`UPDATE organizations SET ${updates.join(", ")} WHERE id = ?`,
+		)
+			.bind(...values, id)
+			.run();
+
+		// Fetch and return the updated organization
+		const updatedOrg = await c.env.DB.prepare(
+			`
+			SELECT 
+				o.id,
+				o.name,
+				o.slug,
+				o.logo,
+				o.metadata,
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
+			FROM organizations o
+			WHERE o.id = ?
+		`,
+		)
+			.bind(id)
+			.first<OrganizationRow & { member_count: number }>();
+
+		return c.json({
+			success: true,
+			data: {
+				id: updatedOrg!.id,
+				name: updatedOrg!.name,
+				slug: updatedOrg!.slug,
+				logo: updatedOrg!.logo,
+				metadata: updatedOrg!.metadata
+					? JSON.parse(updatedOrg!.metadata)
+					: null,
+				memberCount: updatedOrg!.member_count,
+				createdAt: updatedOrg!.createdAt,
+				updatedAt: updatedOrg!.updatedAt,
+			},
+		});
+	} catch (error) {
+		console.error("[Internal Organizations] Update error:", error);
+		return c.json(
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to update organization",
 			},
 			500,
 		);
