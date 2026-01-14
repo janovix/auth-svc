@@ -15,6 +15,7 @@ const internalOrganizationsRoutes = new Hono<InternalBindings>();
 
 /**
  * Organization row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type OrganizationRow = {
 	id: string;
@@ -22,19 +23,20 @@ type OrganizationRow = {
 	slug: string;
 	logo: string | null;
 	metadata: string | null;
-	created_at: string;
-	updated_at: string;
+	createdAt: string;
+	updatedAt: string;
 };
 
 /**
  * Member row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type MemberRow = {
 	id: string;
-	organization_id: string;
-	user_id: string;
+	organizationId: string;
+	userId: string;
 	role: string;
-	created_at: string;
+	createdAt: string;
 	user_name: string | null;
 	user_email: string;
 	user_image: string | null;
@@ -42,16 +44,17 @@ type MemberRow = {
 
 /**
  * Invitation row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type InvitationRow = {
 	id: string;
-	organization_id: string;
+	organizationId: string;
 	email: string;
 	role: string;
 	status: string;
-	inviter_id: string;
-	expires_at: string;
-	created_at: string;
+	inviterId: string;
+	expiresAt: string;
+	createdAt: string;
 };
 
 /**
@@ -70,6 +73,7 @@ internalOrganizationsRoutes.get("/", async (c) => {
 
 	try {
 		// Build the query
+		// Note: organizations table uses camelCase columns (Better Auth managed)
 		let countQuery = "SELECT COUNT(*) as total FROM organizations";
 		let dataQuery = `
 			SELECT 
@@ -78,9 +82,9 @@ internalOrganizationsRoutes.get("/", async (c) => {
 				o.slug,
 				o.logo,
 				o.metadata,
-				o.created_at,
-				o.updated_at,
-				(SELECT COUNT(*) FROM members WHERE organization_id = o.id) as member_count
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
 			FROM organizations o
 		`;
 
@@ -94,7 +98,7 @@ internalOrganizationsRoutes.get("/", async (c) => {
 			params.push(`%${search}%`, `%${search}%`);
 		}
 
-		dataQuery += " ORDER BY o.created_at DESC LIMIT ? OFFSET ?";
+		dataQuery += " ORDER BY o.createdAt DESC LIMIT ? OFFSET ?";
 
 		// Execute count query
 		const countResult = await c.env.DB.prepare(countQuery)
@@ -117,8 +121,8 @@ internalOrganizationsRoutes.get("/", async (c) => {
 			logo: org.logo,
 			metadata: org.metadata ? JSON.parse(org.metadata) : null,
 			memberCount: org.member_count,
-			createdAt: org.created_at,
-			updatedAt: org.updated_at,
+			createdAt: org.createdAt,
+			updatedAt: org.updatedAt,
 		}));
 
 		return c.json({
@@ -161,9 +165,9 @@ internalOrganizationsRoutes.get("/:id", async (c) => {
 				o.slug,
 				o.logo,
 				o.metadata,
-				o.created_at,
-				o.updated_at,
-				(SELECT COUNT(*) FROM members WHERE organization_id = o.id) as member_count
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
 			FROM organizations o
 			WHERE o.id = ?
 		`,
@@ -184,8 +188,8 @@ internalOrganizationsRoutes.get("/:id", async (c) => {
 				logo: org.logo,
 				metadata: org.metadata ? JSON.parse(org.metadata) : null,
 				memberCount: org.member_count,
-				createdAt: org.created_at,
-				updatedAt: org.updated_at,
+				createdAt: org.createdAt,
+				updatedAt: org.updatedAt,
 			},
 		});
 	} catch (error) {
@@ -213,17 +217,17 @@ internalOrganizationsRoutes.get("/:id/members", async (c) => {
 			`
 			SELECT 
 				m.id,
-				m.organization_id,
-				m.user_id,
+				m.organizationId,
+				m.userId,
 				m.role,
-				m.created_at,
+				m.createdAt,
 				u.name as user_name,
 				u.email as user_email,
 				u.image as user_image
 			FROM members m
-			LEFT JOIN users u ON u.id = m.user_id
-			WHERE m.organization_id = ?
-			ORDER BY m.created_at ASC
+			LEFT JOIN users u ON u.id = m.userId
+			WHERE m.organizationId = ?
+			ORDER BY m.createdAt ASC
 		`,
 		)
 			.bind(id)
@@ -234,12 +238,12 @@ internalOrganizationsRoutes.get("/:id/members", async (c) => {
 			data: {
 				members: members.results.map((m) => ({
 					id: m.id,
-					organizationId: m.organization_id,
-					userId: m.user_id,
+					organizationId: m.organizationId,
+					userId: m.userId,
 					role: m.role,
-					createdAt: m.created_at,
+					createdAt: m.createdAt,
 					user: {
-						id: m.user_id,
+						id: m.userId,
 						name: m.user_name || "Unknown",
 						email: m.user_email,
 						image: m.user_image,
@@ -274,16 +278,16 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 			`
 			SELECT 
 				id,
-				organization_id,
+				organizationId,
 				email,
 				role,
 				status,
-				inviter_id,
-				expires_at,
-				created_at
+				inviterId,
+				expiresAt,
+				createdAt
 			FROM invitations
-			WHERE organization_id = ? AND status = ?
-			ORDER BY created_at DESC
+			WHERE organizationId = ? AND status = ?
+			ORDER BY createdAt DESC
 		`,
 		)
 			.bind(id, status)
@@ -294,13 +298,13 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 			data: {
 				invitations: invitations.results.map((inv) => ({
 					id: inv.id,
-					organizationId: inv.organization_id,
+					organizationId: inv.organizationId,
 					email: inv.email,
 					role: inv.role,
 					status: inv.status,
-					inviterId: inv.inviter_id,
-					expiresAt: inv.expires_at,
-					createdAt: inv.created_at,
+					inviterId: inv.inviterId,
+					expiresAt: inv.expiresAt,
+					createdAt: inv.createdAt,
 				})),
 				total: invitations.results.length,
 			},
@@ -372,7 +376,7 @@ internalOrganizationsRoutes.delete("/:id/members/:memberId", async (c) => {
 	try {
 		// Check if member exists
 		const member = await c.env.DB.prepare(
-			"SELECT id, role FROM members WHERE id = ? AND organization_id = ?",
+			"SELECT id, role FROM members WHERE id = ? AND organizationId = ?",
 		)
 			.bind(memberId, orgId)
 			.first<{ id: string; role: string }>();
@@ -384,7 +388,7 @@ internalOrganizationsRoutes.delete("/:id/members/:memberId", async (c) => {
 		// Prevent removing the last owner
 		if (member.role === "owner") {
 			const ownerCount = await c.env.DB.prepare(
-				"SELECT COUNT(*) as count FROM members WHERE organization_id = ? AND role = 'owner'",
+				"SELECT COUNT(*) as count FROM members WHERE organizationId = ? AND role = 'owner'",
 			)
 				.bind(orgId)
 				.first<{ count: number }>();
@@ -443,7 +447,7 @@ internalOrganizationsRoutes.patch("/:id/members/:memberId", async (c) => {
 	try {
 		// Check if member exists
 		const member = await c.env.DB.prepare(
-			"SELECT id, role FROM members WHERE id = ? AND organization_id = ?",
+			"SELECT id, role FROM members WHERE id = ? AND organizationId = ?",
 		)
 			.bind(memberId, orgId)
 			.first<{ id: string; role: string }>();
@@ -455,7 +459,7 @@ internalOrganizationsRoutes.patch("/:id/members/:memberId", async (c) => {
 		// Prevent demoting the last owner
 		if (member.role === "owner" && body.role !== "owner") {
 			const ownerCount = await c.env.DB.prepare(
-				"SELECT COUNT(*) as count FROM members WHERE organization_id = ? AND role = 'owner'",
+				"SELECT COUNT(*) as count FROM members WHERE organizationId = ? AND role = 'owner'",
 			)
 				.bind(orgId)
 				.first<{ count: number }>();
@@ -472,7 +476,7 @@ internalOrganizationsRoutes.patch("/:id/members/:memberId", async (c) => {
 		}
 
 		await c.env.DB.prepare(
-			"UPDATE members SET role = ?, updated_at = datetime('now') WHERE id = ?",
+			"UPDATE members SET role = ?, updatedAt = datetime('now') WHERE id = ?",
 		)
 			.bind(body.role, memberId)
 			.run();
@@ -508,7 +512,7 @@ internalOrganizationsRoutes.delete(
 
 		try {
 			const invitation = await c.env.DB.prepare(
-				"SELECT id FROM invitations WHERE id = ? AND organization_id = ?",
+				"SELECT id FROM invitations WHERE id = ? AND organizationId = ?",
 			)
 				.bind(invitationId, orgId)
 				.first<{ id: string }>();
@@ -518,7 +522,7 @@ internalOrganizationsRoutes.delete(
 			}
 
 			await c.env.DB.prepare(
-				"UPDATE invitations SET status = 'canceled', updated_at = datetime('now') WHERE id = ?",
+				"UPDATE invitations SET status = 'canceled', updatedAt = datetime('now') WHERE id = ?",
 			)
 				.bind(invitationId)
 				.run();
