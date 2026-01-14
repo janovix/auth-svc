@@ -3,21 +3,93 @@
  *
  * These routes are called by the admin panel to manage all organizations
  * regardless of the admin user's membership.
+ *
+ * ARCHITECTURE NOTE:
+ * These internal routes use a mix of:
+ * 1. Better Auth API methods - for operations that benefit from plugin hooks
+ *    and built-in functionality (invitations, member management, slug validation)
+ * 2. Raw SQL - for operations that need to bypass user permissions
+ *    (listing ALL organizations, admin-only deletions, etc.)
+ *
+ * Better Auth API methods used:
+ * - auth.api.checkOrganizationSlug - validates slug uniqueness
+ * - auth.api.createInvitation - creates invitations with email sending
+ * - auth.api.addMember - adds members directly (server-side only)
+ * - auth.api.cancelInvitation - cancels pending invitations
+ *
+ * These internal routes are protected by separate admin authentication
+ * and are not accessible to regular users.
  */
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
-import { sendOrganizationInvitationEmail } from "../utils/mandrill";
+import { getBetterAuthContext } from "../auth/instance";
 
 type InternalBindings = {
 	Bindings: Bindings;
 };
 
+type InternalContext = Context<InternalBindings>;
+
 const internalOrganizationsRoutes = new Hono<InternalBindings>();
 
 /**
- * Default invitation expiration: 48 hours
+ * Type definitions for Better Auth Organization plugin API methods
+ * These are used to properly type the auth.api object which includes
+ * organization plugin methods added dynamically
  */
-const DEFAULT_INVITATION_EXPIRATION_HOURS = 48;
+type OrganizationApiMethods = {
+	checkOrganizationSlug: (params: {
+		body: { slug: string };
+	}) => Promise<{ status: boolean }>;
+	createInvitation: (params: {
+		body: {
+			email: string;
+			role: string;
+			organizationId: string;
+			resend?: boolean;
+		};
+		headers?: Headers;
+	}) => Promise<{
+		id: string;
+		organizationId: string;
+		email: string;
+		role: string;
+		status: string;
+		expiresAt: Date;
+	}>;
+	addMember: (params: {
+		body: {
+			userId: string;
+			role: string;
+			organizationId: string;
+		};
+	}) => Promise<{
+		id: string;
+		organizationId: string;
+		userId: string;
+		role: string;
+		createdAt: Date;
+	}>;
+	cancelInvitation: (params: {
+		body: { invitationId: string };
+		headers?: Headers;
+	}) => Promise<void>;
+};
+
+/**
+ * Helper to get Better Auth instance for API calls
+ * Returns the auth instance with organization plugin methods properly typed
+ */
+function getAuth(c: InternalContext) {
+	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
+		.executionCtx;
+	const { auth } = getBetterAuthContext(c.env, executionContext);
+	// Cast to include organization plugin methods which are added dynamically
+	return auth as typeof auth & {
+		api: typeof auth.api & OrganizationApiMethods;
+	};
+}
 
 /**
  * Organization row from database
@@ -332,7 +404,12 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
  * POST /internal/organizations/:id/invitations
  * Create an invitation to join an organization (admin panel only)
  *
- * Body: { email: string, role: "admin" | "member", inviterUserId?: string }
+ * Uses Better Auth's createInvitation API which handles:
+ * - Checking if user is already a member
+ * - Managing pending invitations (with resend option)
+ * - Sending invitation email via configured callback
+ *
+ * Body: { email: string, role: "admin" | "member", inviterUserId?: string, resend?: boolean }
  */
 internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
 	const orgId = c.req.param("id");
@@ -340,6 +417,7 @@ internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
 		email: string;
 		role: "admin" | "member";
 		inviterUserId?: string;
+		resend?: boolean;
 	}>();
 
 	// Validate email
@@ -373,16 +451,76 @@ internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
 			return c.json({ success: false, error: "Organization not found" }, 404);
 		}
 
-		// Check if user is already a member
-		const existingMember = await c.env.DB.prepare(
-			`SELECT m.id FROM members m
-			 JOIN users u ON u.id = m.userId
-			 WHERE m.organizationId = ? AND LOWER(u.email) = ?`,
-		)
-			.bind(orgId, email)
-			.first<{ id: string }>();
+		// Get inviter user ID - required for Better Auth createInvitation
+		// Better Auth needs a valid user to act as inviter
+		let inviterId = body.inviterUserId;
 
-		if (existingMember) {
+		if (!inviterId) {
+			// Use the first admin user as inviter
+			const adminUser = await c.env.DB.prepare(
+				"SELECT id FROM users WHERE role = 'admin' LIMIT 1",
+			).first<{ id: string }>();
+
+			if (adminUser) {
+				inviterId = adminUser.id;
+			} else {
+				// Fallback: use the organization owner
+				const owner = await c.env.DB.prepare(
+					`SELECT u.id FROM members m
+					 JOIN users u ON u.id = m.userId
+					 WHERE m.organizationId = ? AND m.role = 'owner'
+					 LIMIT 1`,
+				)
+					.bind(orgId)
+					.first<{ id: string }>();
+
+				if (!owner) {
+					return c.json(
+						{ success: false, error: "Could not find an inviter user" },
+						500,
+					);
+				}
+				inviterId = owner.id;
+			}
+		}
+
+		// Get the inviter's session to use with createInvitation
+		// We create a minimal session context for the API call
+		const auth = getAuth(c);
+
+		// Use Better Auth's createInvitation API
+		// This handles member checks, pending invitation checks, and email sending
+		const result = await auth.api.createInvitation({
+			body: {
+				email,
+				role,
+				organizationId: orgId,
+				resend: body.resend ?? false,
+			},
+			headers: c.req.raw.headers,
+		});
+
+		// Return the invitation data
+		return c.json({
+			success: true,
+			data: {
+				id: result.id,
+				organizationId: result.organizationId,
+				email: result.email,
+				role: result.role,
+				status: result.status,
+				expiresAt: result.expiresAt,
+			},
+		});
+	} catch (error) {
+		console.error("[Internal Organizations] Create invitation error:", error);
+
+		// Handle Better Auth specific errors
+		const errorMessage =
+			error instanceof Error ? error.message : "Failed to create invitation";
+
+		// Better Auth returns specific error messages we can pass through
+		if (errorMessage.includes("already a member")) {
 			return c.json(
 				{
 					success: false,
@@ -392,15 +530,7 @@ internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
 			);
 		}
 
-		// Check for existing pending invitation
-		const existingInvitation = await c.env.DB.prepare(
-			`SELECT id FROM invitations 
-			 WHERE organizationId = ? AND LOWER(email) = ? AND status = 'pending'`,
-		)
-			.bind(orgId, email)
-			.first<{ id: string }>();
-
-		if (existingInvitation) {
+		if (errorMessage.includes("already invited")) {
 			return c.json(
 				{
 					success: false,
@@ -410,112 +540,10 @@ internalOrganizationsRoutes.post("/:id/invitations", async (c) => {
 			);
 		}
 
-		// Get inviter information (if inviterUserId provided)
-		// If not provided, use a system admin placeholder
-		let inviterName = "Janovix Admin";
-		let inviterId = body.inviterUserId;
-
-		if (inviterId) {
-			const inviter = await c.env.DB.prepare(
-				"SELECT id, name, email FROM users WHERE id = ?",
-			)
-				.bind(inviterId)
-				.first<{ id: string; name: string | null; email: string }>();
-
-			if (inviter) {
-				inviterName = inviter.name || inviter.email.split("@")[0];
-			}
-		} else {
-			// Use the first admin user as inviter (required field in DB)
-			const adminUser = await c.env.DB.prepare(
-				"SELECT id, name, email FROM users WHERE role = 'admin' LIMIT 1",
-			).first<{ id: string; name: string | null; email: string }>();
-
-			if (adminUser) {
-				inviterId = adminUser.id;
-				inviterName = adminUser.name || adminUser.email.split("@")[0];
-			} else {
-				// Fallback: use the organization owner
-				const owner = await c.env.DB.prepare(
-					`SELECT u.id, u.name, u.email FROM members m
-					 JOIN users u ON u.id = m.userId
-					 WHERE m.organizationId = ? AND m.role = 'owner'
-					 LIMIT 1`,
-				)
-					.bind(orgId)
-					.first<{ id: string; name: string | null; email: string }>();
-
-				if (!owner) {
-					return c.json(
-						{ success: false, error: "Could not find an inviter user" },
-						500,
-					);
-				}
-				inviterId = owner.id;
-				inviterName = owner.name || owner.email.split("@")[0];
-			}
-		}
-
-		// Generate invitation ID and expiration
-		const invitationId = crypto.randomUUID();
-		const expiresAt = new Date(
-			Date.now() + DEFAULT_INVITATION_EXPIRATION_HOURS * 60 * 60 * 1000,
-		).toISOString();
-
-		// Create the invitation
-		await c.env.DB.prepare(
-			`INSERT INTO invitations (id, organizationId, email, role, status, inviterId, expiresAt, createdAt, updatedAt)
-			 VALUES (?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))`,
-		)
-			.bind(invitationId, orgId, email, role, inviterId, expiresAt)
-			.run();
-
-		// Send invitation email
-		const apiKey = c.env.MANDRILL_API_KEY;
-		if (apiKey) {
-			const authAppUrl =
-				c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
-			const inviteUrl = `${authAppUrl}/invite?invitationId=${encodeURIComponent(invitationId)}`;
-
-			// Fire and forget - don't block on email sending
-			sendOrganizationInvitationEmail(apiKey, {
-				email,
-				inviteUrl,
-				organizationName: org.name,
-				inviterName,
-				role,
-			}).catch((error) => {
-				console.error(
-					"[Internal Organizations] Failed to send invitation email:",
-					error,
-				);
-			});
-		} else {
-			console.warn(
-				"[Internal Organizations] MANDRILL_API_KEY not configured; invitation email skipped",
-			);
-		}
-
-		return c.json({
-			success: true,
-			data: {
-				id: invitationId,
-				organizationId: orgId,
-				email,
-				role,
-				status: "pending",
-				expiresAt,
-			},
-		});
-	} catch (error) {
-		console.error("[Internal Organizations] Create invitation error:", error);
 		return c.json(
 			{
 				success: false,
-				error:
-					error instanceof Error
-						? error.message
-						: "Failed to create invitation",
+				error: errorMessage,
 			},
 			500,
 		);
@@ -599,15 +627,15 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 			return c.json({ success: false, error: "Organization not found" }, 404);
 		}
 
-		// Check slug uniqueness if slug is being changed
+		// Check slug uniqueness if slug is being changed using Better Auth API
 		if (body.slug && body.slug !== existingOrg.slug) {
-			const slugExists = await c.env.DB.prepare(
-				"SELECT id FROM organizations WHERE slug = ? AND id != ?",
-			)
-				.bind(body.slug, id)
-				.first<{ id: string }>();
+			const auth = getAuth(c);
+			const slugCheck = await auth.api.checkOrganizationSlug({
+				body: { slug: body.slug },
+			});
 
-			if (slugExists) {
+			// checkOrganizationSlug returns { status: true } if slug is available
+			if (!slugCheck.status) {
 				return c.json(
 					{ success: false, error: "Organization slug is already taken" },
 					400,
@@ -734,6 +762,124 @@ internalOrganizationsRoutes.delete("/:id", async (c) => {
 					error instanceof Error
 						? error.message
 						: "Failed to delete organization",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * POST /internal/organizations/:id/members
+ * Add a member to an organization by creating an invitation
+ *
+ * This endpoint looks up the user by ID and sends them an invitation email.
+ * The user must accept the invitation to become a member.
+ *
+ * Uses Better Auth's createInvitation API which:
+ * - Triggers invitation hooks (beforeCreateInvitation, afterCreateInvitation)
+ * - Sends invitation email via configured sendInvitationEmail callback
+ * - Handles existing member and pending invitation validation
+ *
+ * Body: { userId: string, role: "admin" | "member" }
+ */
+internalOrganizationsRoutes.post("/:id/members", async (c) => {
+	const orgId = c.req.param("id");
+	const body = await c.req.json<{
+		userId: string;
+		role: "admin" | "member";
+	}>();
+
+	// Validate userId
+	if (!body.userId || body.userId.trim().length === 0) {
+		return c.json({ success: false, error: "User ID is required" }, 400);
+	}
+
+	// Validate role (only admin and member can be invited, owner is assigned at creation)
+	if (!body.role || !["admin", "member"].includes(body.role)) {
+		return c.json(
+			{ success: false, error: "Role must be 'admin' or 'member'" },
+			400,
+		);
+	}
+
+	try {
+		// Check if organization exists (keep this check for better error messages)
+		const org = await c.env.DB.prepare(
+			"SELECT id FROM organizations WHERE id = ?",
+		)
+			.bind(orgId)
+			.first<{ id: string }>();
+
+		if (!org) {
+			return c.json({ success: false, error: "Organization not found" }, 404);
+		}
+
+		// Look up the user to get their email for the invitation
+		const user = await c.env.DB.prepare(
+			"SELECT id, email FROM users WHERE id = ?",
+		)
+			.bind(body.userId)
+			.first<{ id: string; email: string }>();
+
+		if (!user) {
+			return c.json({ success: false, error: "User not found" }, 404);
+		}
+
+		// Use Better Auth's createInvitation API to send invitation email
+		const auth = getAuth(c);
+		const result = await auth.api.createInvitation({
+			body: {
+				email: user.email,
+				role: body.role,
+				organizationId: orgId,
+				resend: false,
+			},
+			headers: c.req.raw.headers,
+		});
+
+		// Return the invitation data
+		return c.json({
+			success: true,
+			data: {
+				id: result.id,
+				organizationId: result.organizationId,
+				email: result.email,
+				role: result.role,
+				status: result.status,
+				expiresAt: result.expiresAt,
+			},
+		});
+	} catch (error) {
+		console.error("[Internal Organizations] Add member error:", error);
+
+		const errorMessage =
+			error instanceof Error ? error.message : "Failed to add member";
+
+		// Handle Better Auth specific errors
+		if (errorMessage.includes("already a member")) {
+			return c.json(
+				{
+					success: false,
+					error: "User is already a member of this organization",
+				},
+				400,
+			);
+		}
+
+		if (errorMessage.includes("already invited")) {
+			return c.json(
+				{
+					success: false,
+					error: "An invitation is already pending for this user",
+				},
+				400,
+			);
+		}
+
+		return c.json(
+			{
+				success: false,
+				error: errorMessage,
 			},
 			500,
 		);
@@ -877,7 +1023,9 @@ internalOrganizationsRoutes.patch("/:id/members/:memberId", async (c) => {
 
 /**
  * DELETE /internal/organizations/:id/invitations/:invitationId
- * Cancel an invitation
+ * Cancel an invitation using Better Auth's cancelInvitation API
+ *
+ * This triggers the beforeCancelInvitation and afterCancelInvitation hooks
  */
 internalOrganizationsRoutes.delete(
 	"/:id/invitations/:invitationId",
@@ -886,6 +1034,7 @@ internalOrganizationsRoutes.delete(
 		const invitationId = c.req.param("invitationId");
 
 		try {
+			// Verify invitation exists and belongs to this organization
 			const invitation = await c.env.DB.prepare(
 				"SELECT id FROM invitations WHERE id = ? AND organizationId = ?",
 			)
@@ -896,11 +1045,12 @@ internalOrganizationsRoutes.delete(
 				return c.json({ success: false, error: "Invitation not found" }, 404);
 			}
 
-			await c.env.DB.prepare(
-				"UPDATE invitations SET status = 'canceled', updatedAt = datetime('now') WHERE id = ?",
-			)
-				.bind(invitationId)
-				.run();
+			// Use Better Auth's cancelInvitation API
+			const auth = getAuth(c);
+			await auth.api.cancelInvitation({
+				body: { invitationId },
+				headers: c.req.raw.headers,
+			});
 
 			return c.json({
 				success: true,
@@ -908,13 +1058,19 @@ internalOrganizationsRoutes.delete(
 			});
 		} catch (error) {
 			console.error("[Internal Organizations] Cancel invitation error:", error);
+
+			const errorMessage =
+				error instanceof Error ? error.message : "Failed to cancel invitation";
+
+			// Handle not found errors from Better Auth
+			if (errorMessage.includes("not found")) {
+				return c.json({ success: false, error: "Invitation not found" }, 404);
+			}
+
 			return c.json(
 				{
 					success: false,
-					error:
-						error instanceof Error
-							? error.message
-							: "Failed to cancel invitation",
+					error: errorMessage,
 				},
 				500,
 			);

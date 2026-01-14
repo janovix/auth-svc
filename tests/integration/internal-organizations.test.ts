@@ -298,6 +298,88 @@ describe("Internal Organizations Routes", () => {
 		});
 	});
 
+	describe("POST /internal/organizations/:id/members", () => {
+		it("validates userId is required", async () => {
+			const response = await SELF.fetch(
+				"http://local.test/internal/organizations/test-org-id/members",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ role: "member" }),
+				},
+			);
+
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as ApiResponse<unknown>;
+			expect(body.success).toBe(false);
+			expect(body.error).toBe("User ID is required");
+		});
+
+		it("validates role is required", async () => {
+			const response = await SELF.fetch(
+				"http://local.test/internal/organizations/test-org-id/members",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ userId: "user-123" }),
+				},
+			);
+
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as ApiResponse<unknown>;
+			expect(body.success).toBe(false);
+			expect(body.error).toBe("Role must be 'admin' or 'member'");
+		});
+
+		it("validates role values", async () => {
+			const response = await SELF.fetch(
+				"http://local.test/internal/organizations/test-org-id/members",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ userId: "user-123", role: "invalid" }),
+				},
+			);
+
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as ApiResponse<unknown>;
+			expect(body.success).toBe(false);
+			expect(body.error).toBe("Role must be 'admin' or 'member'");
+		});
+
+		it("rejects owner role (owners can only be set at org creation)", async () => {
+			const response = await SELF.fetch(
+				"http://local.test/internal/organizations/test-org-id/members",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ userId: "user-123", role: "owner" }),
+				},
+			);
+
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as ApiResponse<unknown>;
+			expect(body.success).toBe(false);
+			expect(body.error).toBe("Role must be 'admin' or 'member'");
+		});
+
+		it("returns 404 for non-existent organization", async () => {
+			const response = await SELF.fetch(
+				"http://local.test/internal/organizations/non-existent-org/members",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ userId: "user-123", role: "member" }),
+				},
+			);
+
+			expect(response.status).toBe(404);
+			const body = (await response.json()) as ApiResponse<unknown>;
+			expect(body.success).toBe(false);
+			expect(body.error).toBe("Organization not found");
+		});
+	});
+
 	describe("DELETE /internal/organizations/:id/members/:memberId", () => {
 		it("returns 404 for non-existent member", async () => {
 			const response = await SELF.fetch(
