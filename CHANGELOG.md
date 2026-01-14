@@ -1,3 +1,11 @@
+# [1.4.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.8...v1.4.0-rc.9) (2026-01-14)
+
+
+### Features
+
+* add admin routes and OpenAPI documentation for KV cache management ([b8e1df2](https://github.com/janovix/auth-svc/commit/b8e1df2eb9cf1f8fa27efb86981e0e9978297cad))
+* integrate Better Auth Stripe plugin for user-based billing and organization usage tracking ([eb632ad](https://github.com/janovix/auth-svc/commit/eb632ad61d87628ffb2aeaf1c6e858d50cd0e417))
+
 # [1.4.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.7...v1.4.0-rc.8) (2026-01-12)
 
 
