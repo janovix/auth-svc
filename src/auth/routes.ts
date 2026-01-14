@@ -76,6 +76,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
+		const startTime = Date.now();
+		const pathname = c.req.path;
+
+		// Log request start for debugging hang issues
+		console.log(`[Auth] Request started: ${c.req.method} ${pathname}`);
+
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
@@ -86,11 +92,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c.env,
 			executionContext,
 		);
+		console.log(
+			`[Auth] Context built in ${Date.now() - startTime}ms for ${pathname}`,
+		);
 
 		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
 		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
-
-		const pathname = c.req.path;
 
 		// Track OTP send requests to detect rate limiting
 		let isOtpRequest = false;
@@ -163,7 +170,11 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
+		const preHandlerTime = Date.now();
 		const response = await handleAuthRequest(c, auth);
+		console.log(
+			`[Auth] Handler completed in ${Date.now() - preHandlerTime}ms for ${pathname} (total: ${Date.now() - startTime}ms)`,
+		);
 
 		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
 		if (isOtpRequest && otpEmail && response.status === 200) {

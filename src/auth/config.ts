@@ -342,6 +342,7 @@ export function buildResolvedAuthConfig(
 						otp: string;
 						type: string;
 					}) => {
+						const callbackStart = Date.now();
 						console.log(
 							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
 						);
@@ -363,20 +364,32 @@ export function buildResolvedAuthConfig(
 							: trimmedEmail || email;
 
 						// Use waitUntil for Cloudflare Workers to ensure async operation completes
+						// even after the response is sent to the client.
+						// IMPORTANT: We do NOT await this promise to prevent blocking the response.
 						const emailPromise = sendOtpEmail(
 							apiKey,
 							email,
 							userName,
 							otp,
 							type,
-						);
+						).then(() => {
+							console.log(
+								`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
+							);
+						});
 
 						if (
 							executionContext &&
 							typeof executionContext.waitUntil === "function"
 						) {
+							console.log(
+								`[Email OTP] Using waitUntil for ${email} (has executionContext: true)`,
+							);
 							executionContext.waitUntil(emailPromise);
 						} else {
+							console.warn(
+								`[Email OTP] No executionContext available for ${email}, email may not send if worker exits early`,
+							);
 							emailPromise.catch((error) => {
 								console.error(
 									"[Email OTP] Unhandled email promise rejection",
@@ -384,6 +397,11 @@ export function buildResolvedAuthConfig(
 								);
 							});
 						}
+
+						// Callback returns immediately; email sends in background via waitUntil
+						console.log(
+							`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (email sending in background)`,
+						);
 					},
 			}),
 			// Stripe plugin for user-based billing

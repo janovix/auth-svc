@@ -7,10 +7,15 @@ import { buildResolvedAuthConfig } from "./config";
 import type { Bindings } from "../types/bindings";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
 
-const authCache = new Map<
+/**
+ * Cache for static auth configuration (without execution context).
+ * This caches only the parts that don't depend on per-request execution context.
+ */
+const staticAuthCache = new Map<
 	string,
 	{
-		auth: ReturnType<typeof betterAuth>;
+		prisma: PrismaClient;
+		secondaryStorage: ReturnType<typeof createKVSecondaryStorage>;
 	}
 >();
 
@@ -21,33 +26,45 @@ function createPrismaClient(db: D1Database) {
 
 export function invalidateBetterAuthCache(env: Bindings) {
 	const resolved = buildResolvedAuthConfig(env);
-	authCache.delete(resolved.cacheKey);
+	staticAuthCache.delete(resolved.cacheKey);
 }
 
+/**
+ * Gets Better Auth context for handling requests.
+ *
+ * IMPORTANT: We DON'T cache the full auth instance because:
+ * - Callbacks like sendVerificationOTP capture executionContext
+ * - Each request gets a fresh executionContext in Cloudflare Workers
+ * - Using a stale executionContext causes waitUntil() to fail silently
+ *
+ * We only cache the Prisma client and KV storage adapter which are safe to reuse.
+ */
 export function getBetterAuthContext(
 	env: Bindings,
 	executionContext?: ExecutionContext,
 ) {
+	// Build full config with current execution context (for callbacks)
 	const resolved = buildResolvedAuthConfig(env, executionContext);
-	const cached = authCache.get(resolved.cacheKey);
 
-	if (cached) {
-		return {
-			auth: cached.auth,
-			accessPolicy: resolved.accessPolicy,
-		};
+	// Cache only safe-to-reuse parts (Prisma, KV storage)
+	let cached = staticAuthCache.get(resolved.cacheKey);
+	if (!cached) {
+		const prisma = createPrismaClient(env.DB);
+		const secondaryStorage = createKVSecondaryStorage(env.KV);
+		cached = { prisma, secondaryStorage };
+		staticAuthCache.set(resolved.cacheKey, cached);
 	}
 
-	const prisma = createPrismaClient(env.DB);
-	const secondaryStorage = createKVSecondaryStorage(env.KV);
-
+	// Create fresh auth instance with current execution context
+	// This ensures callbacks like sendVerificationOTP use the correct waitUntil
 	const auth = betterAuth({
 		...resolved.options,
-		database: prismaAdapter(prisma, { provider: "sqlite", transaction: false }),
-		secondaryStorage,
+		database: prismaAdapter(cached.prisma, {
+			provider: "sqlite",
+			transaction: false,
+		}),
+		secondaryStorage: cached.secondaryStorage,
 	});
-
-	authCache.set(resolved.cacheKey, { auth });
 
 	return {
 		auth,

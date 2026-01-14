@@ -30,13 +30,17 @@ describe("getBetterAuthContext", () => {
 		expect(context.accessPolicy).toBeDefined();
 	});
 
-	it("caches auth instance for same environment", () => {
+	it("creates fresh auth instance for each call (to get fresh execution context)", () => {
 		const env = buildEnv();
 		const context1 = getBetterAuthContext(env);
 		const context2 = getBetterAuthContext(env);
 
-		// Should return the same cached instance
-		expect(context1.auth).toBe(context2.auth);
+		// Auth instances should be different (recreated each call for fresh execution context)
+		// Only Prisma client and KV storage are cached
+		expect(context1.auth).not.toBe(context2.auth);
+		// But both should have valid auth and policy
+		expect(context1.auth).toBeDefined();
+		expect(context2.auth).toBeDefined();
 	});
 
 	it("creates different instances for different environments", () => {
@@ -69,26 +73,22 @@ describe("getBetterAuthContext", () => {
 });
 
 describe("invalidateBetterAuthCache", () => {
-	it("removes cached auth instance", () => {
+	it("clears cached Prisma and KV storage", () => {
 		const env = buildEnv({
 			ENVIRONMENT: "dev",
 			BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
 		});
 
-		// Create and cache an instance
+		// Create instances to populate the cache
 		const context1 = getBetterAuthContext(env);
-		const cachedAuth = context1.auth;
-
-		// Verify it's cached
-		const context2 = getBetterAuthContext(env);
-		expect(context2.auth).toBe(cachedAuth);
+		expect(context1.auth).toBeDefined();
 
 		// Invalidate cache
 		invalidateBetterAuthCache(env);
 
-		// Next call should create a new instance
-		const context3 = getBetterAuthContext(env);
-		expect(context3.auth).not.toBe(cachedAuth);
+		// Should not throw and should create new context
+		const context2 = getBetterAuthContext(env);
+		expect(context2.auth).toBeDefined();
 	});
 
 	it("only invalidates cache for specific environment", () => {
@@ -99,19 +99,19 @@ describe("invalidateBetterAuthCache", () => {
 		const env2 = buildEnv({ ENVIRONMENT: "local" });
 
 		// Create instances for both environments
-		const context1a = getBetterAuthContext(env1);
-		const context2a = getBetterAuthContext(env2);
+		getBetterAuthContext(env1);
+		getBetterAuthContext(env2);
 
-		// Invalidate only dev environment
-		invalidateBetterAuthCache(env1);
+		// Invalidate only dev environment - should not throw
+		expect(() => {
+			invalidateBetterAuthCache(env1);
+		}).not.toThrow();
 
-		// Dev should get a new instance
+		// Both should still work
 		const context1b = getBetterAuthContext(env1);
-		expect(context1b.auth).not.toBe(context1a.auth);
-
-		// Local should still use cached instance
 		const context2b = getBetterAuthContext(env2);
-		expect(context2b.auth).toBe(context2a.auth);
+		expect(context1b.auth).toBeDefined();
+		expect(context2b.auth).toBeDefined();
 	});
 
 	it("handles invalidation when cache is empty", () => {
