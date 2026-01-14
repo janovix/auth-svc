@@ -42,5 +42,9 @@
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
 		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
+		"STRIPE_BUSINESS_PRICE_ID": "price_1SoaP3A9qUPmowPeSsX2cRsS",
+		"STRIPE_PRO_PRICE_ID": "price_1SoaPTA9qUPmowPeWQ5UuqEz",
+		"STRIPE_NOTICE_OVERAGE_PRICE_ID": "price_1SoaP4A9qUPmowPeSsX2cRsS",
+		"STRIPE_USER_OVERAGE_PRICE_ID": "price_1SoaP5A9qUPmowPeSsX2cRsS",
 	},
 }
