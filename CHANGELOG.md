@@ -1,3 +1,10 @@
+# [1.4.0-rc.13](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.12...v1.4.0-rc.13) (2026-01-14)
+
+
+### Features
+
+* implement member management and invitation handling in internal organizations routes ([8dc21c1](https://github.com/janovix/auth-svc/commit/8dc21c120c5ea4145ae25b334c23a001710e0965))
+
 # [1.4.0-rc.12](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.11...v1.4.0-rc.12) (2026-01-14)
 
 
