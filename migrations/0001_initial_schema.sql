@@ -5,21 +5,30 @@
 -- ============================================================================
 -- Better Auth managed tables use camelCase column names because Better Auth
 -- generates its own SQL queries that bypass Prisma's @map directives.
--- Tables affected: users, sessions, accounts, verifications, jwks, organizations, members, invitations
+-- Tables affected: users, sessions, accounts, verifications, jwks, organizations, members, invitations, subscription
 --
 -- Custom auth-svc tables use snake_case column names (standard convention).
--- Tables affected: organization_settings, user_settings, audit_logs, subscription_plans,
---                  organization_subscriptions, enterprise_licenses, usage_records
+-- Tables affected: organization_settings, user_settings, audit_logs, used_card_fingerprints, organization_usage
+--
+-- BILLING MODEL: User-based (not organization-based)
+-- - Users are Stripe customers and hold subscriptions
+-- - Subscription limits determine how many organizations a user can own
+-- - Usage tracking is per-organization, billed to the owner's subscription
 -- ============================================================================
 
 -- Drop legacy tables if they exist
 DROP TABLE IF EXISTS tasks;
 
 -- Drop all existing tables to ensure clean state
+-- Old billing tables (organization-based - deprecated)
 DROP TABLE IF EXISTS usage_records;
 DROP TABLE IF EXISTS enterprise_licenses;
 DROP TABLE IF EXISTS organization_subscriptions;
 DROP TABLE IF EXISTS subscription_plans;
+-- New billing tables (user-based)
+DROP TABLE IF EXISTS organization_usage;
+DROP TABLE IF EXISTS used_card_fingerprints;
+DROP TABLE IF EXISTS subscription;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS user_settings;
 DROP TABLE IF EXISTS organization_settings;
@@ -245,110 +254,74 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_signature ON audit_logs(signature);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_previous_signature ON audit_logs(previous_signature);
 
 -- ============================================================================
--- Billing & Subscriptions Domain (custom - snake_case)
+-- Better Auth Stripe Plugin Tables (camelCase columns - required by Better Auth)
+-- User-based billing: users are Stripe customers, not organizations
 -- ============================================================================
 
--- Subscription plans table
-CREATE TABLE subscription_plans (
+-- Stripe subscription table (Better Auth Stripe plugin managed)
+CREATE TABLE subscription (
     id TEXT PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL,
-    tier TEXT NOT NULL,
-    billing_interval TEXT NOT NULL DEFAULT 'month',
-    stripe_price_id TEXT NOT NULL UNIQUE,
-    base_price REAL NOT NULL,
-    notices_included INTEGER NOT NULL,
-    users_included INTEGER NOT NULL,
-    transactions_included INTEGER,
-    alerts_included INTEGER,
-    overage_price_id TEXT,
-    overage_price REAL,
-    features TEXT NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    plan TEXT NOT NULL,
+    referenceId TEXT NOT NULL,
+    stripeCustomerId TEXT,
+    stripeSubscriptionId TEXT,
+    status TEXT,
+    periodStart DATETIME,
+    periodEnd DATETIME,
+    cancelAtPeriodEnd INTEGER DEFAULT 0,
+    seats INTEGER,
+    trialStart DATETIME,
+    trialEnd DATETIME,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_subscription_plans_tier ON subscription_plans(tier);
-CREATE INDEX IF NOT EXISTS idx_subscription_plans_active ON subscription_plans(active);
+CREATE INDEX IF NOT EXISTS idx_subscription_referenceId ON subscription(referenceId);
+CREATE INDEX IF NOT EXISTS idx_subscription_stripeCustomerId ON subscription(stripeCustomerId);
+CREATE INDEX IF NOT EXISTS idx_subscription_stripeSubscriptionId ON subscription(stripeSubscriptionId);
+CREATE INDEX IF NOT EXISTS idx_subscription_status ON subscription(status);
 
--- Organization subscriptions table
-CREATE TABLE organization_subscriptions (
+-- ============================================================================
+-- Custom Billing Tables (snake_case columns)
+-- ============================================================================
+
+-- Card fingerprint tracking for trial abuse prevention
+-- Stores fingerprints of cards that have been used for trials
+-- If a fingerprint exists, deny trial and charge immediately
+CREATE TABLE used_card_fingerprints (
+    id TEXT PRIMARY KEY NOT NULL,
+    fingerprint TEXT NOT NULL UNIQUE,
+    first_user_id TEXT NOT NULL,
+    first_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    usage_count INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (first_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_fingerprints_fingerprint ON used_card_fingerprints(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_card_fingerprints_first_user_id ON used_card_fingerprints(first_user_id);
+
+-- Per-organization usage tracking (for metered billing)
+-- Tracks usage within each organization for the billing period
+CREATE TABLE organization_usage (
     id TEXT PRIMARY KEY NOT NULL,
     organization_id TEXT NOT NULL UNIQUE,
-    stripe_customer_id TEXT NOT NULL UNIQUE,
-    plan_id TEXT,
-    stripe_subscription_id TEXT UNIQUE,
-    stripe_subscription_item_id TEXT,
-    status TEXT NOT NULL DEFAULT 'inactive',
-    current_period_start DATETIME,
-    current_period_end DATETIME,
-    cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+    owner_user_id TEXT NOT NULL,
     notices_used INTEGER NOT NULL DEFAULT 0,
     alerts_used INTEGER NOT NULL DEFAULT 0,
     transactions_used INTEGER NOT NULL DEFAULT 0,
     users_count INTEGER NOT NULL DEFAULT 0,
-    license_id TEXT UNIQUE,
-    billing_email TEXT,
-    billing_name TEXT,
+    period_start DATETIME NOT NULL,
+    period_end DATETIME NOT NULL,
+    overage_reported_at DATETIME,
+    stripe_usage_record_id TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id),
-    FOREIGN KEY (license_id) REFERENCES enterprise_licenses(id)
+    FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_organization_subscriptions_stripe_customer_id ON organization_subscriptions(stripe_customer_id);
-CREATE INDEX IF NOT EXISTS idx_organization_subscriptions_stripe_subscription_id ON organization_subscriptions(stripe_subscription_id);
-CREATE INDEX IF NOT EXISTS idx_organization_subscriptions_status ON organization_subscriptions(status);
-
--- Enterprise licenses table
-CREATE TABLE enterprise_licenses (
-    id TEXT PRIMARY KEY NOT NULL,
-    organization_id TEXT UNIQUE,
-    license_key TEXT NOT NULL UNIQUE,
-    notices_per_month INTEGER NOT NULL,
-    max_users INTEGER NOT NULL,
-    max_transactions INTEGER,
-    max_alerts INTEGER,
-    features TEXT NOT NULL,
-    stripe_subscription_id TEXT UNIQUE,
-    stripe_invoice_id TEXT,
-    issued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    activated_at DATETIME,
-    expires_at DATETIME NOT NULL,
-    revoked_at DATETIME,
-    issued_by TEXT NOT NULL,
-    customer_name TEXT,
-    notes TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_organization_id ON enterprise_licenses(organization_id);
-CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_stripe_subscription_id ON enterprise_licenses(stripe_subscription_id);
-CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_expires_at ON enterprise_licenses(expires_at);
-CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_revoked_at ON enterprise_licenses(revoked_at);
-
--- Usage records table
-CREATE TABLE usage_records (
-    id TEXT PRIMARY KEY NOT NULL,
-    organization_id TEXT NOT NULL,
-    subscription_id TEXT NOT NULL,
-    period_start DATETIME NOT NULL,
-    period_end DATETIME NOT NULL,
-    notices_created INTEGER NOT NULL DEFAULT 0,
-    alerts_created INTEGER NOT NULL DEFAULT 0,
-    transactions_created INTEGER NOT NULL DEFAULT 0,
-    notices_overage INTEGER NOT NULL DEFAULT 0,
-    overage_reported_at DATETIME,
-    stripe_usage_record_ids TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subscription_id) REFERENCES organization_subscriptions(id) ON DELETE CASCADE,
-    UNIQUE (organization_id, period_start)
-);
-
-CREATE INDEX IF NOT EXISTS idx_usage_records_organization_id ON usage_records(organization_id);
-CREATE INDEX IF NOT EXISTS idx_usage_records_subscription_id ON usage_records(subscription_id);
-CREATE INDEX IF NOT EXISTS idx_usage_records_period_start ON usage_records(period_start);
+CREATE INDEX IF NOT EXISTS idx_organization_usage_organization_id ON organization_usage(organization_id);
+CREATE INDEX IF NOT EXISTS idx_organization_usage_owner_user_id ON organization_usage(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_organization_usage_period_start ON organization_usage(period_start);

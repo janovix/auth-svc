@@ -5,11 +5,15 @@
 // ============================================================================
 // Better Auth managed tables use camelCase column names because Better Auth
 // generates its own SQL queries that bypass Prisma's @map directives.
-// Models affected: User, Session, Account, Verification, Jwks, Organization, Member, Invitation
+// Models affected: User, Session, Account, Verification, Jwks, Organization, Member, Invitation, Subscription
 //
 // Custom auth-svc tables use snake_case column names via @map directives.
-// Models affected: OrganizationSettings, UserSettings, AuditLog, SubscriptionPlan,
-//                  OrganizationSubscription, EnterpriseLicense, UsageRecord
+// Models affected: OrganizationSettings, UserSettings, AuditLog, UsedCardFingerprint, OrganizationUsage
+//
+// BILLING MODEL: User-based (not organization-based)
+// - Users are Stripe customers and hold subscriptions via Better Auth Stripe plugin
+// - Subscription limits determine how many organizations a user can own
+// - Usage tracking is per-organization, billed to the owner's subscription
 // ============================================================================
 
 generator client {
@@ -256,131 +260,74 @@ model AuditLog {
 }
 
 // ============================================================================
-// Billing & Subscription Models (custom - snake_case)
+// Better Auth Stripe Plugin Tables (camelCase columns - required by Better Auth)
+// User-based billing: users are Stripe customers, not organizations
 // ============================================================================
 
-// Subscription plan definitions (synced with Stripe Products)
-model SubscriptionPlan {
-  id                   String   @id // Stripe Product ID
-  name                 String // "Business", "Pro", or "Enterprise"
-  tier                 String // "business", "pro", "enterprise"
-  billingInterval      String   @default("month") @map("billing_interval") // "month" or "year"
-  stripePriceId        String   @unique @map("stripe_price_id") // Stripe Price ID for base subscription
-  basePrice            Decimal  @map("base_price") // Base price in MXN
-  noticesIncluded      Int      @map("notices_included") // Notices included per period
-  usersIncluded        Int      @map("users_included") // Users included
-  transactionsIncluded Int?     @map("transactions_included") // Optional transaction limit (enterprise)
-  alertsIncluded       Int?     @map("alerts_included") // Optional alert limit (enterprise)
-  overagePriceId       String?  @map("overage_price_id") // Stripe Price ID for metered overage
-  overagePrice         Decimal? @map("overage_price") // Price per overage unit
-  features             String // JSON array of feature flags
-  active               Boolean  @default(true)
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+// Better Auth Stripe subscription model (camelCase - managed by Better Auth)
+model Subscription {
+  id                   String    @id @default(uuid())
+  plan                 String // "business", "pro"
+  referenceId          String // User ID (the billing entity)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  status               String? // "trialing", "active", "canceled", "past_due", "unpaid"
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  seats                Int?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  subscriptions OrganizationSubscription[]
-
-  @@index([tier])
-  @@index([active])
-  @@map("subscription_plans")
-}
-
-// Organization billing (Stripe Customer + Subscription)
-model OrganizationSubscription {
-  id                       String    @id @default(uuid())
-  organizationId           String    @unique @map("organization_id")
-  // Stripe Customer (created for ALL orgs)
-  stripeCustomerId         String    @unique @map("stripe_customer_id")
-  // Stripe Subscription (NULL until they subscribe)
-  planId                   String?   @map("plan_id")
-  stripeSubscriptionId     String?   @unique @map("stripe_subscription_id")
-  stripeSubscriptionItemId String?   @map("stripe_subscription_item_id") // For metered billing
-  status                   String    @default("inactive") // inactive, trialing, active, past_due, canceled, unpaid
-  currentPeriodStart       DateTime? @map("current_period_start")
-  currentPeriodEnd         DateTime? @map("current_period_end")
-  cancelAtPeriodEnd        Boolean   @default(false) @map("cancel_at_period_end")
-  // Current period usage tracking
-  noticesUsed              Int       @default(0) @map("notices_used")
-  alertsUsed               Int       @default(0) @map("alerts_used")
-  transactionsUsed         Int       @default(0) @map("transactions_used")
-  usersCount               Int       @default(0) @map("users_count")
-  // Enterprise license (for offline JWT verification)
-  licenseId                String?   @unique @map("license_id")
-  // Billing contact (can differ from org owner)
-  billingEmail             String?   @map("billing_email")
-  billingName              String?   @map("billing_name")
-  createdAt                DateTime  @default(now()) @map("created_at")
-  updatedAt                DateTime  @updatedAt @map("updated_at")
-
-  plan         SubscriptionPlan?  @relation(fields: [planId], references: [id])
-  license      EnterpriseLicense? @relation(fields: [licenseId], references: [id])
-  usageRecords UsageRecord[]
-
+  @@index([referenceId])
   @@index([stripeCustomerId])
   @@index([stripeSubscriptionId])
   @@index([status])
-  @@map("organization_subscriptions")
+  @@map("subscription")
 }
 
-// Enterprise licenses (JWT for offline verification, backed by Stripe yearly sub)
-model EnterpriseLicense {
-  id                   String    @id @default(uuid())
-  organizationId       String?   @unique @map("organization_id") // NULL until activated
-  // The signed JWT license key (for offline verification)
-  licenseKey           String    @unique @map("license_key")
-  // Limits (also encoded in JWT payload)
-  noticesPerMonth      Int       @map("notices_per_month")
-  maxUsers             Int       @map("max_users")
-  maxTransactions      Int?      @map("max_transactions")
-  maxAlerts            Int?      @map("max_alerts")
-  features             String // JSON array of enabled features
-  // Stripe tracking
-  stripeSubscriptionId String?   @unique @map("stripe_subscription_id") // Yearly enterprise subscription
-  stripeInvoiceId      String?   @map("stripe_invoice_id") // Initial invoice reference
-  // Validity
-  issuedAt             DateTime  @default(now()) @map("issued_at")
-  activatedAt          DateTime? @map("activated_at") // When org activated the license
-  expiresAt            DateTime  @map("expires_at") // 1 year from issuance
-  revokedAt            DateTime? @map("revoked_at")
-  // Metadata
-  issuedBy             String    @map("issued_by") // Admin user ID who created
-  customerName         String?   @map("customer_name") // Company name for the license
-  notes                String?
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+// ============================================================================
+// Custom Billing Tables (snake_case columns)
+// ============================================================================
 
-  subscription OrganizationSubscription?
+// Card fingerprint tracking for trial abuse prevention
+// Stores fingerprints of cards that have been used for trials
+// If a fingerprint exists, deny trial and charge immediately
+model UsedCardFingerprint {
+  id          String   @id @default(uuid())
+  fingerprint String   @unique
+  firstUserId String   @map("first_user_id")
+  firstUsedAt DateTime @default(now()) @map("first_used_at")
+  lastUsedAt  DateTime @default(now()) @map("last_used_at")
+  usageCount  Int      @default(1) @map("usage_count")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  @@index([organizationId])
-  @@index([stripeSubscriptionId])
-  @@index([expiresAt])
-  @@index([revokedAt])
-  @@map("enterprise_licenses")
+  @@index([fingerprint])
+  @@index([firstUserId])
+  @@map("used_card_fingerprints")
 }
 
-// Usage tracking per billing period (for analytics and Stripe reporting)
-model UsageRecord {
-  id                   String    @id @default(uuid())
-  organizationId       String    @map("organization_id")
-  subscriptionId       String    @map("subscription_id")
-  periodStart          DateTime  @map("period_start")
-  periodEnd            DateTime  @map("period_end")
-  // Counts for the period
-  noticesCreated       Int       @default(0) @map("notices_created")
-  alertsCreated        Int       @default(0) @map("alerts_created")
-  transactionsCreated  Int       @default(0) @map("transactions_created")
-  // Overage tracking
-  noticesOverage       Int       @default(0) @map("notices_overage")
-  overageReportedAt    DateTime? @map("overage_reported_at") // Last time overage was reported to Stripe
-  stripeUsageRecordIds String?   @map("stripe_usage_record_ids") // JSON array of Stripe usage record IDs
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+// Per-organization usage tracking (for metered billing)
+// Tracks usage within each organization for the billing period
+model OrganizationUsage {
+  id                  String    @id @default(uuid())
+  organizationId      String    @unique @map("organization_id")
+  ownerUserId         String    @map("owner_user_id")
+  noticesUsed         Int       @default(0) @map("notices_used")
+  alertsUsed          Int       @default(0) @map("alerts_used")
+  transactionsUsed    Int       @default(0) @map("transactions_used")
+  usersCount          Int       @default(0) @map("users_count")
+  periodStart         DateTime  @map("period_start")
+  periodEnd           DateTime  @map("period_end")
+  overageReportedAt   DateTime? @map("overage_reported_at")
+  stripeUsageRecordId String?   @map("stripe_usage_record_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  subscription OrganizationSubscription @relation(fields: [subscriptionId], references: [id])
-
-  @@unique([organizationId, periodStart])
   @@index([organizationId])
-  @@index([subscriptionId])
+  @@index([ownerUserId])
   @@index([periodStart])
-  @@map("usage_records")
+  @@map("organization_usage")
 }

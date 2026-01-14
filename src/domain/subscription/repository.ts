@@ -1,596 +1,409 @@
 /**
- * Subscription Repository
+ * Subscription Repository - User-based billing model
  *
- * Database operations for subscription plans and organization subscriptions
+ * Handles database operations for:
+ * - User subscriptions (Better Auth Stripe plugin managed)
+ * - Organization usage tracking
+ * - Card fingerprint tracking for trial abuse prevention
  */
 
 import type {
-	SubscriptionPlan,
-	OrganizationSubscription,
-	UsageRecord,
-	Feature,
-	PlanTier,
+	UserSubscription,
+	OrganizationUsage,
+	UsedCardFingerprint,
+	PlanName,
 	SubscriptionStatus,
 } from "./types";
-
-interface RawSubscriptionPlan {
-	id: string;
-	name: string;
-	tier: string;
-	billing_interval: string;
-	stripe_price_id: string;
-	base_price: number;
-	notices_included: number;
-	users_included: number;
-	transactions_included: number | null;
-	alerts_included: number | null;
-	overage_price_id: string | null;
-	overage_price: number | null;
-	features: string;
-	active: number;
-	created_at: string;
-	updated_at: string;
-}
-
-interface RawOrganizationSubscription {
-	id: string;
-	organization_id: string;
-	stripe_customer_id: string;
-	plan_id: string | null;
-	stripe_subscription_id: string | null;
-	stripe_subscription_item_id: string | null;
-	status: string;
-	current_period_start: string | null;
-	current_period_end: string | null;
-	cancel_at_period_end: number;
-	notices_used: number;
-	alerts_used: number;
-	transactions_used: number;
-	users_count: number;
-	license_id: string | null;
-	billing_email: string | null;
-	billing_name: string | null;
-	created_at: string;
-	updated_at: string;
-}
-
-interface RawUsageRecord {
-	id: string;
-	organization_id: string;
-	subscription_id: string;
-	period_start: string;
-	period_end: string;
-	notices_created: number;
-	alerts_created: number;
-	transactions_created: number;
-	notices_overage: number;
-	overage_reported_at: string | null;
-	stripe_usage_record_ids: string | null;
-	created_at: string;
-	updated_at: string;
-}
 
 export class SubscriptionRepository {
 	constructor(private readonly db: D1Database) {}
 
 	// =========================================================================
-	// SUBSCRIPTION PLANS
+	// USER SUBSCRIPTIONS (Better Auth Stripe managed table)
 	// =========================================================================
 
 	/**
-	 * Get all active subscription plans
+	 * Get user's subscription by user ID
+	 * Prioritizes: real subscriptions (with stripeSubscriptionId) > active/trialing status > most recent
 	 */
-	async getActivePlans(): Promise<SubscriptionPlan[]> {
+	async getUserSubscription(userId: string): Promise<UserSubscription | null> {
 		const result = await this.db
 			.prepare(
-				`
-			SELECT * FROM subscription_plans 
-			WHERE active = 1 
-			ORDER BY base_price ASC
-		`,
+				`SELECT * FROM subscription 
+				 WHERE referenceId = ? 
+				 ORDER BY 
+				   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
+				   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+				   createdAt DESC 
+				 LIMIT 1`,
 			)
-			.all<RawSubscriptionPlan>();
-
-		return result.results.map(this.mapPlan);
-	}
-
-	/**
-	 * Get a subscription plan by ID
-	 */
-	async getPlanById(id: string): Promise<SubscriptionPlan | null> {
-		const result = await this.db
-			.prepare(`SELECT * FROM subscription_plans WHERE id = ?`)
-			.bind(id)
-			.first<RawSubscriptionPlan>();
-
-		return result ? this.mapPlan(result) : null;
-	}
-
-	/**
-	 * Get a subscription plan by Stripe Price ID
-	 */
-	async getPlanByStripePriceId(
-		stripePriceId: string,
-	): Promise<SubscriptionPlan | null> {
-		const result = await this.db
-			.prepare(`SELECT * FROM subscription_plans WHERE stripe_price_id = ?`)
-			.bind(stripePriceId)
-			.first<RawSubscriptionPlan>();
-
-		return result ? this.mapPlan(result) : null;
-	}
-
-	/**
-	 * Get a subscription plan by tier
-	 */
-	async getPlanByTier(tier: PlanTier): Promise<SubscriptionPlan | null> {
-		const result = await this.db
-			.prepare(
-				`SELECT * FROM subscription_plans WHERE tier = ? AND active = 1 LIMIT 1`,
-			)
-			.bind(tier)
-			.first<RawSubscriptionPlan>();
-
-		return result ? this.mapPlan(result) : null;
-	}
-
-	/**
-	 * Upsert a subscription plan (for syncing from Stripe)
-	 */
-	async upsertPlan(
-		plan: Omit<SubscriptionPlan, "createdAt" | "updatedAt">,
-	): Promise<void> {
-		await this.db
-			.prepare(
-				`
-			INSERT INTO subscription_plans (
-				id, name, tier, billing_interval, stripe_price_id, base_price,
-				notices_included, users_included, transactions_included, alerts_included,
-				overage_price_id, overage_price, features, active, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-			ON CONFLICT(id) DO UPDATE SET
-				name = excluded.name,
-				tier = excluded.tier,
-				billing_interval = excluded.billing_interval,
-				stripe_price_id = excluded.stripe_price_id,
-				base_price = excluded.base_price,
-				notices_included = excluded.notices_included,
-				users_included = excluded.users_included,
-				transactions_included = excluded.transactions_included,
-				alerts_included = excluded.alerts_included,
-				overage_price_id = excluded.overage_price_id,
-				overage_price = excluded.overage_price,
-				features = excluded.features,
-				active = excluded.active,
-				updated_at = datetime('now')
-		`,
-			)
-			.bind(
-				plan.id,
-				plan.name,
-				plan.tier,
-				plan.billingInterval,
-				plan.stripePriceId,
-				plan.basePrice,
-				plan.noticesIncluded,
-				plan.usersIncluded,
-				plan.transactionsIncluded,
-				plan.alertsIncluded,
-				plan.overagePriceId,
-				plan.overagePrice,
-				JSON.stringify(plan.features),
-				plan.active ? 1 : 0,
-			)
-			.run();
-	}
-
-	// =========================================================================
-	// ORGANIZATION SUBSCRIPTIONS
-	// =========================================================================
-
-	/**
-	 * Get organization subscription by organization ID
-	 */
-	async getByOrganizationId(
-		organizationId: string,
-	): Promise<OrganizationSubscription | null> {
-		const result = await this.db
-			.prepare(
-				`SELECT * FROM organization_subscriptions WHERE organization_id = ?`,
-			)
-			.bind(organizationId)
-			.first<RawOrganizationSubscription>();
+			.bind(userId)
+			.first<{
+				id: string;
+				plan: string;
+				referenceId: string;
+				stripeCustomerId: string | null;
+				stripeSubscriptionId: string | null;
+				status: string | null;
+				periodStart: string | null;
+				periodEnd: string | null;
+				cancelAtPeriodEnd: number;
+				seats: number | null;
+				trialStart: string | null;
+				trialEnd: string | null;
+				createdAt: string;
+				updatedAt: string;
+			}>();
 
 		if (!result) return null;
 
-		const subscription = this.mapSubscription(result);
-
-		// Load plan if planId exists
-		if (subscription.planId) {
-			subscription.plan = await this.getPlanById(subscription.planId);
-		}
-
-		return subscription;
+		return {
+			id: result.id,
+			plan: result.plan as PlanName,
+			referenceId: result.referenceId,
+			stripeCustomerId: result.stripeCustomerId,
+			stripeSubscriptionId: result.stripeSubscriptionId,
+			status: result.status as SubscriptionStatus | null,
+			periodStart: result.periodStart ? new Date(result.periodStart) : null,
+			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,
+			cancelAtPeriodEnd: result.cancelAtPeriodEnd === 1,
+			seats: result.seats,
+			trialStart: result.trialStart ? new Date(result.trialStart) : null,
+			trialEnd: result.trialEnd ? new Date(result.trialEnd) : null,
+			createdAt: new Date(result.createdAt),
+			updatedAt: new Date(result.updatedAt),
+		};
 	}
 
 	/**
-	 * Get organization subscription by Stripe Subscription ID
+	 * Get subscription by Stripe subscription ID
 	 */
 	async getByStripeSubscriptionId(
 		stripeSubscriptionId: string,
-	): Promise<OrganizationSubscription | null> {
+	): Promise<UserSubscription | null> {
 		const result = await this.db
-			.prepare(
-				`SELECT * FROM organization_subscriptions WHERE stripe_subscription_id = ?`,
-			)
+			.prepare(`SELECT * FROM subscription WHERE stripeSubscriptionId = ?`)
 			.bind(stripeSubscriptionId)
-			.first<RawOrganizationSubscription>();
+			.first<{
+				id: string;
+				plan: string;
+				referenceId: string;
+				stripeCustomerId: string | null;
+				stripeSubscriptionId: string | null;
+				status: string | null;
+				periodStart: string | null;
+				periodEnd: string | null;
+				cancelAtPeriodEnd: number;
+				seats: number | null;
+				trialStart: string | null;
+				trialEnd: string | null;
+				createdAt: string;
+				updatedAt: string;
+			}>();
 
 		if (!result) return null;
 
-		const subscription = this.mapSubscription(result);
-
-		if (subscription.planId) {
-			subscription.plan = await this.getPlanById(subscription.planId);
-		}
-
-		return subscription;
+		return {
+			id: result.id,
+			plan: result.plan as PlanName,
+			referenceId: result.referenceId,
+			stripeCustomerId: result.stripeCustomerId,
+			stripeSubscriptionId: result.stripeSubscriptionId,
+			status: result.status as SubscriptionStatus | null,
+			periodStart: result.periodStart ? new Date(result.periodStart) : null,
+			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,
+			cancelAtPeriodEnd: result.cancelAtPeriodEnd === 1,
+			seats: result.seats,
+			trialStart: result.trialStart ? new Date(result.trialStart) : null,
+			trialEnd: result.trialEnd ? new Date(result.trialEnd) : null,
+			createdAt: new Date(result.createdAt),
+			updatedAt: new Date(result.updatedAt),
+		};
 	}
 
+	// =========================================================================
+	// ORGANIZATION USAGE
+	// =========================================================================
+
 	/**
-	 * Get organization subscription by Stripe Customer ID
+	 * Get organization usage record
 	 */
-	async getByStripeCustomerId(
-		stripeCustomerId: string,
-	): Promise<OrganizationSubscription | null> {
+	async getOrganizationUsage(
+		organizationId: string,
+	): Promise<OrganizationUsage | null> {
 		const result = await this.db
-			.prepare(
-				`SELECT * FROM organization_subscriptions WHERE stripe_customer_id = ?`,
-			)
-			.bind(stripeCustomerId)
-			.first<RawOrganizationSubscription>();
+			.prepare(`SELECT * FROM organization_usage WHERE organization_id = ?`)
+			.bind(organizationId)
+			.first<{
+				id: string;
+				organization_id: string;
+				owner_user_id: string;
+				notices_used: number;
+				alerts_used: number;
+				transactions_used: number;
+				users_count: number;
+				period_start: string;
+				period_end: string;
+				overage_reported_at: string | null;
+				stripe_usage_record_id: string | null;
+				created_at: string;
+				updated_at: string;
+			}>();
 
 		if (!result) return null;
 
-		const subscription = this.mapSubscription(result);
-
-		if (subscription.planId) {
-			subscription.plan = await this.getPlanById(subscription.planId);
-		}
-
-		return subscription;
+		return {
+			id: result.id,
+			organizationId: result.organization_id,
+			ownerUserId: result.owner_user_id,
+			noticesUsed: result.notices_used,
+			alertsUsed: result.alerts_used,
+			transactionsUsed: result.transactions_used,
+			usersCount: result.users_count,
+			periodStart: new Date(result.period_start),
+			periodEnd: new Date(result.period_end),
+			overageReportedAt: result.overage_reported_at
+				? new Date(result.overage_reported_at)
+				: null,
+			stripeUsageRecordId: result.stripe_usage_record_id,
+			createdAt: new Date(result.created_at),
+			updatedAt: new Date(result.updated_at),
+		};
 	}
 
 	/**
-	 * Update subscription after Stripe subscription created/updated
+	 * Create or update organization usage record
 	 */
-	async updateSubscription(
+	async upsertOrganizationUsage(
 		organizationId: string,
-		data: {
-			planId?: string | null;
-			stripeSubscriptionId?: string | null;
-			stripeSubscriptionItemId?: string | null;
-			status?: SubscriptionStatus;
-			currentPeriodStart?: Date | null;
-			currentPeriodEnd?: Date | null;
-			cancelAtPeriodEnd?: boolean;
-		},
-	): Promise<void> {
-		const updates: string[] = [];
-		const values: (string | number | null)[] = [];
-
-		if (data.planId !== undefined) {
-			updates.push("plan_id = ?");
-			values.push(data.planId);
-		}
-		if (data.stripeSubscriptionId !== undefined) {
-			updates.push("stripe_subscription_id = ?");
-			values.push(data.stripeSubscriptionId);
-		}
-		if (data.stripeSubscriptionItemId !== undefined) {
-			updates.push("stripe_subscription_item_id = ?");
-			values.push(data.stripeSubscriptionItemId);
-		}
-		if (data.status !== undefined) {
-			updates.push("status = ?");
-			values.push(data.status);
-		}
-		if (data.currentPeriodStart !== undefined) {
-			updates.push("current_period_start = ?");
-			values.push(
-				data.currentPeriodStart ? data.currentPeriodStart.toISOString() : null,
-			);
-		}
-		if (data.currentPeriodEnd !== undefined) {
-			updates.push("current_period_end = ?");
-			values.push(
-				data.currentPeriodEnd ? data.currentPeriodEnd.toISOString() : null,
-			);
-		}
-		if (data.cancelAtPeriodEnd !== undefined) {
-			updates.push("cancel_at_period_end = ?");
-			values.push(data.cancelAtPeriodEnd ? 1 : 0);
-		}
-
-		updates.push("updated_at = datetime('now')");
-		values.push(organizationId);
+		ownerUserId: string,
+		periodStart: Date,
+		periodEnd: Date,
+	): Promise<OrganizationUsage> {
+		const id = crypto.randomUUID();
+		const now = new Date().toISOString();
 
 		await this.db
 			.prepare(
-				`UPDATE organization_subscriptions SET ${updates.join(", ")} WHERE organization_id = ?`,
+				`
+				INSERT INTO organization_usage (
+					id, organization_id, owner_user_id, notices_used, alerts_used, 
+					transactions_used, users_count, period_start, period_end, created_at, updated_at
+				) VALUES (?, ?, ?, 0, 0, 0, 0, ?, ?, ?, ?)
+				ON CONFLICT(organization_id) DO UPDATE SET
+					owner_user_id = excluded.owner_user_id,
+					period_start = excluded.period_start,
+					period_end = excluded.period_end,
+					updated_at = excluded.updated_at
+			`,
 			)
-			.bind(...values)
+			.bind(
+				id,
+				organizationId,
+				ownerUserId,
+				periodStart.toISOString(),
+				periodEnd.toISOString(),
+				now,
+				now,
+			)
 			.run();
+
+		const usage = await this.getOrganizationUsage(organizationId);
+		if (!usage) {
+			throw new Error("Failed to create organization usage record");
+		}
+		return usage;
 	}
 
 	/**
-	 * Update usage counters
-	 */
-	async updateUsage(
-		organizationId: string,
-		data: {
-			noticesUsed?: number;
-			alertsUsed?: number;
-			transactionsUsed?: number;
-			usersCount?: number;
-		},
-	): Promise<void> {
-		const updates: string[] = [];
-		const values: (string | number)[] = [];
-
-		if (data.noticesUsed !== undefined) {
-			updates.push("notices_used = ?");
-			values.push(data.noticesUsed);
-		}
-		if (data.alertsUsed !== undefined) {
-			updates.push("alerts_used = ?");
-			values.push(data.alertsUsed);
-		}
-		if (data.transactionsUsed !== undefined) {
-			updates.push("transactions_used = ?");
-			values.push(data.transactionsUsed);
-		}
-		if (data.usersCount !== undefined) {
-			updates.push("users_count = ?");
-			values.push(data.usersCount);
-		}
-
-		updates.push("updated_at = datetime('now')");
-		values.push(organizationId);
-
-		await this.db
-			.prepare(
-				`UPDATE organization_subscriptions SET ${updates.join(", ")} WHERE organization_id = ?`,
-			)
-			.bind(...values)
-			.run();
-	}
-
-	/**
-	 * Increment usage counter
+	 * Increment usage for a metric
 	 */
 	async incrementUsage(
 		organizationId: string,
 		metric: "notices" | "alerts" | "transactions",
-		count: number,
+		count: number = 1,
 	): Promise<void> {
-		const column =
-			metric === "notices"
-				? "notices_used"
-				: metric === "alerts"
-					? "alerts_used"
-					: "transactions_used";
+		const column = {
+			notices: "notices_used",
+			alerts: "alerts_used",
+			transactions: "transactions_used",
+		}[metric];
 
 		await this.db
 			.prepare(
-				`UPDATE organization_subscriptions 
-				SET ${column} = ${column} + ?, updated_at = datetime('now') 
-				WHERE organization_id = ?`,
+				`
+				UPDATE organization_usage 
+				SET ${column} = ${column} + ?, updated_at = datetime('now')
+				WHERE organization_id = ?
+			`,
 			)
 			.bind(count, organizationId)
 			.run();
 	}
 
 	/**
-	 * Reset usage counters (called at start of new billing period)
+	 * Update user count for organization
 	 */
-	async resetUsage(organizationId: string): Promise<void> {
+	async updateUsersCount(
+		organizationId: string,
+		usersCount: number,
+	): Promise<void> {
 		await this.db
 			.prepare(
-				`UPDATE organization_subscriptions 
-				SET notices_used = 0, alerts_used = 0, transactions_used = 0, updated_at = datetime('now')
-				WHERE organization_id = ?`,
+				`
+				UPDATE organization_usage 
+				SET users_count = ?, updated_at = datetime('now')
+				WHERE organization_id = ?
+			`,
 			)
-			.bind(organizationId)
+			.bind(usersCount, organizationId)
 			.run();
 	}
 
-	// =========================================================================
-	// USAGE RECORDS
-	// =========================================================================
-
 	/**
-	 * Get or create usage record for current period
+	 * Reset usage for new billing period
 	 */
-	async getOrCreateUsageRecord(
+	async resetUsage(
 		organizationId: string,
-		subscriptionId: string,
 		periodStart: Date,
 		periodEnd: Date,
-	): Promise<UsageRecord> {
-		const existing = await this.db
-			.prepare(
-				`SELECT * FROM usage_records 
-				WHERE organization_id = ? AND period_start = ?`,
-			)
-			.bind(organizationId, periodStart.toISOString())
-			.first<RawUsageRecord>();
-
-		if (existing) {
-			return this.mapUsageRecord(existing);
-		}
-
-		// Create new record
-		const id = crypto.randomUUID();
+	): Promise<void> {
 		await this.db
 			.prepare(
-				`INSERT INTO usage_records (
-					id, organization_id, subscription_id, period_start, period_end,
-					notices_created, alerts_created, transactions_created, notices_overage,
-					created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, datetime('now'), datetime('now'))`,
+				`
+				UPDATE organization_usage 
+				SET notices_used = 0, alerts_used = 0, transactions_used = 0,
+				    period_start = ?, period_end = ?, 
+				    overage_reported_at = NULL, stripe_usage_record_id = NULL,
+				    updated_at = datetime('now')
+				WHERE organization_id = ?
+			`,
 			)
-			.bind(
-				id,
-				organizationId,
-				subscriptionId,
-				periodStart.toISOString(),
-				periodEnd.toISOString(),
-			)
+			.bind(periodStart.toISOString(), periodEnd.toISOString(), organizationId)
 			.run();
+	}
+
+	/**
+	 * Mark overage as reported to Stripe
+	 */
+	async markOverageReported(
+		organizationId: string,
+		stripeUsageRecordId: string,
+	): Promise<void> {
+		await this.db
+			.prepare(
+				`
+				UPDATE organization_usage 
+				SET overage_reported_at = datetime('now'), 
+				    stripe_usage_record_id = ?,
+				    updated_at = datetime('now')
+				WHERE organization_id = ?
+			`,
+			)
+			.bind(stripeUsageRecordId, organizationId)
+			.run();
+	}
+
+	/**
+	 * Count organizations owned by a user
+	 */
+	async countOrganizationsOwned(userId: string): Promise<number> {
+		const result = await this.db
+			.prepare(
+				`
+				SELECT COUNT(*) as count FROM members 
+				WHERE userId = ? AND role = 'owner'
+			`,
+			)
+			.bind(userId)
+			.first<{ count: number }>();
+
+		return result?.count ?? 0;
+	}
+
+	// =========================================================================
+	// CARD FINGERPRINT (Trial abuse prevention)
+	// =========================================================================
+
+	/**
+	 * Check if card fingerprint has been used before
+	 */
+	async isCardFingerprintUsed(fingerprint: string): Promise<boolean> {
+		const result = await this.db
+			.prepare(`SELECT id FROM used_card_fingerprints WHERE fingerprint = ?`)
+			.bind(fingerprint)
+			.first();
+
+		return !!result;
+	}
+
+	/**
+	 * Get card fingerprint record
+	 */
+	async getCardFingerprint(
+		fingerprint: string,
+	): Promise<UsedCardFingerprint | null> {
+		const result = await this.db
+			.prepare(`SELECT * FROM used_card_fingerprints WHERE fingerprint = ?`)
+			.bind(fingerprint)
+			.first<{
+				id: string;
+				fingerprint: string;
+				first_user_id: string;
+				first_used_at: string;
+				last_used_at: string;
+				usage_count: number;
+				created_at: string;
+			}>();
+
+		if (!result) return null;
 
 		return {
-			id,
-			organizationId,
-			subscriptionId,
-			periodStart,
-			periodEnd,
-			noticesCreated: 0,
-			alertsCreated: 0,
-			transactionsCreated: 0,
-			noticesOverage: 0,
-			overageReportedAt: null,
-			stripeUsageRecordIds: null,
-			createdAt: new Date(),
-			updatedAt: new Date(),
+			id: result.id,
+			fingerprint: result.fingerprint,
+			firstUserId: result.first_user_id,
+			firstUsedAt: new Date(result.first_used_at),
+			lastUsedAt: new Date(result.last_used_at),
+			usageCount: result.usage_count,
+			createdAt: new Date(result.created_at),
 		};
 	}
 
 	/**
-	 * Update usage record
+	 * Store card fingerprint (for new trials)
 	 */
-	async updateUsageRecord(
-		id: string,
-		data: {
-			noticesCreated?: number;
-			alertsCreated?: number;
-			transactionsCreated?: number;
-			noticesOverage?: number;
-			overageReportedAt?: Date;
-			stripeUsageRecordIds?: string[];
-		},
+	async storeCardFingerprint(
+		fingerprint: string,
+		userId: string,
 	): Promise<void> {
-		const updates: string[] = [];
-		const values: (string | number | null)[] = [];
-
-		if (data.noticesCreated !== undefined) {
-			updates.push("notices_created = ?");
-			values.push(data.noticesCreated);
-		}
-		if (data.alertsCreated !== undefined) {
-			updates.push("alerts_created = ?");
-			values.push(data.alertsCreated);
-		}
-		if (data.transactionsCreated !== undefined) {
-			updates.push("transactions_created = ?");
-			values.push(data.transactionsCreated);
-		}
-		if (data.noticesOverage !== undefined) {
-			updates.push("notices_overage = ?");
-			values.push(data.noticesOverage);
-		}
-		if (data.overageReportedAt !== undefined) {
-			updates.push("overage_reported_at = ?");
-			values.push(data.overageReportedAt.toISOString());
-		}
-		if (data.stripeUsageRecordIds !== undefined) {
-			updates.push("stripe_usage_record_ids = ?");
-			values.push(JSON.stringify(data.stripeUsageRecordIds));
-		}
-
-		updates.push("updated_at = datetime('now')");
-		values.push(id);
+		const id = crypto.randomUUID();
+		const now = new Date().toISOString();
 
 		await this.db
-			.prepare(`UPDATE usage_records SET ${updates.join(", ")} WHERE id = ?`)
-			.bind(...values)
+			.prepare(
+				`
+				INSERT INTO used_card_fingerprints (
+					id, fingerprint, first_user_id, first_used_at, last_used_at, usage_count, created_at
+				) VALUES (?, ?, ?, ?, ?, 1, ?)
+			`,
+			)
+			.bind(id, fingerprint, userId, now, now, now)
 			.run();
 	}
 
-	// =========================================================================
-	// MAPPERS
-	// =========================================================================
-
-	private mapPlan(raw: RawSubscriptionPlan): SubscriptionPlan {
-		return {
-			id: raw.id,
-			name: raw.name,
-			tier: raw.tier as PlanTier,
-			billingInterval: raw.billing_interval as "month" | "year",
-			stripePriceId: raw.stripe_price_id,
-			basePrice: raw.base_price,
-			noticesIncluded: raw.notices_included,
-			usersIncluded: raw.users_included,
-			transactionsIncluded: raw.transactions_included,
-			alertsIncluded: raw.alerts_included,
-			overagePriceId: raw.overage_price_id,
-			overagePrice: raw.overage_price,
-			features: JSON.parse(raw.features) as Feature[],
-			active: raw.active === 1,
-			createdAt: new Date(raw.created_at),
-			updatedAt: new Date(raw.updated_at),
-		};
-	}
-
-	private mapSubscription(
-		raw: RawOrganizationSubscription,
-	): OrganizationSubscription {
-		return {
-			id: raw.id,
-			organizationId: raw.organization_id,
-			stripeCustomerId: raw.stripe_customer_id,
-			planId: raw.plan_id,
-			stripeSubscriptionId: raw.stripe_subscription_id,
-			stripeSubscriptionItemId: raw.stripe_subscription_item_id,
-			status: raw.status as SubscriptionStatus,
-			currentPeriodStart: raw.current_period_start
-				? new Date(raw.current_period_start)
-				: null,
-			currentPeriodEnd: raw.current_period_end
-				? new Date(raw.current_period_end)
-				: null,
-			cancelAtPeriodEnd: raw.cancel_at_period_end === 1,
-			noticesUsed: raw.notices_used,
-			alertsUsed: raw.alerts_used,
-			transactionsUsed: raw.transactions_used,
-			usersCount: raw.users_count,
-			licenseId: raw.license_id,
-			billingEmail: raw.billing_email,
-			billingName: raw.billing_name,
-			createdAt: new Date(raw.created_at),
-			updatedAt: new Date(raw.updated_at),
-		};
-	}
-
-	private mapUsageRecord(raw: RawUsageRecord): UsageRecord {
-		return {
-			id: raw.id,
-			organizationId: raw.organization_id,
-			subscriptionId: raw.subscription_id,
-			periodStart: new Date(raw.period_start),
-			periodEnd: new Date(raw.period_end),
-			noticesCreated: raw.notices_created,
-			alertsCreated: raw.alerts_created,
-			transactionsCreated: raw.transactions_created,
-			noticesOverage: raw.notices_overage,
-			overageReportedAt: raw.overage_reported_at
-				? new Date(raw.overage_reported_at)
-				: null,
-			stripeUsageRecordIds: raw.stripe_usage_record_ids
-				? JSON.parse(raw.stripe_usage_record_ids)
-				: null,
-			createdAt: new Date(raw.created_at),
-			updatedAt: new Date(raw.updated_at),
-		};
+	/**
+	 * Increment card fingerprint usage count
+	 */
+	async incrementCardFingerprintUsage(fingerprint: string): Promise<void> {
+		await this.db
+			.prepare(
+				`
+				UPDATE used_card_fingerprints 
+				SET usage_count = usage_count + 1, last_used_at = datetime('now')
+				WHERE fingerprint = ?
+			`,
+			)
+			.bind(fingerprint)
+			.run();
 	}
 }

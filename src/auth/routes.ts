@@ -9,6 +9,38 @@ import { getTrustedOriginPatterns } from "../middleware/cors";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
+/**
+ * Track OTP send requests to detect rate limiting.
+ * Key: requestId, Value: { email, timestamp, sent: boolean }
+ * We use a simple approach: set a flag before request, callback sets sent=true
+ */
+let otpSendTracker: { email: string; sent: boolean } | null = null;
+
+/**
+ * Called by sendVerificationOTP callback to mark that OTP was actually sent
+ */
+export function markOtpSent(email: string) {
+	if (otpSendTracker && otpSendTracker.email === email) {
+		otpSendTracker.sent = true;
+	}
+}
+
+/**
+ * Start tracking an OTP send request
+ */
+function startOtpTracking(email: string) {
+	otpSendTracker = { email, sent: false };
+}
+
+/**
+ * Check if OTP was actually sent and clean up
+ */
+function checkOtpSent(): boolean {
+	const wasSent = otpSendTracker?.sent ?? false;
+	otpSendTracker = null;
+	return wasSent;
+}
+
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	// Better Auth handles CORS and cookies internally based on its configuration
 	// Just mount the handler as per Better Auth documentation: https://www.better-auth.com/docs/integrations/hono
@@ -32,7 +64,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 					"Access-Control-Allow-Methods":
 						"GET, POST, PUT, DELETE, PATCH, OPTIONS",
 					"Access-Control-Allow-Headers":
-						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with",
+						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with, x-captcha-response",
 					"Access-Control-Max-Age": "86400",
 				},
 			});
@@ -58,8 +90,31 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
 		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
 
-		// Validate Turnstile for forgot-password requests
 		const pathname = c.req.path;
+
+		// Track OTP send requests to detect rate limiting
+		let isOtpRequest = false;
+		let otpEmail: string | null = null;
+		if (
+			pathname === "/api/auth/email-otp/send-verification-otp" &&
+			c.req.method === "POST"
+		) {
+			isOtpRequest = true;
+			try {
+				const body = (await c.req.raw.clone().json()) as { email?: string };
+				otpEmail = body.email || null;
+				if (otpEmail) {
+					startOtpTracking(otpEmail);
+					console.log(
+						`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
+					);
+				}
+			} catch {
+				// Ignore parse errors
+			}
+		}
+
+		// Validate Turnstile for forgot-password requests
 		if (pathname === "/api/auth/forgot-password" && c.req.method === "POST") {
 			const turnstileResult = await validateTurnstileForRequest(c);
 			if (!turnstileResult.valid) {
@@ -81,10 +136,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
 			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
 			// - /api/auth/reset-password: Users click password reset links in emails (direct browser navigation)
+			// - /api/auth/subscription/*: All Stripe subscription routes (redirects, callbacks, etc.)
 			const isPublicRoute =
 				pathname === "/api/auth/jwks" ||
 				pathname === "/api/auth/verify-email" ||
-				pathname === "/api/auth/reset-password";
+				pathname === "/api/auth/reset-password" ||
+				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
 				return handleAuthRequest(c, auth);
@@ -106,7 +163,43 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		return handleAuthRequest(c, auth);
+		const response = await handleAuthRequest(c, auth);
+
+		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
+		if (isOtpRequest && otpEmail && response.status === 200) {
+			const wasSent = checkOtpSent();
+			if (!wasSent) {
+				console.log(
+					`[OTP Tracking] OTP for ${otpEmail} was RATE LIMITED (existing OTP still valid)`,
+				);
+
+				// Modify response to indicate rate limiting
+				try {
+					const originalBody = (await response.clone().json()) as Record<
+						string,
+						unknown
+					>;
+					return new Response(
+						JSON.stringify({
+							...originalBody,
+							rateLimited: true,
+							message:
+								"An OTP was already sent recently. Please check your email or wait before requesting a new code.",
+						}),
+						{
+							status: 200,
+							headers: response.headers,
+						},
+					);
+				} catch {
+					// If we can't parse, just return original
+				}
+			} else {
+				console.log(`[OTP Tracking] OTP for ${otpEmail} was SENT successfully`);
+			}
+		}
+
+		return response;
 	});
 }
 

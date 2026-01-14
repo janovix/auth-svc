@@ -1,581 +1,233 @@
 /**
- * Subscription Service
+ * Subscription Service - User-based billing model
  *
- * Business logic for subscription management
+ * Handles:
+ * - User subscription status (reads from Better Auth Stripe tables)
+ * - Organization usage tracking and limits
+ * - Card fingerprint checking for trial abuse prevention
+ * - Metered billing reporting to Stripe
+ *
+ * Note: Subscription lifecycle (checkout, cancel, upgrade) is handled
+ * by Better Auth Stripe plugin. This service focuses on usage and limits.
  */
 
 import type Stripe from "stripe";
 import { SubscriptionRepository } from "./repository";
-import {
-	PLAN_FEATURES,
-	PLAN_LIMITS,
-	getRequiredTierForFeature,
-} from "./features";
+import { PLAN_LIMITS, type PlanName } from "../../auth/config";
 import type {
-	SubscriptionPlan,
-	OrganizationSubscription,
-	SubscriptionStatusResponse,
+	UserSubscriptionStatus,
 	UsageCheckResult,
-	FeatureCheckResult,
-	PlanComparison,
-	Invoice,
-	Feature,
-	PlanTier,
+	OrganizationUsage,
 	UsageMetric,
+	Feature,
+	PlanLimits,
 } from "./types";
+import { PLAN_FEATURES } from "./types";
 
 export class SubscriptionService {
 	constructor(
 		private readonly repository: SubscriptionRepository,
-		private readonly stripe: Stripe,
+		private readonly stripe: Stripe | null = null,
 	) {}
 
 	// =========================================================================
-	// PLANS
+	// USER SUBSCRIPTION STATUS
 	// =========================================================================
 
 	/**
-	 * Get all available plans for display
+	 * Get user's subscription status
 	 */
-	async getAvailablePlans(): Promise<PlanComparison[]> {
-		const plans = await this.repository.getActivePlans();
-
-		return plans
-			.filter((p) => p.tier !== "enterprise") // Enterprise is custom
-			.map((plan) => ({
-				id: plan.id,
-				name: plan.name,
-				tier: plan.tier,
-				monthlyPrice: plan.basePrice,
-				noticesIncluded: plan.noticesIncluded,
-				usersIncluded: plan.usersIncluded,
-				overagePrice: plan.overagePrice,
-				features: plan.features,
-				recommended: plan.tier === "pro",
-			}));
-	}
-
-	/**
-	 * Get plan by ID
-	 */
-	async getPlan(planId: string): Promise<SubscriptionPlan | null> {
-		return this.repository.getPlanById(planId);
-	}
-
-	// =========================================================================
-	// SUBSCRIPTION STATUS
-	// =========================================================================
-
-	/**
-	 * Get full subscription status for an organization
-	 */
-	async getSubscriptionStatus(
-		organizationId: string,
-	): Promise<SubscriptionStatusResponse | null> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
+	async getUserSubscriptionStatus(
+		userId: string,
+	): Promise<UserSubscriptionStatus> {
+		const subscription = await this.repository.getUserSubscription(userId);
+		const orgsOwned = await this.repository.countOrganizationsOwned(userId);
 
 		if (!subscription) {
-			return null;
+			return {
+				hasSubscription: false,
+				status: null,
+				plan: null,
+				limits: null,
+				isTrialing: false,
+				trialDaysRemaining: null,
+				currentPeriodStart: null,
+				currentPeriodEnd: null,
+				cancelAtPeriodEnd: false,
+				organizationsOwned: orgsOwned,
+				organizationsLimit: 0,
+			};
 		}
 
-		const plan = subscription.plan;
-		const isEnterprise = !!subscription.licenseId;
+		const plan = subscription.plan as PlanName;
+		const limits = PLAN_LIMITS[plan] || null;
+		const isTrialing = subscription.status === "trialing";
 
-		// Determine plan tier:
-		// - Enterprise license takes precedence
-		// - If has paid plan, use that tier
-		// - If has Stripe customer but no paid plan, use "free" tier
-		// - Otherwise "none" (shouldn't happen with auto-customer creation)
-		const planTier: PlanTier = isEnterprise
-			? "enterprise"
-			: plan?.tier || (subscription.stripeCustomerId ? "free" : "none");
-
-		// Get features based on plan or enterprise license
-		const features = PLAN_FEATURES[planTier];
-
-		// Calculate usage
-		const limits = this.getPlanLimits(subscription);
-
-		// hasSubscription is true if user has paid plan OR is on free tier
-		// This allows free tier users to access the app with limited features
-		const hasActiveAccess =
-			subscription.status === "active" ||
-			subscription.status === "trialing" ||
-			planTier === "free"; // Free tier always has access
+		let trialDaysRemaining: number | null = null;
+		if (isTrialing && subscription.trialEnd) {
+			const now = new Date();
+			const diff = subscription.trialEnd.getTime() - now.getTime();
+			trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+		}
 
 		return {
-			hasSubscription: hasActiveAccess,
-			isEnterprise,
+			hasSubscription: true,
 			status: subscription.status,
-			planTier,
-			planName:
-				plan?.name ||
-				(isEnterprise ? "Enterprise" : planTier === "free" ? "Free" : null),
-			currentPeriodStart:
-				subscription.currentPeriodStart?.toISOString() || null,
-			currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || null,
+			plan,
+			limits,
+			isTrialing,
+			trialDaysRemaining,
+			currentPeriodStart: subscription.periodStart?.toISOString() || null,
+			currentPeriodEnd: subscription.periodEnd?.toISOString() || null,
 			cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-			usage: {
-				notices: this.calculateUsage(
-					subscription.noticesUsed,
-					limits.notices,
-					planTier,
-				),
-				users: this.calculateUsage(
-					subscription.usersCount,
-					limits.users,
-					planTier,
-				),
-				alerts:
-					limits.alerts !== null
-						? this.calculateUsage(
-								subscription.alertsUsed,
-								limits.alerts,
-								planTier,
-							)
-						: undefined,
-				transactions:
-					limits.transactions !== null
-						? this.calculateUsage(
-								subscription.transactionsUsed,
-								limits.transactions,
-								planTier,
-							)
-						: undefined,
-			},
-			features,
-			stripeCustomerId: subscription.stripeCustomerId,
-		};
-	}
-
-	// =========================================================================
-	// CHECKOUT & SUBSCRIPTION MANAGEMENT
-	// =========================================================================
-
-	/**
-	 * Create a Stripe Checkout session for subscribing to a plan
-	 */
-	async createCheckoutSession(
-		organizationId: string,
-		planId: string,
-		successUrl: string,
-		cancelUrl: string,
-	): Promise<{ sessionId: string; url: string }> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-		if (!subscription) {
-			throw new Error("Organization subscription record not found");
-		}
-
-		const plan = await this.repository.getPlanById(planId);
-		if (!plan) {
-			throw new Error("Plan not found");
-		}
-
-		// Build line items
-		const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-			{
-				price: plan.stripePriceId,
-				quantity: 1,
-			},
-		];
-
-		// Add overage price if exists (metered)
-		if (plan.overagePriceId) {
-			lineItems.push({
-				price: plan.overagePriceId,
-			});
-		}
-
-		const session = await this.stripe.checkout.sessions.create({
-			customer: subscription.stripeCustomerId,
-			mode: "subscription",
-			line_items: lineItems,
-			success_url: successUrl,
-			cancel_url: cancelUrl,
-			// Enable Stripe Link for accelerated checkout (remembers payment methods)
-			// Also enable cards for fallback
-			payment_method_types: ["card", "link"],
-			// Allow promotion codes for discounts
-			allow_promotion_codes: true,
-			// Collect billing address for invoicing
-			billing_address_collection: "required",
-			subscription_data: {
-				metadata: {
-					organizationId,
-					planId,
-				},
-			},
-		});
-
-		return {
-			sessionId: session.id,
-			url: session.url!,
+			organizationsOwned: orgsOwned,
+			organizationsLimit: limits?.maxOrganizations ?? 0,
 		};
 	}
 
 	/**
-	 * Change subscription plan (upgrade/downgrade)
+	 * Check if user can create a new organization
 	 */
-	async changePlan(organizationId: string, newPlanId: string): Promise<void> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-		if (!subscription || !subscription.stripeSubscriptionId) {
-			throw new Error("No active subscription found");
+	async canCreateOrganization(
+		userId: string,
+	): Promise<{ allowed: boolean; reason?: string }> {
+		const status = await this.getUserSubscriptionStatus(userId);
+
+		if (!status.hasSubscription) {
+			return {
+				allowed: false,
+				reason: "A subscription is required to create organizations",
+			};
 		}
 
-		const newPlan = await this.repository.getPlanById(newPlanId);
-		if (!newPlan) {
-			throw new Error("Plan not found");
+		if (status.status !== "active" && status.status !== "trialing") {
+			return {
+				allowed: false,
+				reason: `Subscription is ${status.status}. An active subscription is required.`,
+			};
 		}
 
-		// Get the current subscription from Stripe
-		const stripeSubscription = await this.stripe.subscriptions.retrieve(
-			subscription.stripeSubscriptionId,
-		);
-
-		// Find the main subscription item (not metered)
-		const mainItem = stripeSubscription.items.data.find(
-			(item: Stripe.SubscriptionItem) =>
-				item.price.recurring?.usage_type !== "metered",
-		);
-
-		if (!mainItem) {
-			throw new Error("No main subscription item found");
+		if (status.organizationsOwned >= status.organizationsLimit) {
+			return {
+				allowed: false,
+				reason: `You've reached the limit of ${status.organizationsLimit} organization(s) for your ${status.plan} plan`,
+			};
 		}
 
-		// Update the subscription
-		await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-			items: [
-				{
-					id: mainItem.id,
-					price: newPlan.stripePriceId,
-				},
-			],
-			proration_behavior: "create_prorations",
-			metadata: {
-				planId: newPlanId,
-			},
-		});
+		return { allowed: true };
 	}
 
 	/**
-	 * Cancel subscription at period end
+	 * Get plan limits for a user
 	 */
-	async cancelSubscription(organizationId: string): Promise<void> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-		if (!subscription || !subscription.stripeSubscriptionId) {
-			throw new Error("No active subscription found");
-		}
+	async getUserPlanLimits(userId: string): Promise<PlanLimits | null> {
+		const subscription = await this.repository.getUserSubscription(userId);
+		if (!subscription) return null;
 
-		await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-			cancel_at_period_end: true,
-		});
-
-		await this.repository.updateSubscription(organizationId, {
-			cancelAtPeriodEnd: true,
-		});
+		const plan = subscription.plan as PlanName;
+		return PLAN_LIMITS[plan] || null;
 	}
 
 	/**
-	 * Reactivate a canceled subscription
+	 * Get features for user's plan
 	 */
-	async reactivateSubscription(organizationId: string): Promise<void> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-		if (!subscription || !subscription.stripeSubscriptionId) {
-			throw new Error("No subscription found");
-		}
+	async getUserFeatures(userId: string): Promise<Feature[]> {
+		const subscription = await this.repository.getUserSubscription(userId);
+		if (!subscription) return [];
 
-		await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-			cancel_at_period_end: false,
-		});
+		const plan = subscription.plan as PlanName;
+		return PLAN_FEATURES[plan] || [];
+	}
 
-		await this.repository.updateSubscription(organizationId, {
-			cancelAtPeriodEnd: false,
-		});
+	/**
+	 * Check if user has a specific feature
+	 */
+	async hasFeature(userId: string, feature: Feature): Promise<boolean> {
+		const features = await this.getUserFeatures(userId);
+		return features.includes(feature);
 	}
 
 	// =========================================================================
-	// INVOICES
+	// ORGANIZATION USAGE
 	// =========================================================================
 
 	/**
-	 * Get invoices for an organization
+	 * Get or create organization usage record
 	 */
-	async getInvoices(
+	async getOrCreateOrganizationUsage(
 		organizationId: string,
-		limit: number = 10,
-	): Promise<Invoice[]> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-		if (!subscription) {
-			return [];
+		ownerUserId: string,
+	): Promise<OrganizationUsage> {
+		let usage = await this.repository.getOrganizationUsage(organizationId);
+
+		if (!usage) {
+			// Get owner's subscription period
+			const subscription =
+				await this.repository.getUserSubscription(ownerUserId);
+
+			const periodStart = subscription?.periodStart || new Date();
+			const periodEnd =
+				subscription?.periodEnd ||
+				new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
+
+			usage = await this.repository.upsertOrganizationUsage(
+				organizationId,
+				ownerUserId,
+				periodStart,
+				periodEnd,
+			);
 		}
 
-		const invoices = await this.stripe.invoices.list({
-			customer: subscription.stripeCustomerId,
-			limit,
-		});
-
-		return invoices.data.map((invoice: Stripe.Invoice) => ({
-			id: invoice.id,
-			number: invoice.number,
-			status: invoice.status || "unknown",
-			amountDue: invoice.amount_due,
-			amountPaid: invoice.amount_paid,
-			currency: invoice.currency,
-			periodStart: invoice.period_start,
-			periodEnd: invoice.period_end,
-			created: invoice.created,
-			hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-			invoicePdf: invoice.invoice_pdf ?? null,
-		}));
+		return usage;
 	}
 
-	// =========================================================================
-	// USAGE & FEATURE CHECKS
-	// =========================================================================
-
 	/**
-	 * Check if usage is allowed for a metric
+	 * Check usage for a specific metric in an organization
 	 */
 	async checkUsage(
 		organizationId: string,
+		ownerUserId: string,
 		metric: UsageMetric,
 	): Promise<UsageCheckResult> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
+		const usage = await this.getOrCreateOrganizationUsage(
+			organizationId,
+			ownerUserId,
+		);
+		const limits = await this.getUserPlanLimits(ownerUserId);
 
-		if (!subscription) {
+		if (!limits) {
 			return {
 				allowed: false,
 				used: 0,
 				included: 0,
 				remaining: 0,
 				overage: 0,
-				planTier: "none",
 			};
 		}
-
-		const limits = this.getPlanLimits(subscription);
-		// Determine tier: enterprise > paid plan > free (if has Stripe customer) > none
-		const planTier: PlanTier = subscription.licenseId
-			? "enterprise"
-			: subscription.plan?.tier ||
-				(subscription.stripeCustomerId ? "free" : "none");
 
 		let used: number;
 		let included: number | null;
 
 		switch (metric) {
 			case "notices":
-				used = subscription.noticesUsed;
-				included = limits.notices;
-				break;
-			case "users":
-				used = subscription.usersCount;
-				included = limits.users;
+				used = usage.noticesUsed;
+				included = limits.noticesPerMonth;
 				break;
 			case "alerts":
-				used = subscription.alertsUsed;
-				included = limits.alerts;
+				used = usage.alertsUsed;
+				included = limits.alertsPerMonth;
 				break;
 			case "transactions":
-				used = subscription.transactionsUsed;
-				included = limits.transactions;
+				used = usage.transactionsUsed;
+				included = limits.transactionsPerMonth;
+				break;
+			case "users":
+				used = usage.usersCount;
+				included = limits.usersPerOrg;
 				break;
 		}
 
-		return this.calculateUsage(used, included, planTier);
-	}
-
-	/**
-	 * Check if organization has access to a feature
-	 */
-	async checkFeature(
-		organizationId: string,
-		feature: Feature,
-	): Promise<FeatureCheckResult> {
-		const subscription =
-			await this.repository.getByOrganizationId(organizationId);
-
-		if (!subscription) {
-			return {
-				allowed: false,
-				planTier: "none",
-				requiredTier: getRequiredTierForFeature(feature) || undefined,
-			};
-		}
-
-		// Determine tier: enterprise > paid plan > free (if has Stripe customer) > none
-		const planTier: PlanTier = subscription.licenseId
-			? "enterprise"
-			: subscription.plan?.tier ||
-				(subscription.stripeCustomerId ? "free" : "none");
-
-		const hasFeature = PLAN_FEATURES[planTier].includes(feature);
-
-		return {
-			allowed: hasFeature,
-			planTier,
-			requiredTier: hasFeature
-				? undefined
-				: getRequiredTierForFeature(feature) || undefined,
-		};
-	}
-
-	// =========================================================================
-	// WEBHOOK HANDLERS
-	// =========================================================================
-
-	/**
-	 * Handle subscription created/updated from Stripe webhook
-	 */
-	async handleSubscriptionUpdated(
-		stripeSubscription: Stripe.Subscription,
-	): Promise<void> {
-		const subscription = await this.repository.getByStripeCustomerId(
-			stripeSubscription.customer as string,
-		);
-
-		if (!subscription) {
-			console.error(
-				`No subscription record found for customer ${stripeSubscription.customer}`,
-			);
-			return;
-		}
-
-		// Find the main subscription item
-		const mainItem = stripeSubscription.items.data.find(
-			(item: Stripe.SubscriptionItem) =>
-				item.price.recurring?.usage_type !== "metered",
-		);
-
-		// Find the plan by Stripe price ID
-		let planId: string | null = null;
-		if (mainItem) {
-			const plan = await this.repository.getPlanByStripePriceId(
-				mainItem.price.id,
-			);
-			planId = plan?.id || null;
-		}
-
-		// Find the metered subscription item
-		const meteredItem = stripeSubscription.items.data.find(
-			(item: Stripe.SubscriptionItem) =>
-				item.price.recurring?.usage_type === "metered",
-		);
-
-		// Type assertion for Stripe subscription with period properties
-		const subData = stripeSubscription as unknown as {
-			id: string;
-			status: string;
-			cancel_at_period_end: boolean;
-			current_period_start?: number;
-			current_period_end?: number;
-		};
-
-		await this.repository.updateSubscription(subscription.organizationId, {
-			planId,
-			stripeSubscriptionId: stripeSubscription.id,
-			stripeSubscriptionItemId: meteredItem?.id || null,
-			status: subData.status as OrganizationSubscription["status"],
-			currentPeriodStart: subData.current_period_start
-				? new Date(subData.current_period_start * 1000)
-				: null,
-			currentPeriodEnd: subData.current_period_end
-				? new Date(subData.current_period_end * 1000)
-				: null,
-			cancelAtPeriodEnd: subData.cancel_at_period_end,
-		});
-	}
-
-	/**
-	 * Handle subscription deleted from Stripe webhook
-	 */
-	async handleSubscriptionDeleted(
-		stripeSubscription: Stripe.Subscription,
-	): Promise<void> {
-		const subscription = await this.repository.getByStripeSubscriptionId(
-			stripeSubscription.id,
-		);
-
-		if (!subscription) {
-			return;
-		}
-
-		await this.repository.updateSubscription(subscription.organizationId, {
-			status: "canceled",
-			stripeSubscriptionId: null,
-			stripeSubscriptionItemId: null,
-			planId: null,
-		});
-	}
-
-	/**
-	 * Handle invoice paid - reset usage for new period
-	 */
-	async handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-		// Type assertion for invoice with subscription property
-		const invoiceData = invoice as unknown as { subscription?: string | null };
-		if (!invoiceData.subscription) {
-			return;
-		}
-
-		const subscription = await this.repository.getByStripeSubscriptionId(
-			invoiceData.subscription,
-		);
-
-		if (!subscription) {
-			return;
-		}
-
-		// Reset usage counters for new billing period
-		await this.repository.resetUsage(subscription.organizationId);
-	}
-
-	// =========================================================================
-	// HELPERS
-	// =========================================================================
-
-	private getPlanLimits(subscription: OrganizationSubscription): {
-		notices: number | null;
-		users: number | null;
-		alerts: number | null;
-		transactions: number | null;
-	} {
-		if (subscription.plan) {
-			return {
-				notices: subscription.plan.noticesIncluded,
-				users: subscription.plan.usersIncluded,
-				alerts: subscription.plan.alertsIncluded,
-				transactions: subscription.plan.transactionsIncluded,
-			};
-		}
-
-		// Check for enterprise license
-		// TODO: Load license limits from EnterpriseLicense table
-		if (subscription.licenseId) {
-			return PLAN_LIMITS.enterprise;
-		}
-
-		// If org has Stripe customer but no paid plan, use free tier limits
-		if (subscription.stripeCustomerId) {
-			return PLAN_LIMITS.free;
-		}
-
-		return PLAN_LIMITS.none;
-	}
-
-	private calculateUsage(
-		used: number,
-		included: number | null,
-		planTier: PlanTier,
-	): UsageCheckResult {
-		// Null means unlimited
+		// null means unlimited
 		if (included === null) {
 			return {
 				allowed: true,
@@ -583,7 +235,6 @@ export class SubscriptionService {
 				included: -1, // -1 indicates unlimited
 				remaining: -1,
 				overage: 0,
-				planTier,
 			};
 		}
 
@@ -596,7 +247,173 @@ export class SubscriptionService {
 			included,
 			remaining,
 			overage,
-			planTier,
 		};
+	}
+
+	/**
+	 * Report usage increment for an organization
+	 */
+	async reportUsage(
+		organizationId: string,
+		metric: "notices" | "alerts" | "transactions",
+		count: number = 1,
+	): Promise<void> {
+		await this.repository.incrementUsage(organizationId, metric, count);
+	}
+
+	/**
+	 * Update user count for an organization
+	 */
+	async updateUsersCount(
+		organizationId: string,
+		usersCount: number,
+	): Promise<void> {
+		await this.repository.updateUsersCount(organizationId, usersCount);
+	}
+
+	/**
+	 * Reset usage for new billing period
+	 */
+	async resetUsageForPeriod(
+		organizationId: string,
+		periodStart: Date,
+		periodEnd: Date,
+	): Promise<void> {
+		await this.repository.resetUsage(organizationId, periodStart, periodEnd);
+	}
+
+	// =========================================================================
+	// METERED BILLING (Report overage to Stripe)
+	// =========================================================================
+
+	/**
+	 * Report overage usage to Stripe for metered billing
+	 * TODO: Implement proper Stripe metered billing when ready
+	 */
+	async reportOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		_overagePriceId: string,
+	): Promise<void> {
+		if (!this.stripe) {
+			console.warn("[Subscription] Stripe client not configured");
+			return;
+		}
+
+		const usage = await this.repository.getOrganizationUsage(organizationId);
+		const limits = await this.getUserPlanLimits(ownerUserId);
+		const subscription = await this.repository.getUserSubscription(ownerUserId);
+
+		if (!usage || !limits || !subscription?.stripeSubscriptionId) {
+			return;
+		}
+
+		// Calculate overage
+		const noticeOverage = Math.max(
+			0,
+			usage.noticesUsed - limits.noticesPerMonth,
+		);
+
+		if (noticeOverage === 0) {
+			return; // No overage to report
+		}
+
+		// Log overage for now - implement Stripe metered billing later
+		console.log(
+			`[Subscription] Overage detected for org ${organizationId}: ${noticeOverage} notices over limit`,
+		);
+
+		// Mark as reported with a placeholder ID
+		const reportId = `overage_${organizationId}_${Date.now()}`;
+		await this.repository.markOverageReported(organizationId, reportId);
+	}
+
+	// =========================================================================
+	// CARD FINGERPRINT (Trial abuse prevention)
+	// =========================================================================
+
+	/**
+	 * Check if card fingerprint has been used for a trial before
+	 */
+	async isCardUsedForTrial(fingerprint: string): Promise<boolean> {
+		return this.repository.isCardFingerprintUsed(fingerprint);
+	}
+
+	/**
+	 * Store card fingerprint after successful trial start
+	 */
+	async storeCardFingerprint(
+		fingerprint: string,
+		userId: string,
+	): Promise<void> {
+		const exists = await this.repository.isCardFingerprintUsed(fingerprint);
+
+		if (exists) {
+			// Card already used, increment count
+			await this.repository.incrementCardFingerprintUsage(fingerprint);
+		} else {
+			// New card, store it
+			await this.repository.storeCardFingerprint(fingerprint, userId);
+		}
+	}
+
+	/**
+	 * Handle checkout completion - check fingerprint and potentially skip trial
+	 * Returns true if trial should be skipped (card was used before)
+	 */
+	async handleCheckoutForTrialAbuse(
+		stripeSubscriptionId: string,
+		userId: string,
+	): Promise<{ skipTrial: boolean; reason?: string }> {
+		if (!this.stripe) {
+			return { skipTrial: false };
+		}
+
+		try {
+			// Get subscription to find payment method
+			const subscription = await this.stripe.subscriptions.retrieve(
+				stripeSubscriptionId,
+				{ expand: ["default_payment_method"] },
+			);
+
+			const paymentMethod = subscription.default_payment_method;
+			if (
+				!paymentMethod ||
+				typeof paymentMethod === "string" ||
+				paymentMethod.type !== "card"
+			) {
+				return { skipTrial: false };
+			}
+
+			const fingerprint = paymentMethod.card?.fingerprint;
+			if (!fingerprint) {
+				return { skipTrial: false };
+			}
+
+			// Check if fingerprint was used before
+			const wasUsed = await this.isCardUsedForTrial(fingerprint);
+
+			if (wasUsed) {
+				// Skip trial - card was used before
+				// Update subscription to remove trial
+				await this.stripe.subscriptions.update(stripeSubscriptionId, {
+					trial_end: "now", // End trial immediately
+				});
+
+				await this.repository.incrementCardFingerprintUsage(fingerprint);
+
+				return {
+					skipTrial: true,
+					reason: "Card has been used for a trial before",
+				};
+			}
+
+			// New card - store fingerprint
+			await this.storeCardFingerprint(fingerprint, userId);
+			return { skipTrial: false };
+		} catch (error) {
+			console.error("[Subscription] Error checking trial abuse:", error);
+			return { skipTrial: false };
+		}
 	}
 }

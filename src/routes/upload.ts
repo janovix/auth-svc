@@ -85,13 +85,17 @@ function getAvatarPublicUrl(env: Bindings, key: string): string {
 /**
  * Generate a unique key for avatar storage
  * Format: {env}/avatars/{userId}/{timestamp}-{random}.{ext}
- * 
+ *
  * Environment prefixes ensure no collisions between environments:
  * - prod/avatars/user123/1234567890-abc123.webp
  * - dev/avatars/user123/1234567890-abc123.webp
  * - local/avatars/user123/1234567890-abc123.webp
  */
-function generateAvatarKey(env: Bindings, userId: string, mimeType: string): string {
+function generateAvatarKey(
+	env: Bindings,
+	userId: string,
+	mimeType: string,
+): string {
 	const envPrefix = getEnvironmentPrefix(env);
 	const timestamp = Date.now();
 	const random = Math.random().toString(36).substring(2, 8);
@@ -112,7 +116,10 @@ const signedUrlRequestSchema = z.object({
 		.number()
 		.int()
 		.positive()
-		.max(MAX_FILE_SIZE, `File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB`),
+		.max(
+			MAX_FILE_SIZE,
+			`File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+		),
 });
 
 /**
@@ -200,14 +207,15 @@ uploadRoutes.post("/avatar", async (c) => {
 		const providedKey = formData.get("key");
 
 		if (!file || !(file instanceof File)) {
-			return c.json(
-				{ success: false, error: "No file provided" },
-				400,
-			);
+			return c.json({ success: false, error: "No file provided" }, 400);
 		}
 
 		// Validate file type
-		if (!ALLOWED_MIME_TYPES.includes(file.type as typeof ALLOWED_MIME_TYPES[number])) {
+		if (
+			!ALLOWED_MIME_TYPES.includes(
+				file.type as (typeof ALLOWED_MIME_TYPES)[number],
+			)
+		) {
 			return c.json(
 				{
 					success: false,
@@ -232,7 +240,8 @@ uploadRoutes.post("/avatar", async (c) => {
 		const envPrefix = getEnvironmentPrefix(c.env);
 		const expectedKeyPrefix = `${envPrefix}/avatars/${user.id}/`;
 		const key =
-			typeof providedKey === "string" && providedKey.startsWith(expectedKeyPrefix)
+			typeof providedKey === "string" &&
+			providedKey.startsWith(expectedKeyPrefix)
 				? providedKey
 				: generateAvatarKey(c.env, user.id, file.type);
 
@@ -264,10 +273,7 @@ uploadRoutes.post("/avatar", async (c) => {
 		});
 	} catch (error) {
 		console.error("[Upload] Error uploading avatar:", error);
-		return c.json(
-			{ success: false, error: "Failed to upload avatar" },
-			500,
-		);
+		return c.json({ success: false, error: "Failed to upload avatar" }, 500);
 	}
 });
 
@@ -304,7 +310,10 @@ uploadRoutes.delete("/avatar/*", async (c) => {
 	const expectedKeyPrefix = `${envPrefix}/avatars/${user.id}/`;
 	if (!key.startsWith(expectedKeyPrefix)) {
 		return c.json(
-			{ success: false, error: "Forbidden: Cannot delete other users' avatars" },
+			{
+				success: false,
+				error: "Forbidden: Cannot delete other users' avatars",
+			},
 			403,
 		);
 	}
@@ -320,10 +329,7 @@ uploadRoutes.delete("/avatar/*", async (c) => {
 		});
 	} catch (error) {
 		console.error("[Upload] Error deleting avatar:", error);
-		return c.json(
-			{ success: false, error: "Failed to delete avatar" },
-			500,
-		);
+		return c.json({ success: false, error: "Failed to delete avatar" }, 500);
 	}
 });
 

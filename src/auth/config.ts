@@ -2,7 +2,9 @@ import type { BetterAuthOptions } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI } from "better-auth/plugins";
+import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { markOtpSent } from "./routes";
+import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
 
 import type { Bindings, JanovixEnvironment } from "../types/bindings";
@@ -10,6 +12,31 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+
+// ============================================================================
+// Subscription Plan Limits (User-based billing)
+// ============================================================================
+// These limits are enforced by the application, not Stripe.
+// Pricing is managed entirely in Stripe Dashboard.
+
+export const PLAN_LIMITS = {
+	business: {
+		maxOrganizations: 1,
+		noticesPerMonth: 50,
+		usersPerOrg: 5,
+		alertsPerMonth: null, // unlimited
+		transactionsPerMonth: null, // unlimited
+	},
+	pro: {
+		maxOrganizations: 3,
+		noticesPerMonth: 150,
+		usersPerOrg: 10,
+		alertsPerMonth: null, // unlimited
+		transactionsPerMonth: null, // unlimited
+	},
+} as const;
+
+export type PlanName = keyof typeof PLAN_LIMITS;
 
 const BASE_PATH = "/api/auth";
 const ORG_SLUG = "janovix";
@@ -144,8 +171,81 @@ export function buildResolvedAuthConfig(
 				adminRoles: ["admin"],
 			}),
 			organization({
-				// Allow users to create organizations
-				allowUserToCreateOrganization: true,
+				// Organization creation is controlled by subscription limits
+				// The actual limit check happens in databaseHooks.organization.create.before
+				allowUserToCreateOrganization: async (user) => {
+					// Check if user has an active subscription with available org slots
+					// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders
+					// Then by active/trialing status, then by most recent
+					const subscription = await env.DB.prepare(
+						`SELECT plan, status, stripeSubscriptionId FROM subscription 
+					 WHERE referenceId = ? 
+					 ORDER BY 
+					   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
+					   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+					   createdAt DESC 
+					 LIMIT 1`,
+					)
+						.bind(user.id)
+						.first<{
+							plan: string;
+							status: string;
+							stripeSubscriptionId: string | null;
+						}>();
+
+					// Debug: log what we found
+					console.log(
+						`[Org Guard] User ${user.id} subscription lookup:`,
+						subscription,
+					);
+
+					if (!subscription) {
+						console.log(
+							`[Org Guard] User ${user.id} has no subscription, denying org creation`,
+						);
+						return false;
+					}
+
+					if (
+						subscription.status !== "active" &&
+						subscription.status !== "trialing"
+					) {
+						console.log(
+							`[Org Guard] User ${user.id} subscription is ${subscription.status} (stripeSubId: ${subscription.stripeSubscriptionId}), denying org creation`,
+						);
+						return false;
+					}
+
+					// Get org limit based on plan
+					const limits = PLAN_LIMITS[subscription.plan as PlanName];
+					if (!limits) {
+						console.log(
+							`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+						);
+						return false;
+					}
+
+					// Count organizations owned by user
+					const orgsResult = await env.DB.prepare(
+						`SELECT COUNT(*) as count FROM members WHERE userId = ? AND role = 'owner'`,
+					)
+						.bind(user.id)
+						.first<{ count: number }>();
+
+					const orgsOwned = orgsResult?.count ?? 0;
+
+					if (orgsOwned >= limits.maxOrganizations) {
+						console.log(
+							`[Org Guard] User ${user.id} has ${orgsOwned}/${limits.maxOrganizations} orgs, denying creation`,
+						);
+						return false;
+					}
+
+					console.log(
+						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${limits.maxOrganizations} used)`,
+					);
+					return true;
+				},
 				// Organization creator gets "owner" role by default
 				creatorRole: "owner",
 				// We keep teams disabled for now; can be enabled later without breaking the API surface.
@@ -169,15 +269,15 @@ export function buildResolvedAuthConfig(
 							return;
 						}
 
-						// Invitation acceptance happens in the AML app, not the auth app
-						const partnerAppUrl =
-							env.AML_FRONTEND_URL || "https://aml.janovix.workers.dev";
+						// Invitation acceptance happens in the auth app at /invite
+						const authAppUrl =
+							env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
 
 						const invitationId = data.invitation?.id ?? data.id ?? "";
 
 						const inviteUrl = invitationId
-							? `${partnerAppUrl}/invitations/accept?invitationId=${encodeURIComponent(invitationId)}`
-							: `${partnerAppUrl}/invitations`;
+							? `${authAppUrl}/invite?invitationId=${encodeURIComponent(invitationId)}`
+							: `${authAppUrl}/invite`;
 
 						const organizationName =
 							data.organization?.name ?? "tu organización";
@@ -238,6 +338,13 @@ export function buildResolvedAuthConfig(
 						otp: string;
 						type: string;
 					}) => {
+						console.log(
+							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
+						);
+
+						// Mark that OTP callback was called (for rate-limit detection)
+						markOtpSent(email);
+
 						const apiKey = env.MANDRILL_API_KEY;
 						if (!apiKey) {
 							console.error(
@@ -275,6 +382,72 @@ export function buildResolvedAuthConfig(
 						}
 					},
 			}),
+			// Stripe plugin for user-based billing
+			// Pricing is managed in Stripe Dashboard, only plan names and limits are defined here
+			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+				? [
+						stripe({
+							stripeClient: new Stripe(env.STRIPE_SECRET_KEY),
+							stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
+							createCustomerOnSignUp: true,
+							subscription: {
+								enabled: true,
+								plans: [
+									{
+										name: "business",
+										priceId: env.STRIPE_BUSINESS_PRICE_ID || "price_business",
+										limits: PLAN_LIMITS.business,
+										freeTrial: {
+											days: 14,
+										},
+									},
+									{
+										name: "pro",
+										priceId: env.STRIPE_PRO_PRICE_ID || "price_pro",
+										limits: PLAN_LIMITS.pro,
+										freeTrial: {
+											days: 14,
+										},
+									},
+								],
+								// Customize checkout session to enable Link payments and other options
+								getCheckoutSessionParams: async () => ({
+									params: {
+										// Enable Link and card payment methods
+										// When payment_method_types is not set, Stripe uses dynamic payment methods
+										// which automatically includes Link if enabled in the Stripe Dashboard
+										// Setting explicitly ensures Link is always available
+										payment_method_types: ["card", "link"],
+										// Allow promotion codes for discounts
+										allow_promotion_codes: true,
+										// Collect billing address for invoicing
+										billing_address_collection: "auto",
+										// Note: Don't set customer_email here - Better Auth Stripe plugin
+										// already sets the `customer` param when a customer exists,
+										// and Stripe doesn't allow both customer and customer_email
+									},
+								}),
+							},
+						}),
+					]
+				: []),
+			// Cloudflare Turnstile captcha protection for email-sending endpoints
+			// Protects against bots triggering expensive email operations
+			...(env.TURNSTILE_SECRET_KEY
+				? [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: env.TURNSTILE_SECRET_KEY,
+							// Protect only endpoints that SEND emails (expensive operation)
+							// /sign-in/email-otp is NOT included - it verifies OTP, doesn't send email
+							endpoints: [
+								"/sign-up/email", // Sends verification OTP on signup
+								"/email-otp/send-verification-otp", // Send/resend OTP email
+								"/forget-password", // Password reset email
+							],
+						}),
+					]
+				: []),
 		],
 		session: {
 			updateAge: 60 * 30,
@@ -290,90 +463,155 @@ export function buildResolvedAuthConfig(
 		rateLimit: RATE_LIMITS[resolvedEnv],
 		advanced: buildAdvancedOptions(resolvedEnv, cookieDomain),
 		trustedOrigins,
-		// Database hooks to create Stripe Customer when organization is created
+		// Note: Stripe customer creation is now handled by @better-auth/stripe plugin
+		// when createCustomerOnSignUp: true is set. Users are the billing entity, not orgs.
+		// Database hooks for syncing user changes to Stripe
 		databaseHooks: {
-			organization: {
-				create: {
-					after: async (organization: {
+			user: {
+				update: {
+					after: async (user: {
 						id: string;
-						name: string;
-						slug: string;
+						name?: string | null;
+						email?: string;
 					}) => {
-						// Skip Stripe customer creation if Stripe is not configured
+						// Sync user to Stripe customer when profile is updated
 						if (!env.STRIPE_SECRET_KEY) {
-							console.warn(
-								"[Org Created] STRIPE_SECRET_KEY not configured, skipping Stripe customer creation",
+							return;
+						}
+
+						// Skip if no name was updated (nothing to sync)
+						if (!user.name) {
+							console.log(
+								`[Stripe Sync] No name in update for user ${user.id}, skipping`,
 							);
 							return;
 						}
 
-						const stripeSecretKey = env.STRIPE_SECRET_KEY;
+						const syncStripeCustomer = async () => {
+							const stripeClient = new Stripe(env.STRIPE_SECRET_KEY as string);
 
-						// Create Stripe customer for the organization
-						const createStripeCustomerPromise = (async () => {
-							try {
-								const stripe = new Stripe(stripeSecretKey);
+							// Get full user record to ensure we have email
+							// (the hook may only receive updated fields)
+							const fullUser = await env.DB.prepare(
+								`SELECT id, email, name FROM users WHERE id = ?`,
+							)
+								.bind(user.id)
+								.first<{ id: string; email: string; name: string | null }>();
 
-								// Create the Stripe Customer
-								const stripeCustomer = await stripe.customers.create({
-									name: organization.name,
-									metadata: {
-										organizationId: organization.id,
-										organizationName: organization.name,
-										organizationSlug: organization.slug,
-										planType: "free",
-										isEnterprise: "false",
-									},
+							if (!fullUser) {
+								console.error(
+									`[Stripe Sync] User ${user.id} not found in database`,
+								);
+								return;
+							}
+
+							const userEmail = fullUser.email;
+							const userName = user.name || fullUser.name || undefined;
+
+							console.log(
+								`[Stripe Sync] Syncing user ${user.id} (${userEmail}) with name "${userName}"`,
+							);
+
+							// Look up the Stripe customer ID from the subscription table
+							const subscription = await env.DB.prepare(
+								`SELECT id, stripeCustomerId FROM subscription WHERE referenceId = ? ORDER BY createdAt DESC LIMIT 1`,
+							)
+								.bind(user.id)
+								.first<{ id: string; stripeCustomerId: string | null }>();
+
+							let customerId = subscription?.stripeCustomerId;
+
+							// If no customer exists in our DB, search Stripe by email first
+							// Email is our unique identifier since all emails are validated
+							if (!customerId) {
+								console.log(
+									`[Stripe Sync] No Stripe customer ID in DB for user ${user.id}, searching by email ${userEmail}`,
+								);
+
+								// Search for existing customer by email
+								const existingCustomers = await stripeClient.customers.list({
+									email: userEmail,
+									limit: 1,
 								});
 
-								// Create the organization_subscriptions record with "free" status
-								console.log(
-									`[Org Created] Created Stripe customer ${stripeCustomer.id} for org ${organization.id}`,
-								);
+								if (existingCustomers.data.length > 0) {
+									// Use existing customer
+									customerId = existingCustomers.data[0].id;
+									console.log(
+										`[Stripe Sync] Found existing Stripe customer ${customerId} for email ${userEmail}`,
+									);
 
-								// Insert the subscription record
-								const subscriptionId = crypto.randomUUID();
-								await env.DB.prepare(
-									`
-									INSERT INTO organization_subscriptions (
-										id, organization_id, stripe_customer_id, status, created_at, updated_at
-									) VALUES (?, ?, ?, 'inactive', datetime('now'), datetime('now'))
-								`,
-								)
-									.bind(subscriptionId, organization.id, stripeCustomer.id)
-									.run();
+									// Update the customer name
+									await stripeClient.customers.update(customerId, {
+										name: userName,
+										metadata: {
+											userId: user.id,
+											source: "janovix-auth-hook",
+										},
+									});
+									console.log(
+										`[Stripe Sync] Updated Stripe customer ${customerId} name to "${userName}"`,
+									);
+								} else {
+									// Create new customer only if none exists for this email
+									const customer = await stripeClient.customers.create({
+										email: userEmail,
+										name: userName || undefined,
+										metadata: {
+											userId: user.id,
+											source: "janovix-auth-hook",
+										},
+									});
+									customerId = customer.id;
+									console.log(
+										`[Stripe Sync] Created new Stripe customer ${customerId} for email ${userEmail} with name "${userName}"`,
+									);
+								}
 
+								// Store customer ID in subscription table
+								if (subscription?.id) {
+									await env.DB.prepare(
+										`UPDATE subscription SET stripeCustomerId = ?, updatedAt = datetime('now') WHERE id = ?`,
+									)
+										.bind(customerId, subscription.id)
+										.run();
+								} else {
+									await env.DB.prepare(
+										`INSERT INTO subscription (id, plan, referenceId, stripeCustomerId, status, createdAt, updatedAt)
+										 VALUES (?, 'none', ?, ?, 'incomplete', datetime('now'), datetime('now'))`,
+									)
+										.bind(crypto.randomUUID(), user.id, customerId)
+										.run();
+								}
+							} else {
+								// Update existing customer's name
+								await stripeClient.customers.update(customerId, {
+									name: userName,
+								});
 								console.log(
-									`[Org Created] Created subscription record for org ${organization.id}`,
-								);
-							} catch (error) {
-								console.error(
-									"[Org Created] Failed to create Stripe customer:",
-									error,
+									`[Stripe Sync] Updated Stripe customer ${customerId} name to "${userName}"`,
 								);
 							}
-						})();
+						};
 
-						// Use waitUntil if available to ensure async operation completes
+						// Use waitUntil for async operation if available
+						const promise = syncStripeCustomer().catch((error) => {
+							console.error(
+								`[Stripe Sync] Error syncing user to Stripe:`,
+								error,
+							);
+						});
+
 						if (
 							executionContext &&
 							typeof executionContext.waitUntil === "function"
 						) {
-							executionContext.waitUntil(createStripeCustomerPromise);
-						} else {
-							// Fallback: let the promise run in background
-							createStripeCustomerPromise.catch((error) => {
-								console.error(
-									"[Org Created] Unhandled Stripe customer creation error:",
-									error,
-								);
-							});
+							executionContext.waitUntil(promise);
 						}
 					},
 				},
 			},
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		} as any, // Type assertion needed as Better Auth types don't include organization hooks
+		},
 	};
 
 	return {

@@ -150,7 +150,9 @@ export class DeleteAvatarEndpoint extends OpenAPIRoute {
 		operationId: "upload-delete-avatar",
 		request: {
 			params: z.object({
-				key: z.string().describe("The full storage key of the avatar to delete"),
+				key: z
+					.string()
+					.describe("The full storage key of the avatar to delete"),
 			}),
 		},
 		responses: {

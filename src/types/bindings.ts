@@ -108,8 +108,32 @@ export type Bindings = Env & {
 	 */
 	STRIPE_WEBHOOK_SECRET?: string;
 
+	/**
+	 * Stripe Price ID for Business plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_BUSINESS_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for Pro plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_PRO_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for metered notice overage billing.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_NOTICE_OVERAGE_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for metered user overage billing.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_USER_OVERAGE_PRICE_ID?: string;
+
 	// =========================================================================
-	// ENTERPRISE LICENSING
+	// ENTERPRISE LICENSING (DEPRECATED - Using Better Auth Stripe)
 	// =========================================================================
 
 	/**
