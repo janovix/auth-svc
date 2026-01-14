@@ -12,6 +12,7 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+import { executeInBackground } from "./execution-context";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -115,7 +116,9 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 
 export function buildResolvedAuthConfig(
 	env: Bindings,
-	executionContext?: ExecutionContext,
+	// executionContext is kept for API compatibility but no longer captured in closures.
+	// Callbacks now use executeInBackground() which gets context dynamically.
+	_executionContext?: ExecutionContext,
 ): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
@@ -306,20 +309,11 @@ export function buildResolvedAuthConfig(
 							role: data.role,
 						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							executionContext.waitUntil(invitationPromise);
-						} else {
-							// Fallback: ensure promise completes and errors are handled
-							invitationPromise.catch((error) => {
-								console.error(
-									"[Org Invitation] Unhandled email promise rejection",
-									error,
-								);
-							});
-						}
+						// Use dynamic execution context to handle background task
+						executeInBackground(
+							invitationPromise,
+							`Org invitation email to ${email}`,
+						);
 					},
 			}),
 			emailOTP({
@@ -378,25 +372,8 @@ export function buildResolvedAuthConfig(
 							);
 						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							console.log(
-								`[Email OTP] Using waitUntil for ${email} (has executionContext: true)`,
-							);
-							executionContext.waitUntil(emailPromise);
-						} else {
-							console.warn(
-								`[Email OTP] No executionContext available for ${email}, email may not send if worker exits early`,
-							);
-							emailPromise.catch((error) => {
-								console.error(
-									"[Email OTP] Unhandled email promise rejection",
-									error,
-								);
-							});
-						}
+						// Use dynamic execution context to handle background task
+						executeInBackground(emailPromise, `OTP email to ${email}`);
 
 						// Callback returns immediately; email sends in background via waitUntil
 						console.log(
@@ -616,7 +593,7 @@ export function buildResolvedAuthConfig(
 							}
 						};
 
-						// Use waitUntil for async operation if available
+						// Use dynamic execution context to handle background task
 						const promise = syncStripeCustomer().catch((error) => {
 							console.error(
 								`[Stripe Sync] Error syncing user to Stripe:`,
@@ -624,12 +601,7 @@ export function buildResolvedAuthConfig(
 							);
 						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							executionContext.waitUntil(promise);
-						}
+						executeInBackground(promise, `Stripe sync for user ${user.id}`);
 					},
 				},
 			},
