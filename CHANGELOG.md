@@ -1,3 +1,10 @@
+# [1.4.0-rc.14](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.13...v1.4.0-rc.14) (2026-01-14)
+
+
+### Features
+
+* enhance email and Turnstile verification with timeout handling and logging improvements ([ac91410](https://github.com/janovix/auth-svc/commit/ac91410d0d693c35515a909db4a6d9823017cbc1))
+
 # [1.4.0-rc.13](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.12...v1.4.0-rc.13) (2026-01-14)
 
 
