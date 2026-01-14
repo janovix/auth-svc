@@ -1,3 +1,10 @@
+# [1.4.0-rc.11](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.10...v1.4.0-rc.11) (2026-01-14)
+
+
+### Features
+
+* add internal organizations route to the application ([1e044b3](https://github.com/janovix/auth-svc/commit/1e044b383195eb3c1cc22f370d761f7e67b55578))
+
 # [1.4.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.9...v1.4.0-rc.10) (2026-01-14)
 
 
