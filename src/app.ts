@@ -57,6 +57,7 @@ import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
+import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -159,6 +160,7 @@ openapi.patch(
 
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
+app.route("/internal/organizations", internalOrganizationsRoutes);
 
 // Register Settings OpenAPI documentation
 openapi.get("/api/settings/user", GetUserSettingsEndpoint);
