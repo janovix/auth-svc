@@ -1,3 +1,10 @@
+# [1.4.0-rc.16](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.15...v1.4.0-rc.16) (2026-01-14)
+
+
+### Features
+
+* enhance invitation handling in internal organizations routes with raw SQL and email notifications ([44f62ae](https://github.com/janovix/auth-svc/commit/44f62aef2617c099bff56327dd38cde731517acd))
+
 # [1.4.0-rc.15](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.14...v1.4.0-rc.15) (2026-01-14)
 
 
