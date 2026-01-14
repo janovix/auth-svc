@@ -1,3 +1,10 @@
+# [1.4.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.9...v1.4.0-rc.10) (2026-01-14)
+
+
+### Features
+
+* enhance JWT payload to include user role for authorization ([c43a5b2](https://github.com/janovix/auth-svc/commit/c43a5b2c3e70b715924a8054a67741705284a9c0))
+
 # [1.4.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.8...v1.4.0-rc.9) (2026-01-14)
 
 
