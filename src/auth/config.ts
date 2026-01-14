@@ -151,12 +151,16 @@ export function buildResolvedAuthConfig(
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
-					// Include organization ID in JWT claims for multi-tenant support
+					// Include organization ID and role in JWT claims for multi-tenant support
+					// and admin authorization in downstream services (aml-svc, etc.)
 					definePayload: async ({ user, session }) => {
 						return {
 							sub: user.id,
 							email: user.email,
 							name: user.name,
+							// User role for authorization (admin, user, etc.)
+							// Used by aml-svc admin endpoints to verify admin access
+							role: user.role ?? "user",
 							// activeOrganizationId is set by better-auth organization plugin
 							// when user switches organizations via setActiveOrganization
 							organizationId: session.activeOrganizationId ?? null,
