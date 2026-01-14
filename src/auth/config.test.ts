@@ -102,12 +102,16 @@ describe("buildResolvedAuthConfig", () => {
 		);
 	});
 
-	it("keeps localhost origins for local env without cross-subdomain cookies", () => {
+	it("keeps localhost origins for local env with cross-subdomain cookies", () => {
 		const config = buildResolvedAuthConfig(
 			buildEnvWithoutInternalToken({ ENVIRONMENT: "local" }),
 		);
 
-		expect(config.options.advanced?.crossSubDomainCookies).toBeUndefined();
+		// Local env now has cross-subdomain cookies enabled for .janovix.workers.dev
+		expect(config.options.advanced?.crossSubDomainCookies).toEqual({
+			enabled: true,
+			domain: ".janovix.workers.dev",
+		});
 		expect(config.options.trustedOrigins).toEqual(
 			expect.arrayContaining(["http://localhost:*", "https://localhost:*"]),
 		);

@@ -56,6 +56,7 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
+import { adminRoutes } from "./routes/admin";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -205,6 +206,9 @@ app.route("/api/upload", uploadRoutes);
 openapi.post("/api/upload/avatar/prepare", PrepareAvatarUploadEndpoint);
 openapi.post("/api/upload/avatar", UploadAvatarEndpoint);
 openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
+
+// Register Admin routes (KV management, etc.)
+app.route("/api/admin", adminRoutes);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
