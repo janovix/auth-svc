@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { emailOTP, openAPI } from "better-auth/plugins";
 import { markOtpSent } from "./routes";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
@@ -430,23 +430,10 @@ export function buildResolvedAuthConfig(
 						}),
 					]
 				: []),
-			// Cloudflare Turnstile captcha protection for email-sending endpoints
-			// Protects against bots triggering expensive email operations
-			...(env.TURNSTILE_SECRET_KEY
-				? [
-						captcha({
-							provider: "cloudflare-turnstile",
-							secretKey: env.TURNSTILE_SECRET_KEY,
-							// Protect only endpoints that SEND emails (expensive operation)
-							// /sign-in/email-otp is NOT included - it verifies OTP, doesn't send email
-							endpoints: [
-								"/sign-up/email", // Sends verification OTP on signup
-								"/email-otp/send-verification-otp", // Send/resend OTP email
-								"/forget-password", // Password reset email
-							],
-						}),
-					]
-				: []),
+			// NOTE: Cloudflare Turnstile captcha protection is handled in routes.ts
+			// with proper 5-second timeout to prevent request hanging in Cloudflare Workers.
+			// Better Auth's captcha plugin doesn't support timeouts, which can cause
+			// indefinite hangs when Turnstile is slow to respond.
 		],
 		session: {
 			updateAge: 60 * 30,

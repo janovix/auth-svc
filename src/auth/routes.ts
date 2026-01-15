@@ -121,8 +121,18 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		// Validate Turnstile for forgot-password requests
-		if (pathname === "/api/auth/forgot-password" && c.req.method === "POST") {
+		// Validate Turnstile for endpoints that send emails (expensive operations)
+		// We handle this ourselves instead of using Better Auth's captcha plugin
+		// because our implementation has proper timeout handling to prevent hanging
+		const turnstileProtectedEndpoints = [
+			"/api/auth/forgot-password",
+			"/api/auth/sign-up/email",
+			"/api/auth/email-otp/send-verification-otp",
+		];
+		if (
+			turnstileProtectedEndpoints.includes(pathname) &&
+			c.req.method === "POST"
+		) {
 			const turnstileResult = await validateTurnstileForRequest(c);
 			if (!turnstileResult.valid) {
 				return c.json(
@@ -215,20 +225,24 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 }
 
 /**
- * Validates Turnstile token for password reset requests.
+ * Validates Turnstile token for email-sending requests.
  *
  * If TURNSTILE_SECRET_KEY is not configured, validation is skipped (development mode).
  * This allows local development without Turnstile while enforcing it in production.
+ *
+ * Uses our custom verifyTurnstileToken utility which has a 5-second timeout
+ * to prevent request hanging in Cloudflare Workers.
  */
 async function validateTurnstileForRequest(
 	c: Context<{ Bindings: Bindings }>,
 ): Promise<{ valid: boolean; message: string }> {
+	const pathname = c.req.path;
 	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
 
 	// Skip validation if Turnstile is not configured (development mode)
 	if (!turnstileSecret) {
 		console.warn(
-			"[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation",
+			`[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation for ${pathname}`,
 		);
 		return { valid: true, message: "Turnstile not configured" };
 	}
@@ -239,16 +253,20 @@ async function validateTurnstileForRequest(
 	try {
 		body = await c.req.raw.clone().json();
 	} catch {
+		console.warn(`[Turnstile] Invalid request body for ${pathname}`);
 		return { valid: false, message: "Invalid request body" };
 	}
 
 	const { turnstileToken } = body;
 
 	if (!turnstileToken) {
+		console.warn(`[Turnstile] Missing token for ${pathname}`);
 		return { valid: false, message: "Turnstile token is required" };
 	}
 
 	const clientIp = getClientIp(c.req.raw);
+	const startTime = Date.now();
+	console.log(`[Turnstile] Starting verification for ${pathname}`);
 
 	const result = await verifyTurnstileToken({
 		secretKey: turnstileSecret,
@@ -256,13 +274,22 @@ async function validateTurnstileForRequest(
 		remoteIp: clientIp,
 	});
 
+	const duration = Date.now() - startTime;
+
 	if (!result.success) {
-		console.warn("[Turnstile] Verification failed:", result["error-codes"]);
+		console.warn(
+			`[Turnstile] Verification failed for ${pathname} in ${duration}ms:`,
+			result["error-codes"],
+		);
 		return {
 			valid: false,
 			message: "Bot verification failed. Please try again.",
 		};
 	}
+
+	console.log(
+		`[Turnstile] Verification succeeded for ${pathname} in ${duration}ms`,
+	);
 
 	return { valid: true, message: "Turnstile verified" };
 }
