@@ -247,17 +247,23 @@ async function validateTurnstileForRequest(
 		return { valid: true, message: "Turnstile not configured" };
 	}
 
-	// Parse the request body to get the turnstile token
-	// Clone the request stream to avoid exhausting it for Better Auth handler
-	let body: { turnstileToken?: string; email?: string };
-	try {
-		body = await c.req.raw.clone().json();
-	} catch {
-		console.warn(`[Turnstile] Invalid request body for ${pathname}`);
-		return { valid: false, message: "Invalid request body" };
-	}
+	// Get Turnstile token from either:
+	// 1. x-captcha-response header (Better Auth client convention)
+	// 2. turnstileToken in request body (legacy/custom clients)
+	let turnstileToken = c.req.header("x-captcha-response");
 
-	const { turnstileToken } = body;
+	if (!turnstileToken) {
+		// Fallback to request body for backwards compatibility
+		// Clone the request stream to avoid exhausting it for Better Auth handler
+		try {
+			const body = (await c.req.raw.clone().json()) as {
+				turnstileToken?: string;
+			};
+			turnstileToken = body.turnstileToken;
+		} catch {
+			// Body parsing failed, but header might still have token
+		}
+	}
 
 	if (!turnstileToken) {
 		console.warn(`[Turnstile] Missing token for ${pathname}`);

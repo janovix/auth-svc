@@ -449,7 +449,9 @@ describe("isBetterAuthRedirectError", () => {
 });
 
 describe("Turnstile validation edge cases", () => {
-	it("rejects forgot-password with invalid JSON body", async () => {
+	it("rejects forgot-password with invalid JSON body and no header token", async () => {
+		// When body is invalid JSON and no x-captcha-response header is provided,
+		// the validation falls back gracefully and returns "missing token" error
 		const request = new Request("http://localhost/api/auth/forgot-password", {
 			method: "POST",
 			headers: {
@@ -474,7 +476,7 @@ describe("Turnstile validation edge cases", () => {
 
 		expect(response.status).toBe(400);
 		const body = (await response.json()) as { message: string };
-		expect(body.message).toBe("Invalid request body");
+		expect(body.message).toBe("Turnstile token is required");
 	});
 
 	it("rejects forgot-password with missing turnstile token", async () => {
@@ -600,6 +602,56 @@ describe("Turnstile validation edge cases", () => {
 
 			// Should pass turnstile validation and proceed to Better Auth
 			// Better Auth may return various status codes, but should not be 400 from turnstile
+			expect(response.status).not.toBe(400);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	it("accepts turnstile token from x-captcha-response header", async () => {
+		// Better Auth clients send the token in x-captcha-response header
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url.includes("challenges.cloudflare.com/turnstile")) {
+				return new Response(
+					JSON.stringify({
+						success: true,
+					}),
+					{ status: 200 },
+				);
+			}
+			return originalFetch(input, init);
+		};
+
+		try {
+			const request = new Request("http://localhost/api/auth/forgot-password", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					origin: "https://auth.janovix.workers.dev",
+					"x-captcha-response": "valid-header-token",
+				},
+				body: JSON.stringify({
+					email: "test@example.com",
+					// No turnstileToken in body - should use header
+				}),
+			});
+
+			const response = await typedWorker.fetch(
+				request,
+				{
+					...env,
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_SECRET: TEST_SECRET,
+					BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
+					AUTH_INTERNAL_TOKEN: TEST_INTERNAL_TOKEN,
+					TURNSTILE_SECRET_KEY: "test-turnstile-secret",
+				},
+				{} as ExecutionContext,
+			);
+
+			// Should pass turnstile validation using header token
 			expect(response.status).not.toBe(400);
 		} finally {
 			globalThis.fetch = originalFetch;
