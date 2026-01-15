@@ -443,7 +443,10 @@ export function buildResolvedAuthConfig(
 			cookieCache: {
 				enabled: true,
 				strategy: "jwe",
-				refreshCache: true,
+				// Short maxAge ensures banned users are checked against DB frequently
+				// This enables immediate session revocation when users are banned
+				maxAge: 60, // 1 minute - sessions revalidate against DB every minute
+				refreshCache: false, // Disable auto-refresh to force DB validation on expiry
 			},
 		},
 		rateLimit: RATE_LIMITS[resolvedEnv],
