@@ -242,5 +242,278 @@ describe("AuditService", () => {
 			expect(result.filename).toContain(".csv");
 			expect(result.data).toContain("id,event_type,entity_type");
 		});
+
+		it("should escape CSV special characters", async () => {
+			mockDb._mockAll.mockResolvedValue({
+				results: [
+					{
+						id: "log-1",
+						event_type: "CREATE",
+						entity_type: "user,with,commas",
+						entity_id: 'id"with"quotes',
+						actor_user_id: "user\nwith\nnewlines",
+						actor_organization_id: null,
+						actor_ip: null,
+						actor_user_agent: null,
+						previous_state: null,
+						new_state: null,
+						change_summary: null,
+						source_service: "auth-svc",
+						request_id: null,
+						metadata: null,
+						signature: "sig-1",
+						previous_signature: null,
+						created_at: "2024-01-01T00:00:00.000Z",
+					},
+				],
+			});
+
+			const result = await service.export("csv");
+
+			expect(result.data).toContain('"user,with,commas"');
+			expect(result.data).toContain('"id""with""quotes"');
+		});
+	});
+
+	describe("getById", () => {
+		it("should return audit log by ID", async () => {
+			mockDb._mockFirst.mockResolvedValue({
+				id: "log-123",
+				event_type: "CREATE",
+				entity_type: "user",
+				entity_id: "user-456",
+				actor_user_id: null,
+				actor_organization_id: null,
+				actor_ip: null,
+				actor_user_agent: null,
+				previous_state: null,
+				new_state: null,
+				change_summary: null,
+				source_service: "auth-svc",
+				request_id: null,
+				metadata: null,
+				signature: "sig-123",
+				previous_signature: null,
+				created_at: "2024-01-01T00:00:00.000Z",
+			});
+
+			const result = await service.getById("log-123");
+
+			expect(result).not.toBeNull();
+			expect(result?.id).toBe("log-123");
+		});
+
+		it("should return null when not found", async () => {
+			mockDb._mockFirst.mockResolvedValue(null);
+
+			const result = await service.getById("nonexistent");
+
+			expect(result).toBeNull();
+		});
+	});
+
+	describe("verifyChainIntegrity", () => {
+		it("should return valid for empty chain", async () => {
+			mockDb._mockAll.mockResolvedValue({ results: [] });
+
+			const result = await service.verifyChainIntegrity();
+
+			expect(result.valid).toBe(true);
+			expect(result.totalVerified).toBe(0);
+		});
+
+		it("should handle errors gracefully", async () => {
+			mockDb._mockAll.mockRejectedValue(new Error("Database error"));
+
+			const result = await service.verifyChainIntegrity();
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toBe("Database error");
+		});
+
+		it("should detect broken chain when previous entry not found", async () => {
+			mockDb._mockAll.mockResolvedValue({
+				results: [
+					{
+						id: "log-1",
+						event_type: "CREATE",
+						entity_type: "user",
+						entity_id: "user-1",
+						actor_user_id: null,
+						actor_organization_id: null,
+						actor_ip: null,
+						actor_user_agent: null,
+						previous_state: null,
+						new_state: null,
+						change_summary: null,
+						source_service: "auth-svc",
+						request_id: null,
+						metadata: null,
+						signature: "sig-1",
+						previous_signature: "nonexistent-prev-sig",
+						created_at: "2024-01-01T00:00:00.000Z",
+					},
+				],
+			});
+			mockDb._mockFirst.mockResolvedValue(null);
+
+			const result = await service.verifyChainIntegrity();
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("non-existent previous signature");
+		});
+	});
+
+	describe("logFromContext", () => {
+		it("should create log from context", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+			mockDb._mockFirst.mockResolvedValueOnce({
+				id: "log-123",
+				event_type: "CREATE",
+				entity_type: "user",
+				entity_id: "user-456",
+				actor_user_id: "actor-789",
+				actor_organization_id: "org-123",
+				actor_ip: "127.0.0.1",
+				actor_user_agent: "Test Agent",
+				previous_state: null,
+				new_state: '{"name":"Test"}',
+				change_summary: null,
+				source_service: "auth-svc",
+				request_id: "req-abc",
+				metadata: '{"key":"value"}',
+				signature: "sig-123",
+				previous_signature: null,
+				created_at: "2024-01-01T00:00:00.000Z",
+			});
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await service.logFromContext(
+				"CREATE",
+				"user",
+				"user-456",
+				"auth-svc",
+				{
+					actorUserId: "actor-789",
+					actorOrganizationId: "org-123",
+					actorIp: "127.0.0.1",
+					actorUserAgent: "Test Agent",
+					newState: { name: "Test" },
+					requestId: "req-abc",
+					metadata: { key: "value" },
+				},
+			);
+
+			expect(result.eventType).toBe("CREATE");
+			expect(result.entityType).toBe("user");
+			expect(result.sourceService).toBe("auth-svc");
+		});
+
+		it("should create log with minimal options", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+			mockDb._mockFirst.mockResolvedValueOnce({
+				id: "log-123",
+				event_type: "DELETE",
+				entity_type: "session",
+				entity_id: null,
+				actor_user_id: null,
+				actor_organization_id: null,
+				actor_ip: null,
+				actor_user_agent: null,
+				previous_state: null,
+				new_state: null,
+				change_summary: null,
+				source_service: "auth-svc",
+				request_id: null,
+				metadata: null,
+				signature: "sig-123",
+				previous_signature: null,
+				created_at: "2024-01-01T00:00:00.000Z",
+			});
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await service.logFromContext(
+				"DELETE",
+				"session",
+				null,
+				"auth-svc",
+			);
+
+			expect(result.eventType).toBe("DELETE");
+			expect(result.entityId).toBeNull();
+		});
+	});
+
+	describe("createLog with change summary", () => {
+		it("should use provided change summary", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+			mockDb._mockFirst.mockResolvedValueOnce({
+				id: "log-123",
+				event_type: "UPDATE",
+				entity_type: "user",
+				entity_id: "user-456",
+				actor_user_id: null,
+				actor_organization_id: null,
+				actor_ip: null,
+				actor_user_agent: null,
+				previous_state: '{"name":"Old"}',
+				new_state: '{"name":"New"}',
+				change_summary: '{"custom":"summary"}',
+				source_service: "auth-svc",
+				request_id: null,
+				metadata: null,
+				signature: "sig-123",
+				previous_signature: null,
+				created_at: "2024-01-01T00:00:00.000Z",
+			});
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await service.createLog({
+				eventType: "UPDATE",
+				entityType: "user",
+				entityId: "user-456",
+				previousState: { name: "Old" },
+				newState: { name: "New" },
+				changeSummary: { custom: "summary" },
+				sourceService: "auth-svc",
+			});
+
+			expect(result.changeSummary).toEqual({ custom: "summary" });
+		});
+
+		it("should create log with metadata", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+			mockDb._mockFirst.mockResolvedValueOnce({
+				id: "log-123",
+				event_type: "CREATE",
+				entity_type: "user",
+				entity_id: "user-456",
+				actor_user_id: null,
+				actor_organization_id: "org-123",
+				actor_ip: null,
+				actor_user_agent: null,
+				previous_state: null,
+				new_state: null,
+				change_summary: null,
+				source_service: "auth-svc",
+				request_id: null,
+				metadata: '{"foo":"bar"}',
+				signature: "sig-123",
+				previous_signature: null,
+				created_at: "2024-01-01T00:00:00.000Z",
+			});
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await service.createLog({
+				eventType: "CREATE",
+				entityType: "user",
+				entityId: "user-456",
+				actorOrganizationId: "org-123",
+				metadata: { foo: "bar" },
+				sourceService: "auth-svc",
+			});
+
+			expect(result.metadata).toEqual({ foo: "bar" });
+		});
 	});
 });

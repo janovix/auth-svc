@@ -198,4 +198,131 @@ describe("SettingsRepository", () => {
 		expect(userDeleted).toBe(true);
 		expect(orgDeleted).toBe(false);
 	});
+
+	describe("createUserSettings", () => {
+		it("creates user settings with all fields", async () => {
+			mockDb._mockRun.mockResolvedValueOnce({ meta: { changes: 1 } });
+			mockDb._mockFirst.mockResolvedValueOnce({
+				...sampleUserRow,
+				clock_format: "24h",
+			});
+
+			const result = await repository.createUserSettings(
+				"user-settings-new",
+				"user-new",
+				{
+					theme: "dark",
+					timezone: "America/New_York",
+					language: "en",
+					dateFormat: "YYYY-MM-DD",
+					clockFormat: "24h",
+					avatarUrl: "https://example.com/avatar.png",
+					paymentMethods: [{ id: "pm-1", type: "card", label: "Visa" }],
+					metadata: { custom: "data" },
+				},
+			);
+
+			expect(result?.userId).toBe("user-1");
+			expect(mockDb._mockRun).toHaveBeenCalled();
+		});
+
+		it("throws error when creation fails", async () => {
+			mockDb._mockRun.mockResolvedValueOnce({ meta: { changes: 1 } });
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+
+			await expect(
+				repository.createUserSettings("id", "user-fail", {}),
+			).rejects.toThrow("Failed to create user settings");
+		});
+	});
+
+	describe("updateUserSettings", () => {
+		it("returns null when user not found", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+
+			const result = await repository.updateUserSettings("nonexistent", {
+				theme: "dark",
+			});
+
+			expect(result).toBeNull();
+		});
+
+		it("updates all user settings fields", async () => {
+			mockDb._mockFirst
+				.mockResolvedValueOnce(sampleUserRow)
+				.mockResolvedValueOnce({ ...sampleUserRow, theme: "dark" });
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await repository.updateUserSettings("user-1", {
+				theme: "dark",
+				timezone: "UTC",
+				language: "es",
+				dateFormat: "DD/MM/YYYY",
+				clockFormat: "24h",
+				avatarUrl: "https://new-avatar.com/img.png",
+				paymentMethods: [{ id: "pm-2", type: "bank_account", label: "Bank" }],
+				metadata: { updated: true },
+			});
+
+			expect(result?.theme).toBe("dark");
+		});
+	});
+
+	describe("upsertUserSettings creates new", () => {
+		it("creates when user settings do not exist", async () => {
+			mockDb._mockFirst
+				.mockResolvedValueOnce(null) // Check existing
+				.mockResolvedValueOnce(sampleUserRow); // After create
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await repository.upsertUserSettings(
+				"user-settings-new",
+				"user-new",
+				{ theme: "light" },
+			);
+
+			expect(result?.theme).toBe("light");
+		});
+	});
+
+	describe("upsertOrganizationSettings creates new", () => {
+		it("creates when organization settings do not exist", async () => {
+			mockDb._mockFirst
+				.mockResolvedValueOnce(null) // Check existing
+				.mockResolvedValueOnce(sampleOrgRow); // After create
+			mockDb._mockRun.mockResolvedValue({ meta: { changes: 1 } });
+
+			const result = await repository.upsertOrganizationSettings(
+				"org-settings-new",
+				"org-new",
+				{ theme: "dark" },
+			);
+
+			expect(result?.theme).toBe("dark");
+		});
+	});
+
+	describe("createOrganizationSettings throws on failure", () => {
+		it("throws error when creation fails", async () => {
+			mockDb._mockRun.mockResolvedValueOnce({ meta: { changes: 1 } });
+			mockDb._mockFirst.mockResolvedValueOnce(null);
+
+			await expect(
+				repository.createOrganizationSettings("id", "org-fail", {}),
+			).rejects.toThrow("Failed to create organization settings");
+		});
+	});
+
+	describe("getUserSettings returns mapped clockFormat", () => {
+		it("maps clock_format field correctly", async () => {
+			mockDb._mockFirst.mockResolvedValueOnce({
+				...sampleUserRow,
+				clock_format: "24h",
+			});
+
+			const result = await repository.getUserSettings("user-1");
+
+			expect(result?.clockFormat).toBe("24h");
+		});
+	});
 });

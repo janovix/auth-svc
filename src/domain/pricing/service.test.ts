@@ -28,6 +28,7 @@ describe("PricingService", () => {
 		getLimitsForPlan: ReturnType<typeof vi.fn>;
 		getLimitsByPlanName: ReturnType<typeof vi.fn>;
 		getPricesForPlan: ReturnType<typeof vi.fn>;
+		getPriceByStripePriceId: ReturnType<typeof vi.fn>;
 		getLicenseByKey: ReturnType<typeof vi.fn>;
 		getLicenseById: ReturnType<typeof vi.fn>;
 		getLicenseByUserId: ReturnType<typeof vi.fn>;
@@ -134,6 +135,7 @@ describe("PricingService", () => {
 			getLimitsForPlan: vi.fn(),
 			getLimitsByPlanName: vi.fn(),
 			getPricesForPlan: vi.fn(),
+			getPriceByStripePriceId: vi.fn(),
 			getLicenseByKey: vi.fn(),
 			getLicenseById: vi.fn(),
 			getLicenseByUserId: vi.fn(),
@@ -142,6 +144,565 @@ describe("PricingService", () => {
 		service = new PricingService(
 			mockRepository as unknown as PricingRepository,
 		);
+	});
+
+	// =========================================================================
+	// PLANS
+	// =========================================================================
+
+	describe("getActivePlans", () => {
+		it("should return active plans", async () => {
+			mockRepository.getActivePlans.mockResolvedValue([
+				mockBusinessPlan,
+				mockProPlan,
+			]);
+
+			const plans = await service.getActivePlans();
+
+			expect(plans).toHaveLength(2);
+			expect(plans[0].name).toBe("business");
+		});
+	});
+
+	describe("getAllPlans", () => {
+		it("should return all plans including inactive", async () => {
+			mockRepository.getAllPlans.mockResolvedValue([
+				mockBusinessPlan,
+				{ ...mockProPlan, isActive: false },
+			]);
+
+			const plans = await service.getAllPlans();
+
+			expect(plans).toHaveLength(2);
+		});
+	});
+
+	describe("getPlanByName", () => {
+		it("should return plan when found", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+
+			const plan = await service.getPlanByName("business");
+
+			expect(plan).not.toBeNull();
+			expect(plan?.name).toBe("business");
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const plan = await service.getPlanByName("nonexistent");
+
+			expect(plan).toBeNull();
+		});
+	});
+
+	describe("getPlanById", () => {
+		it("should return plan when found", async () => {
+			mockRepository.getPlanById.mockResolvedValue(mockBusinessPlan);
+
+			const plan = await service.getPlanById("plan_business");
+
+			expect(plan).not.toBeNull();
+			expect(plan?.id).toBe("plan_business");
+		});
+	});
+
+	describe("getPlanWithDetailsByName", () => {
+		it("should return plan with details", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getLimitsForPlan.mockResolvedValue(mockBusinessLimits);
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const result = await service.getPlanWithDetailsByName("business");
+
+			expect(result).not.toBeNull();
+			expect(result?.plan.name).toBe("business");
+			expect(result?.limits).toEqual(mockBusinessLimits);
+			expect(result?.prices).toEqual(mockBusinessPrices);
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const result = await service.getPlanWithDetailsByName("nonexistent");
+
+			expect(result).toBeNull();
+		});
+	});
+
+	describe("getPublicPlanByName", () => {
+		it("should return public plan info without stripe price IDs", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getLimitsForPlan.mockResolvedValue(mockBusinessLimits);
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const result = await service.getPublicPlanByName("business");
+
+			expect(result).not.toBeNull();
+			expect(result?.name).toBe("business");
+			expect(result?.limits?.maxOrganizations).toBe(1);
+			expect(result?.prices[0]).not.toHaveProperty("stripePriceId");
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const result = await service.getPublicPlanByName("nonexistent");
+
+			expect(result).toBeNull();
+		});
+
+		it("should handle plan with null limits", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getLimitsForPlan.mockResolvedValue(null);
+			mockRepository.getPricesForPlan.mockResolvedValue([]);
+
+			const result = await service.getPublicPlanByName("business");
+
+			expect(result?.limits).toBeNull();
+		});
+	});
+
+	// =========================================================================
+	// LIMITS
+	// =========================================================================
+
+	describe("getLimitsByPlanId", () => {
+		it("should return limits for plan", async () => {
+			mockRepository.getLimitsForPlan.mockResolvedValue(mockBusinessLimits);
+
+			const limits = await service.getLimitsByPlanId("plan_business");
+
+			expect(limits).toEqual(mockBusinessLimits);
+		});
+	});
+
+	// =========================================================================
+	// PRICES
+	// =========================================================================
+
+	describe("getPricesForPlan", () => {
+		it("should return prices for plan", async () => {
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const prices = await service.getPricesForPlan("plan_business");
+
+			expect(prices).toHaveLength(2);
+			expect(prices[0].priceType).toBe("subscription");
+		});
+	});
+
+	describe("getPriceByStripePriceId", () => {
+		it("should return price when found", async () => {
+			mockRepository.getPriceByStripePriceId.mockResolvedValue(
+				mockBusinessPrices[0],
+			);
+
+			const price = await service.getPriceByStripePriceId(
+				"price_business_monthly",
+			);
+
+			expect(price).not.toBeNull();
+			expect(price?.stripePriceId).toBe("price_business_monthly");
+		});
+	});
+
+	describe("getSubscriptionPriceForPlan", () => {
+		it("should return subscription price", async () => {
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const price = await service.getSubscriptionPriceForPlan("plan_business");
+
+			expect(price).not.toBeNull();
+			expect(price?.priceType).toBe("subscription");
+		});
+
+		it("should return null when no subscription price", async () => {
+			mockRepository.getPricesForPlan.mockResolvedValue([
+				{ ...mockBusinessPrices[1], priceType: "seat" },
+			]);
+
+			const price = await service.getSubscriptionPriceForPlan("plan_business");
+
+			expect(price).toBeNull();
+		});
+	});
+
+	describe("getSeatPriceForPlan", () => {
+		it("should return seat price", async () => {
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const price = await service.getSeatPriceForPlan("plan_business");
+
+			expect(price).not.toBeNull();
+			expect(price?.priceType).toBe("seat");
+		});
+
+		it("should return null when no seat price", async () => {
+			mockRepository.getPricesForPlan.mockResolvedValue([
+				mockBusinessPrices[0],
+			]);
+
+			const price = await service.getSeatPriceForPlan("plan_business");
+
+			expect(price).toBeNull();
+		});
+	});
+
+	describe("getPlanNameFromStripePriceId", () => {
+		it("should return plan name for valid price", async () => {
+			mockRepository.getPriceByStripePriceId.mockResolvedValue(
+				mockBusinessPrices[0],
+			);
+			mockRepository.getPlanById.mockResolvedValue(mockBusinessPlan);
+
+			const planName = await service.getPlanNameFromStripePriceId(
+				"price_business_monthly",
+			);
+
+			expect(planName).toBe("business");
+		});
+
+		it("should return null when price not found", async () => {
+			mockRepository.getPriceByStripePriceId.mockResolvedValue(null);
+
+			const planName =
+				await service.getPlanNameFromStripePriceId("nonexistent");
+
+			expect(planName).toBeNull();
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getPriceByStripePriceId.mockResolvedValue(
+				mockBusinessPrices[0],
+			);
+			mockRepository.getPlanById.mockResolvedValue(null);
+
+			const planName = await service.getPlanNameFromStripePriceId(
+				"price_business_monthly",
+			);
+
+			expect(planName).toBeNull();
+		});
+	});
+
+	describe("getAllSubscriptionPrices", () => {
+		it("should return map of plan names to stripe price IDs", async () => {
+			mockRepository.getAllPlans.mockResolvedValue([
+				mockBusinessPlan,
+				mockProPlan,
+			]);
+			mockRepository.getPricesForPlan.mockImplementation((planId: string) => {
+				if (planId === "plan_business")
+					return Promise.resolve(mockBusinessPrices);
+				if (planId === "plan_pro")
+					return Promise.resolve([
+						{ ...mockBusinessPrices[0], stripePriceId: "price_pro_monthly" },
+					]);
+				return Promise.resolve([]);
+			});
+
+			const priceMap = await service.getAllSubscriptionPrices();
+
+			expect(priceMap.size).toBe(2);
+			expect(priceMap.get("business")).toBe("price_business_monthly");
+			expect(priceMap.get("pro")).toBe("price_pro_monthly");
+		});
+
+		it("should skip plans without subscription price", async () => {
+			mockRepository.getAllPlans.mockResolvedValue([mockBusinessPlan]);
+			mockRepository.getPricesForPlan.mockResolvedValue([
+				{ ...mockBusinessPrices[1], priceType: "seat" },
+			]);
+
+			const priceMap = await service.getAllSubscriptionPrices();
+
+			expect(priceMap.size).toBe(0);
+		});
+	});
+
+	describe("getSubscriptionPriceIdByPlanName", () => {
+		it("should return stripe price ID for plan", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const priceId =
+				await service.getSubscriptionPriceIdByPlanName("business");
+
+			expect(priceId).toBe("price_business_monthly");
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const priceId =
+				await service.getSubscriptionPriceIdByPlanName("nonexistent");
+
+			expect(priceId).toBeNull();
+		});
+
+		it("should return null when no subscription price", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getPricesForPlan.mockResolvedValue([]);
+
+			const priceId =
+				await service.getSubscriptionPriceIdByPlanName("business");
+
+			expect(priceId).toBeNull();
+		});
+	});
+
+	// =========================================================================
+	// LICENSES
+	// =========================================================================
+
+	describe("getLicenseByKey", () => {
+		it("should return license when found", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-TEST",
+				organizationName: "Test Corp",
+				planId: "plan_pro",
+				userId: null,
+				status: "active",
+				expiresAt: null,
+				activatedAt: null,
+				maxOrganizations: null,
+				maxUsers: null,
+				reportsIncluded: null,
+				noticesIncluded: null,
+				alertsIncluded: null,
+				transactionsIncluded: null,
+				clientsIncluded: null,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-01"),
+			};
+			mockRepository.getLicenseByKey.mockResolvedValue(mockLicense);
+
+			const license = await service.getLicenseByKey("ENT-TEST");
+
+			expect(license).not.toBeNull();
+			expect(license?.key).toBe("ENT-TEST");
+		});
+	});
+
+	describe("getLicenseByUserId", () => {
+		it("should return license when found", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-TEST",
+				organizationName: "Test Corp",
+				planId: "plan_pro",
+				userId: "user_123",
+				status: "active",
+				expiresAt: null,
+				activatedAt: new Date("2024-01-15"),
+				maxOrganizations: null,
+				maxUsers: null,
+				reportsIncluded: null,
+				noticesIncluded: null,
+				alertsIncluded: null,
+				transactionsIncluded: null,
+				clientsIncluded: null,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-15"),
+			};
+			mockRepository.getLicenseByUserId.mockResolvedValue(mockLicense);
+
+			const license = await service.getLicenseByUserId("user_123");
+
+			expect(license).not.toBeNull();
+			expect(license?.userId).toBe("user_123");
+		});
+	});
+
+	describe("activateLicense", () => {
+		const mockLicense: EnterpriseLicense = {
+			id: "lic_1",
+			key: "ENT-ACTIVATE",
+			organizationName: "Test Corp",
+			planId: "plan_pro",
+			userId: null,
+			status: "active",
+			expiresAt: null,
+			activatedAt: null,
+			maxOrganizations: null,
+			maxUsers: null,
+			reportsIncluded: null,
+			noticesIncluded: null,
+			alertsIncluded: null,
+			transactionsIncluded: null,
+			clientsIncluded: null,
+			metadata: null,
+			createdAt: new Date("2024-01-01"),
+			updatedAt: new Date("2024-01-01"),
+		};
+
+		it("should activate license successfully", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(mockLicense);
+			mockRepository.activateLicense.mockResolvedValue(undefined);
+			mockRepository.getLicenseById.mockResolvedValue({
+				...mockLicense,
+				userId: "user_123",
+				activatedAt: new Date(),
+			});
+
+			const result = await service.activateLicense("ENT-ACTIVATE", "user_123");
+
+			expect(result.success).toBe(true);
+			expect(result.license?.userId).toBe("user_123");
+		});
+
+		it("should fail when license not found", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(null);
+
+			const result = await service.activateLicense("INVALID", "user_123");
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License key not found");
+		});
+
+		it("should fail when license is revoked", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue({
+				...mockLicense,
+				status: "revoked",
+			});
+
+			const result = await service.activateLicense("ENT-REVOKED", "user_123");
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is revoked");
+		});
+
+		it("should fail when license is already in use by another user", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue({
+				...mockLicense,
+				userId: "other_user",
+			});
+
+			const result = await service.activateLicense("ENT-INUSE", "user_123");
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is already in use");
+		});
+
+		it("should succeed when activating license for same user", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue({
+				...mockLicense,
+				userId: "user_123",
+			});
+			mockRepository.activateLicense.mockResolvedValue(undefined);
+			mockRepository.getLicenseById.mockResolvedValue({
+				...mockLicense,
+				userId: "user_123",
+			});
+
+			const result = await service.activateLicense("ENT-SAME", "user_123");
+
+			expect(result.success).toBe(true);
+		});
+	});
+
+	describe("getEffectiveLimitsForUser with invalid license plan", () => {
+		it("should fall back to plan limits when license references invalid plan", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-INVALID-PLAN",
+				organizationName: "Test Corp",
+				planId: "plan_invalid",
+				userId: "user_123",
+				status: "active",
+				expiresAt: null,
+				activatedAt: new Date("2024-01-15"),
+				maxOrganizations: null,
+				maxUsers: null,
+				reportsIncluded: null,
+				noticesIncluded: null,
+				alertsIncluded: null,
+				transactionsIncluded: null,
+				clientsIncluded: null,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-15"),
+			};
+
+			mockRepository.getLicenseByUserId.mockResolvedValue(mockLicense);
+			mockRepository.getPlanById.mockResolvedValue(null); // Invalid plan
+			mockRepository.getLimitsForPlan.mockResolvedValue(null);
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+
+			// Mock for fallback
+			mockRepository.getLimitsForPlan.mockResolvedValueOnce(null);
+			mockRepository.getLimitsForPlan.mockResolvedValueOnce(mockBusinessLimits);
+
+			const limits = await service.getEffectiveLimitsForUser(
+				"user_123",
+				"business",
+			);
+
+			expect(limits).toBeDefined();
+			expect(limits?.source).toBe("plan");
+		});
+
+		it("should return null when plan not found", async () => {
+			mockRepository.getLicenseByUserId.mockResolvedValue(null);
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const limits = await service.getEffectiveLimitsForUser(
+				"user_123",
+				"nonexistent",
+			);
+
+			expect(limits).toBeNull();
+		});
+
+		it("should return null when limits not found", async () => {
+			mockRepository.getLicenseByUserId.mockResolvedValue(null);
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getLimitsForPlan.mockResolvedValue(null);
+
+			const limits = await service.getEffectiveLimitsForUser(
+				"user_123",
+				"business",
+			);
+
+			expect(limits).toBeNull();
+		});
+	});
+
+	describe("getEffectiveLimitsForLicense edge cases", () => {
+		it("should return null when plan not found for license", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-TEST",
+				organizationName: "Test Corp",
+				planId: "plan_invalid",
+				userId: "user_123",
+				status: "active",
+				expiresAt: null,
+				activatedAt: new Date(),
+				maxOrganizations: null,
+				maxUsers: null,
+				reportsIncluded: null,
+				noticesIncluded: null,
+				alertsIncluded: null,
+				transactionsIncluded: null,
+				clientsIncluded: null,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-01"),
+			};
+
+			mockRepository.getLicenseById.mockResolvedValue(mockLicense);
+			mockRepository.getPlanById.mockResolvedValue(null);
+			mockRepository.getLimitsForPlan.mockResolvedValue(null);
+
+			const limits = await service.getEffectiveLimitsForLicense("lic_1");
+
+			expect(limits).toBeNull();
+		});
 	});
 
 	describe("getPublicPlans", () => {

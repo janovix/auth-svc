@@ -28,10 +28,10 @@ export default defineWorkersConfig({
 				"src/auth/routes.ts", // Better Auth routes; covered via integration tests
 			],
 			thresholds: {
-				lines: 60,
-				functions: 60,
-				branches: 55,
-				statements: 60,
+				lines: 85,
+				functions: 85,
+				branches: 80,
+				statements: 85,
 			},
 		},
 		// Bundle problematic dependencies that fail to import on Windows and other systems
