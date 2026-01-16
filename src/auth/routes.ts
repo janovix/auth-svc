@@ -88,10 +88,20 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
 
-		const { auth, accessPolicy } = await getBetterAuthContext(
+		const { auth, accessPolicy, cleanup } = await getBetterAuthContext(
 			c.env,
 			executionContext,
 		);
+
+		// Ensure cleanup is called when request completes (success or error)
+		// This prevents execution context from leaking to other requests
+		c.executionCtx?.waitUntil?.(
+			Promise.resolve().then(() => {
+				// Cleanup will be called after response is sent
+				setTimeout(cleanup, 100);
+			}),
+		);
+
 		console.log(
 			`[Auth] Context built in ${Date.now() - startTime}ms for ${pathname}`,
 		);
@@ -378,11 +388,19 @@ async function validateTurnstileForRequest(
 	return { valid: true, message: "Turnstile verified" };
 }
 
+/**
+ * Timeout in milliseconds for Better Auth handler.
+ * This prevents indefinite hangs from external service calls (Stripe, email, etc.)
+ * Cloudflare Workers have a 30s limit, so we use 25s to leave room for cleanup.
+ */
+const BETTER_AUTH_HANDLER_TIMEOUT_MS = 25_000;
+
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
 ) {
 	const pathname = c.req.path;
+	const startTime = Date.now();
 
 	console.log(`[Auth] Passing request to Better Auth handler for ${pathname}`);
 
@@ -425,8 +443,19 @@ async function handleAuthRequest(
 		);
 	});
 
+	// Add timeout protection to prevent indefinite hangs
+	const timeoutPromise = new Promise<Response>((_, reject) => {
+		setTimeout(() => {
+			const elapsed = Date.now() - startTime;
+			console.error(
+				`[Auth] Handler timeout after ${elapsed}ms for ${pathname}`,
+			);
+			reject(new Error(`Request timeout after ${elapsed}ms`));
+		}, BETTER_AUTH_HANDLER_TIMEOUT_MS);
+	});
+
 	try {
-		const response = await handlerPromise;
+		const response = await Promise.race([handlerPromise, timeoutPromise]);
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
@@ -453,7 +482,11 @@ async function handleAuthRequest(
 		);
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error(`[Auth] Handler error for ${pathname}:`, errorMessage);
+		const isTimeout = errorMessage.includes("timeout");
+		console.error(
+			`[Auth] Handler ${isTimeout ? "timeout" : "error"} for ${pathname}:`,
+			errorMessage,
+		);
 
 		// Check if it's a JWKS decrypt error
 		if (isJwksDecryptError(error)) {
@@ -463,17 +496,23 @@ async function handleAuthRequest(
 			await clearJwksAndResetAuth(c, error);
 		}
 
+		// Return appropriate error code for timeout vs other errors
+		const errorCode = isTimeout ? 5002 : 5000;
+		const userMessage = isTimeout
+			? "Request timed out. Please try again."
+			: errorMessage || "Internal Server Error";
+
 		return c.json(
 			{
 				success: false,
 				errors: [
 					{
-						code: 5000,
-						message: errorMessage || "Internal Server Error",
+						code: errorCode,
+						message: userMessage,
 					},
 				],
 			},
-			500,
+			isTimeout ? 504 : 500,
 		);
 	}
 }

@@ -109,18 +109,38 @@ export function invalidateBetterAuthCache(env: Bindings) {
  *
  * @param env - Cloudflare Worker bindings
  * @param executionContext - Optional execution context for waitUntil support
+ * @returns Auth context with cleanup function for execution context
  */
 export async function getBetterAuthContext(
 	env: Bindings,
 	executionContext?: ExecutionContext,
-) {
+): Promise<{
+	auth: ReturnType<typeof betterAuth>;
+	accessPolicy: { enforceInternal: boolean; token?: string };
+	cleanup: () => void;
+}> {
 	// Store execution context for this request (callbacks will access it dynamically)
 	// CRITICAL: This must be called before any auth operations that trigger callbacks
 	// (like email OTP sending) to ensure waitUntil() works in Cloudflare Workers.
-	setCurrentExecutionContext(executionContext);
+	// The cleanup function should be called when the request completes.
+	const cleanup = setCurrentExecutionContext(executionContext);
 
-	// Fetch prices from database (with caching)
-	const stripePriceIds = await fetchStripePriceIds(env);
+	// Fetch prices from database (with caching) - use timeout to prevent hanging
+	let stripePriceIds: StripePriceIds | undefined;
+	try {
+		stripePriceIds = await Promise.race([
+			fetchStripePriceIds(env),
+			new Promise<StripePriceIds>((_, reject) =>
+				setTimeout(() => reject(new Error("Price fetch timeout")), 5000),
+			),
+		]);
+	} catch (error) {
+		console.warn(
+			"[Auth] Price fetch failed or timed out, using defaults:",
+			error,
+		);
+		// Continue without price IDs - will use env var fallbacks
+	}
 
 	const resolved = buildResolvedAuthConfig(
 		env,
@@ -140,6 +160,7 @@ export async function getBetterAuthContext(
 		return {
 			auth: cached.auth,
 			accessPolicy: resolved.accessPolicy,
+			cleanup,
 		};
 	}
 
@@ -157,5 +178,6 @@ export async function getBetterAuthContext(
 	return {
 		auth,
 		accessPolicy: resolved.accessPolicy,
+		cleanup,
 	};
 }

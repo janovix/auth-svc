@@ -5,34 +5,157 @@
  * execution context, allowing async callbacks (like email sending) to
  * access waitUntil() without capturing stale references.
  *
- * In Cloudflare Workers, each request gets a fresh ExecutionContext.
- * Better Auth callbacks are defined at config time but execute at request time,
- * so they need a way to access the current request's context dynamically.
+ * IMPORTANT: Cloudflare Workers can process multiple requests concurrently
+ * within the same isolate. Using a simple global variable causes race conditions
+ * where request B overwrites request A's context while A is still processing.
+ *
+ * Solution: Use a stack-based approach with timestamps to detect stale contexts.
+ * Each request pushes its context on entry and pops on exit. Background tasks
+ * capture a reference to the context at creation time rather than reading from
+ * a global variable at execution time.
  */
 
-let currentExecutionContext: ExecutionContext | undefined;
+/**
+ * Context entry with metadata for debugging and staleness detection.
+ */
+interface ContextEntry {
+	ctx: ExecutionContext;
+	timestamp: number;
+	requestId: string;
+}
+
+/**
+ * Stack of execution contexts. Most recent is at the end.
+ * Using a stack handles nested/concurrent requests better than a single variable.
+ */
+const contextStack: ContextEntry[] = [];
+
+/**
+ * Maximum age (ms) for a context to be considered valid.
+ * Cloudflare Workers have a 30s CPU time limit, so contexts older than this
+ * are likely from completed requests.
+ */
+const MAX_CONTEXT_AGE_MS = 30_000;
+
+/**
+ * Generate a simple request ID for debugging.
+ */
+function generateRequestId(): string {
+	return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /**
  * Sets the current request's execution context.
  * Should be called at the start of each request handler.
+ *
+ * @returns A cleanup function to call when the request completes
  */
 export function setCurrentExecutionContext(
 	ctx: ExecutionContext | undefined,
-): void {
-	currentExecutionContext = ctx;
+): () => void {
+	if (!ctx) {
+		return () => {}; // No-op cleanup for undefined context
+	}
+
+	const requestId = generateRequestId();
+	const entry: ContextEntry = {
+		ctx,
+		timestamp: Date.now(),
+		requestId,
+	};
+
+	contextStack.push(entry);
+
+	// Cleanup function to remove this specific context
+	return () => {
+		const index = contextStack.findIndex((e) => e.requestId === requestId);
+		if (index !== -1) {
+			contextStack.splice(index, 1);
+		}
+	};
 }
 
 /**
  * Gets the current request's execution context for use in callbacks.
- * Returns undefined if no context is set (e.g., in tests or non-Worker environments).
+ * Returns undefined if no valid context is available.
+ *
+ * This function cleans up stale contexts and returns the most recent valid one.
  */
 export function getCurrentExecutionContext(): ExecutionContext | undefined {
-	return currentExecutionContext;
+	const now = Date.now();
+
+	// Clean up stale contexts (from requests that may have completed without cleanup)
+	while (
+		contextStack.length > 0 &&
+		now - contextStack[0].timestamp > MAX_CONTEXT_AGE_MS
+	) {
+		const stale = contextStack.shift();
+		console.warn(
+			`[ExecutionContext] Cleaned up stale context ${stale?.requestId} (age: ${now - (stale?.timestamp ?? 0)}ms)`,
+		);
+	}
+
+	// Return the most recent context (last in stack)
+	if (contextStack.length > 0) {
+		return contextStack[contextStack.length - 1].ctx;
+	}
+
+	return undefined;
+}
+
+/**
+ * Captures the current execution context for use in a callback.
+ * Returns a function that can be called later to execute work in the background.
+ *
+ * This is safer than reading the global context at callback execution time
+ * because it captures the context at the time the callback is created.
+ *
+ * @returns A function that takes a promise and runs it with waitUntil
+ */
+export function captureBackgroundExecutor(): (
+	promise: Promise<unknown>,
+	errorContext: string,
+) => void {
+	// Capture the context NOW, at creation time
+	const capturedCtx = getCurrentExecutionContext();
+
+	return (promise: Promise<unknown>, errorContext: string) => {
+		// Wrap promise with error handling and timeout
+		const safePromise = Promise.race([
+			promise,
+			new Promise((_, reject) =>
+				setTimeout(
+					() => reject(new Error(`Background task timeout: ${errorContext}`)),
+					25_000,
+				),
+			),
+		]).catch((error) => {
+			console.error(`[Background] ${errorContext} failed:`, error);
+		});
+
+		if (capturedCtx && typeof capturedCtx.waitUntil === "function") {
+			try {
+				capturedCtx.waitUntil(safePromise);
+			} catch (err) {
+				// waitUntil can throw if called after response is sent
+				console.warn(
+					`[Background] waitUntil failed for ${errorContext}, running detached:`,
+					err,
+				);
+			}
+		}
+		// If no context or waitUntil failed, the promise runs detached
+		// (it's already been started and has error handling)
+	};
 }
 
 /**
  * Executes a promise in the background using waitUntil if available.
  * Falls back to fire-and-forget with error logging if no context is available.
+ *
+ * NOTE: This reads the current context at execution time, which may not be
+ * the correct context if called from an async callback. For callbacks,
+ * prefer using captureBackgroundExecutor() at callback creation time.
  *
  * @param promise - The promise to execute in the background
  * @param errorContext - A string describing the operation for error logging
@@ -41,14 +164,32 @@ export function executeInBackground(
 	promise: Promise<unknown>,
 	errorContext: string,
 ): void {
-	const ctx = currentExecutionContext;
+	const ctx = getCurrentExecutionContext();
+
+	// Wrap promise with error handling and timeout to prevent hanging
+	const safePromise = Promise.race([
+		promise,
+		new Promise((_, reject) =>
+			setTimeout(
+				() => reject(new Error(`Background task timeout: ${errorContext}`)),
+				25_000,
+			),
+		),
+	]).catch((error) => {
+		console.error(`[Background] ${errorContext} failed:`, error);
+	});
 
 	if (ctx && typeof ctx.waitUntil === "function") {
-		ctx.waitUntil(promise);
-	} else {
-		// Fire-and-forget with error handling
-		promise.catch((error) => {
-			console.error(`[Background] ${errorContext} failed:`, error);
-		});
+		try {
+			ctx.waitUntil(safePromise);
+		} catch (err) {
+			// waitUntil can throw if called after response is sent
+			console.warn(
+				`[Background] waitUntil failed for ${errorContext}, running detached:`,
+				err,
+			);
+		}
 	}
+	// If no context or waitUntil failed, the promise runs detached
+	// (it's already been started and has error handling)
 }

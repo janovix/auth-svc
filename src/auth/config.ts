@@ -434,7 +434,9 @@ export function buildResolvedAuthConfig(
 			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
 				? [
 						stripe({
-							stripeClient: new Stripe(env.STRIPE_SECRET_KEY),
+							stripeClient: new Stripe(env.STRIPE_SECRET_KEY, {
+								timeout: 15_000, // 15 second timeout for Stripe API calls
+							}),
 							stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
 							createCustomerOnSignUp: true,
 							subscription: {
@@ -553,8 +555,13 @@ export function buildResolvedAuthConfig(
 							return;
 						}
 
+						// Timeout for Stripe operations (10 seconds)
+						const STRIPE_TIMEOUT_MS = 10_000;
+
 						const syncStripeCustomer = async () => {
-							const stripeClient = new Stripe(env.STRIPE_SECRET_KEY as string);
+							const stripeClient = new Stripe(env.STRIPE_SECRET_KEY as string, {
+								timeout: STRIPE_TIMEOUT_MS,
+							});
 
 							// Get full user record to ensure we have email
 							// (the hook may only receive updated fields)
@@ -661,6 +668,7 @@ export function buildResolvedAuthConfig(
 						};
 
 						// Use dynamic execution context to handle background task
+						// The task has its own internal timeout via Stripe client config
 						const promise = syncStripeCustomer().catch((error) => {
 							console.error(
 								`[Stripe Sync] Error syncing user to Stripe:`,
