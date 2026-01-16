@@ -108,50 +108,8 @@ export type Bindings = Env & {
 	 */
 	STRIPE_WEBHOOK_SECRET?: string;
 
-	/**
-	 * Stripe Price ID for Watchlist plan subscription.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_WATCHLIST_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for AML Business plan subscription.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_BUSINESS_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for AML Pro plan subscription.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_PRO_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for AML Ultra plan subscription.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_ULTRA_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for metered alert overage billing.
-	 * Used to report alert overage via Stripe Usage Records API.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_ALERT_OVERAGE_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for metered transaction overage billing.
-	 * Used to report transaction overage via Stripe Usage Records API.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_TRANSACTION_OVERAGE_PRICE_ID?: string;
-
-	/**
-	 * Stripe Price ID for per-seat (extra user) billing.
-	 * Used to update subscription quantity when members are added/removed.
-	 * Created in Stripe Dashboard, configured via wrangler vars.
-	 */
-	STRIPE_SEAT_PRICE_ID?: string;
+	// Note: Stripe Price IDs are stored in D1 database (plan_prices table)
+	// and seeded via 'pnpm seed:plans'. They are NOT stored as env vars.
 
 	// =========================================================================
 	// ENTERPRISE LICENSING (DEPRECATED - Using Better Auth Stripe)

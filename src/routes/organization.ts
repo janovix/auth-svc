@@ -13,7 +13,7 @@ import {
 	SubscriptionRepository,
 	SubscriptionService,
 } from "../domain/subscription";
-import { PricingRepository } from "../domain/pricing";
+import { PricingRepository, PricingService } from "../domain/pricing";
 
 type OrganizationBindings = {
 	Bindings: Bindings;
@@ -156,7 +156,7 @@ organizationRoutes.post("/update-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			console.log(
 				"[Organization] Stripe not configured for seat billing, skipping update",
 			);
@@ -167,9 +167,24 @@ organizationRoutes.post("/update-seats", async (c) => {
 			});
 		}
 
+		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
+
+		// Get seat price from database
+		const seatPriceId = await pricingService.getAnySeatPriceId();
+		if (!seatPriceId) {
+			console.log(
+				"[Organization] No seat price found in database, skipping update. Run 'pnpm seed:plans' to seed pricing.",
+			);
+			return c.json({
+				success: true,
+				message: "Seat pricing not configured in database",
+				seatsUpdated: false,
+			});
+		}
+
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
-		const pricingRepository = new PricingRepository(c.env.DB);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
@@ -187,7 +202,7 @@ organizationRoutes.post("/update-seats", async (c) => {
 		await service.updateSubscriptionSeatQuantity(
 			organizationId,
 			memberCount,
-			c.env.STRIPE_SEAT_PRICE_ID,
+			seatPriceId,
 		);
 
 		return c.json({
@@ -228,10 +243,23 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			return c.json({
 				success: true,
 				message: "Seat billing not configured",
+				synced: 0,
+			});
+		}
+
+		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
+
+		// Get seat price from database
+		const seatPriceId = await pricingService.getAnySeatPriceId();
+		if (!seatPriceId) {
+			return c.json({
+				success: true,
+				message: "Seat pricing not configured in database",
 				synced: 0,
 			});
 		}
@@ -253,7 +281,6 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
-		const pricingRepository = new PricingRepository(c.env.DB);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
@@ -269,7 +296,7 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 				await service.updateSubscriptionSeatQuantity(
 					org.organizationId,
 					memberCount,
-					c.env.STRIPE_SEAT_PRICE_ID,
+					seatPriceId,
 				);
 				synced++;
 			} catch (error) {

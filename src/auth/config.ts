@@ -166,7 +166,12 @@ export function buildResolvedAuthConfig(
 	// executionContext is kept for API compatibility but no longer captured in closures.
 	// Callbacks now use executeInBackground() which gets context dynamically.
 	_executionContext?: ExecutionContext,
-	stripePriceIds?: StripePriceIds,
+	stripePriceIds: StripePriceIds = {
+		watchlist: "",
+		business: "",
+		pro: "",
+		ultra: "",
+	},
 ): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
@@ -430,7 +435,7 @@ export function buildResolvedAuthConfig(
 					},
 			}),
 			// Stripe plugin for user-based billing
-			// Price IDs are fetched from database (plan_prices table) or fall back to env vars
+			// Price IDs are fetched from D1 database (plan_prices table) - no env var fallback
 			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
 				? [
 						stripe({
@@ -442,11 +447,8 @@ export function buildResolvedAuthConfig(
 								plans: [
 									{
 										name: "watchlist",
-										// Price ID from database (via stripePriceIds param) or env var fallback
-										priceId:
-											stripePriceIds?.watchlist ||
-											env.STRIPE_WATCHLIST_PRICE_ID ||
-											"price_watchlist",
+										// Price ID from D1 database (via stripePriceIds param)
+										priceId: stripePriceIds.watchlist,
 										limits: PLAN_LIMITS.watchlist,
 										freeTrial: {
 											days: 14,
@@ -454,10 +456,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "business",
-										priceId:
-											stripePriceIds?.business ||
-											env.STRIPE_BUSINESS_PRICE_ID ||
-											"price_aml_business",
+										priceId: stripePriceIds.business,
 										limits: PLAN_LIMITS.business,
 										freeTrial: {
 											days: 14,
@@ -465,10 +464,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "pro",
-										priceId:
-											stripePriceIds?.pro ||
-											env.STRIPE_PRO_PRICE_ID ||
-											"price_aml_pro",
+										priceId: stripePriceIds.pro,
 										limits: PLAN_LIMITS.pro,
 										freeTrial: {
 											days: 14,
@@ -476,10 +472,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "ultra",
-										priceId:
-											stripePriceIds?.ultra ||
-											env.STRIPE_ULTRA_PRICE_ID ||
-											"price_aml_ultra",
+										priceId: stripePriceIds.ultra,
 										limits: PLAN_LIMITS.ultra,
 										freeTrial: {
 											days: 14,

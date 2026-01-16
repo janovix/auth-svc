@@ -263,6 +263,16 @@ export class PricingService {
 	}
 
 	/**
+	 * Get any active seat price Stripe ID
+	 * Seat prices are typically shared across all plans
+	 */
+	async getAnySeatPriceId(): Promise<string | null> {
+		const allPrices = await this.repository.getAllActivePrices();
+		const seatPrice = allPrices.find((p) => p.priceType === "seat");
+		return seatPrice?.stripePriceId ?? null;
+	}
+
+	/**
 	 * Get plan name from a Stripe price ID
 	 * Useful for webhook handling and subscription detection
 	 */
