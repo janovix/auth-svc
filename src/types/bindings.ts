@@ -109,28 +109,49 @@ export type Bindings = Env & {
 	STRIPE_WEBHOOK_SECRET?: string;
 
 	/**
-	 * Stripe Price ID for Business plan subscription.
+	 * Stripe Price ID for Watchlist plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_WATCHLIST_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for AML Business plan subscription.
 	 * Created in Stripe Dashboard, configured via wrangler vars.
 	 */
 	STRIPE_BUSINESS_PRICE_ID?: string;
 
 	/**
-	 * Stripe Price ID for Pro plan subscription.
+	 * Stripe Price ID for AML Pro plan subscription.
 	 * Created in Stripe Dashboard, configured via wrangler vars.
 	 */
 	STRIPE_PRO_PRICE_ID?: string;
 
 	/**
-	 * Stripe Price ID for metered notice overage billing.
+	 * Stripe Price ID for AML Ultra plan subscription.
 	 * Created in Stripe Dashboard, configured via wrangler vars.
 	 */
-	STRIPE_NOTICE_OVERAGE_PRICE_ID?: string;
+	STRIPE_ULTRA_PRICE_ID?: string;
 
 	/**
-	 * Stripe Price ID for metered user overage billing.
+	 * Stripe Price ID for metered alert overage billing.
+	 * Used to report alert overage via Stripe Usage Records API.
 	 * Created in Stripe Dashboard, configured via wrangler vars.
 	 */
-	STRIPE_USER_OVERAGE_PRICE_ID?: string;
+	STRIPE_ALERT_OVERAGE_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for metered transaction overage billing.
+	 * Used to report transaction overage via Stripe Usage Records API.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_TRANSACTION_OVERAGE_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for per-seat (extra user) billing.
+	 * Used to update subscription quantity when members are added/removed.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_SEAT_PRICE_ID?: string;
 
 	// =========================================================================
 	// ENTERPRISE LICENSING (DEPRECATED - Using Better Auth Stripe)

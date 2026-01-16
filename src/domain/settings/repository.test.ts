@@ -80,6 +80,7 @@ describe("SettingsRepository", () => {
 			timezone: "UTC",
 			language: "en",
 			dateFormat: "MM/DD/YYYY",
+			clockFormat: "12h",
 			avatarUrl: "https://cdn/avatar.png",
 			metadata: { branding: "custom" },
 			createdAt: new Date("2024-01-01T00:00:00.000Z"),

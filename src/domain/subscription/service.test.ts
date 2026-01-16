@@ -1,765 +1,555 @@
+/**
+ * Subscription service unit tests
+ *
+ * Tests for metered billing (alerts) and seat-based billing (users)
+ */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SubscriptionService } from "./service";
 import type { SubscriptionRepository } from "./repository";
-import type { UserSubscription, OrganizationUsage } from "./types";
+import type Stripe from "stripe";
+import type { OrganizationUsage, UserSubscription, PlanLimits } from "./types";
 
-// Use actual PLAN_LIMITS from config (no mock needed)
+// Mock repository
+const createMockRepository = () => ({
+	getUserSubscription: vi.fn(),
+	getOrganizationUsage: vi.fn(),
+	updateUsersCount: vi.fn(),
+	markOverageReported: vi.fn(),
+	countOrganizationMembers: vi.fn(),
+	getOrganizationOwnerUserId: vi.fn(),
+	countOrganizationsOwned: vi.fn(),
+	getOwnedOrganizationsWithMemberCounts: vi.fn(),
+	upsertOrganizationUsage: vi.fn(),
+	incrementUsage: vi.fn(),
+	resetUsage: vi.fn(),
+	getByStripeSubscriptionId: vi.fn(),
+	isCardFingerprintUsed: vi.fn(),
+	storeCardFingerprint: vi.fn(),
+	incrementCardFingerprintUsage: vi.fn(),
+	getCardFingerprint: vi.fn(),
+});
 
-type MockedRepository = {
-	[K in keyof SubscriptionRepository]: ReturnType<typeof vi.fn>;
-};
+// Mock Stripe client
+const createMockStripe = () => ({
+	subscriptions: {
+		retrieve: vi.fn(),
+		update: vi.fn(),
+	},
+	subscriptionItems: {
+		update: vi.fn(),
+		create: vi.fn(),
+		del: vi.fn(),
+		createUsageRecord: vi.fn(),
+	},
+});
 
-const createMockRepository = (): MockedRepository => {
-	return {
-		getUserSubscription: vi.fn(),
-		getByStripeSubscriptionId: vi.fn(),
-		getOrganizationUsage: vi.fn(),
-		upsertOrganizationUsage: vi.fn(),
-		incrementUsage: vi.fn(),
-		updateUsersCount: vi.fn(),
-		resetUsage: vi.fn(),
-		markOverageReported: vi.fn(),
-		countOrganizationsOwned: vi.fn(),
-		isCardFingerprintUsed: vi.fn(),
-		getCardFingerprint: vi.fn(),
-		storeCardFingerprint: vi.fn(),
-		incrementCardFingerprintUsage: vi.fn(),
-	};
-};
-
-const createMockStripe = () => {
-	return {
-		subscriptions: {
-			retrieve: vi.fn(),
-			update: vi.fn(),
-		},
-	};
-};
-
-const sampleBusinessSubscription: UserSubscription = {
-	id: "sub-1",
-	plan: "business",
-	referenceId: "user-1",
-	stripeCustomerId: "cus_123",
-	stripeSubscriptionId: "sub_123",
-	status: "active",
-	periodStart: new Date("2024-01-01"),
-	periodEnd: new Date("2024-02-01"),
-	cancelAtPeriodEnd: false,
-	seats: 5,
-	trialStart: null,
-	trialEnd: null,
-	createdAt: new Date("2024-01-01"),
-	updatedAt: new Date("2024-01-15"),
-};
-
-const sampleProSubscription: UserSubscription = {
-	...sampleBusinessSubscription,
-	id: "sub-2",
-	plan: "pro",
-};
-
-const sampleTrialingSubscription: UserSubscription = {
-	...sampleBusinessSubscription,
-	id: "sub-3",
-	status: "trialing",
-	trialStart: new Date("2024-01-01"),
-	trialEnd: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
-};
-
-const sampleOrgUsage: OrganizationUsage = {
+// Sample test data
+const mockUsage: OrganizationUsage = {
 	id: "usage-1",
-	organizationId: "org-1",
-	ownerUserId: "user-1",
-	noticesUsed: 50,
-	alertsUsed: 10,
-	transactionsUsed: 100,
+	organizationId: "org-123",
+	ownerUserId: "user-456",
+	reportsUsed: 5,
+	noticesUsed: 10,
+	alertsUsed: 75, // Over the 50 limit for business
+	transactionsUsed: 300, // Over the 250 limit for business
+	clientsUsed: 60, // Over the 50 limit for business
 	usersCount: 3,
 	periodStart: new Date("2024-01-01"),
-	periodEnd: new Date("2024-02-01"),
+	periodEnd: new Date("2024-01-31"),
 	overageReportedAt: null,
 	stripeUsageRecordId: null,
 	createdAt: new Date("2024-01-01"),
 	updatedAt: new Date("2024-01-15"),
 };
 
+const mockSubscription: UserSubscription = {
+	id: "sub-1",
+	plan: "business",
+	referenceId: "user-456",
+	stripeCustomerId: "cus_123",
+	stripeSubscriptionId: "sub_stripe_123",
+	status: "active",
+	periodStart: new Date("2024-01-01"),
+	periodEnd: new Date("2024-01-31"),
+	cancelAtPeriodEnd: false,
+	seats: null,
+	trialStart: null,
+	trialEnd: null,
+	createdAt: new Date("2024-01-01"),
+	updatedAt: new Date("2024-01-15"),
+};
+
+// Business plan limits for reference in tests (updated January 2026)
+const businessLimits: PlanLimits = {
+	maxOrganizations: 1,
+	usersPerOrg: 2,
+	reportsPerMonth: 1,
+	noticesPerMonth: 2,
+	alertsPerMonth: 25, // 75 used - 25 limit = 50 overage for test
+	transactionsPerMonth: 50,
+	clientsPerMonth: 25,
+};
+
+// Mock PricingRepository for alert overage tests
+const createMockPricingRepositoryForBusiness = () => ({
+	getPlanByName: vi
+		.fn()
+		.mockResolvedValue({ id: "plan_business", name: "business" }),
+	getLimitsForPlan: vi.fn().mockResolvedValue(businessLimits),
+	getLicenseByUserId: vi.fn().mockResolvedValue(null),
+	getActivePlans: vi.fn(),
+	getAllPlans: vi.fn(),
+	getPlanById: vi.fn(),
+	getLimitsByPlanName: vi.fn(),
+	getPricesForPlan: vi.fn(),
+	getLicenseByKey: vi.fn(),
+	getLicenseById: vi.fn(),
+	activateLicense: vi.fn(),
+	getPriceByStripePriceId: vi.fn(),
+});
+
+// Pro plan limits for multi-org tests
+const proLimits: PlanLimits = {
+	maxOrganizations: 3,
+	usersPerOrg: 10,
+	reportsPerMonth: 15,
+	noticesPerMonth: 20,
+	alertsPerMonth: 100,
+	transactionsPerMonth: 500,
+	clientsPerMonth: 250,
+};
+
+// Pro subscription for multi-org tests
+const mockProSubscription: UserSubscription = {
+	id: "sub-2",
+	plan: "pro",
+	referenceId: "user-789",
+	stripeCustomerId: "cus_456",
+	stripeSubscriptionId: "sub_stripe_456",
+	status: "active",
+	periodStart: new Date("2024-01-01"),
+	periodEnd: new Date("2024-01-31"),
+	cancelAtPeriodEnd: false,
+	seats: null,
+	trialStart: null,
+	trialEnd: null,
+	createdAt: new Date("2024-01-01"),
+	updatedAt: new Date("2024-01-15"),
+};
+
 describe("SubscriptionService", () => {
-	let mockRepository: MockedRepository;
+	let mockRepository: ReturnType<typeof createMockRepository>;
+	let mockStripe: ReturnType<typeof createMockStripe>;
 	let service: SubscriptionService;
 
 	beforeEach(() => {
 		mockRepository = createMockRepository();
+		mockStripe = createMockStripe();
 		service = new SubscriptionService(
 			mockRepository as unknown as SubscriptionRepository,
-			null,
+			mockStripe as unknown as Stripe,
 		);
 	});
 
-	// =========================================================================
-	// USER SUBSCRIPTION STATUS
-	// =========================================================================
+	describe("reportAlertOverageToStripe", () => {
+		it("should report alert overage when usage exceeds limit", async () => {
+			mockRepository.getOrganizationUsage.mockResolvedValue(mockUsage);
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+			mockStripe.subscriptionItems.createUsageRecord.mockResolvedValue({
+				id: "usage_record_123",
+			});
 
-	describe("getUserSubscriptionStatus", () => {
-		it("returns no subscription status when user has no subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(0);
+			// Create service with pricing repository so getUserPlanLimits works
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
 
-			const result = await service.getUserSubscriptionStatus("user-1");
+			await serviceWithPricing.reportAlertOverageToStripe(
+				"org-123",
+				"user-456",
+				"si_alert_overage",
+			);
 
-			expect(result).toEqual({
-				hasSubscription: false,
-				status: null,
-				plan: null,
-				limits: null,
-				isTrialing: false,
-				trialDaysRemaining: null,
-				currentPeriodStart: null,
-				currentPeriodEnd: null,
-				cancelAtPeriodEnd: false,
-				organizationsOwned: 0,
-				organizationsLimit: 0,
+			// Should have calculated 50 overage (75 used - 25 limit)
+			expect(
+				mockStripe.subscriptionItems.createUsageRecord,
+			).toHaveBeenCalledWith("si_alert_overage", {
+				quantity: 50,
+				timestamp: "now",
+				action: "set",
+			});
+			expect(mockRepository.markOverageReported).toHaveBeenCalledWith(
+				"org-123",
+				"usage_record_123",
+			);
+		});
+
+		it("should not report overage when usage is within limit", async () => {
+			const usageWithinLimit = { ...mockUsage, alertsUsed: 20 }; // Within 25 limit
+			mockRepository.getOrganizationUsage.mockResolvedValue(usageWithinLimit);
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+
+			// Create service with pricing repository so getUserPlanLimits works
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.reportAlertOverageToStripe(
+				"org-123",
+				"user-456",
+				"si_alert_overage",
+			);
+
+			expect(
+				mockStripe.subscriptionItems.createUsageRecord,
+			).not.toHaveBeenCalled();
+			expect(mockRepository.markOverageReported).not.toHaveBeenCalled();
+		});
+
+		it("should not report if no subscription exists", async () => {
+			mockRepository.getOrganizationUsage.mockResolvedValue(mockUsage);
+			mockRepository.getUserSubscription.mockResolvedValue(null);
+
+			await service.reportAlertOverageToStripe(
+				"org-123",
+				"user-456",
+				"si_alert_overage",
+			);
+
+			expect(
+				mockStripe.subscriptionItems.createUsageRecord,
+			).not.toHaveBeenCalled();
+		});
+
+		it("should not report if Stripe is not configured", async () => {
+			const serviceNoStripe = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				null,
+			);
+
+			await serviceNoStripe.reportAlertOverageToStripe(
+				"org-123",
+				"user-456",
+				"si_alert_overage",
+			);
+
+			expect(
+				mockStripe.subscriptionItems.createUsageRecord,
+			).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("updateTotalSeatQuantityForOwner", () => {
+		const mockStripeSubscription = {
+			id: "sub_stripe_456",
+			items: {
+				data: [
+					{
+						id: "si_base_plan",
+						price: { id: "price_pro" },
+					},
+					{
+						id: "si_seats",
+						price: { id: "price_seat" },
+					},
+				],
+			},
+		};
+
+		// Mock PricingRepository that returns pro limits
+		const createMockPricingRepository = () => ({
+			getPlanByName: vi.fn().mockResolvedValue({ id: "plan_pro", name: "pro" }),
+			getLimitsForPlan: vi.fn().mockResolvedValue(proLimits),
+			getLicenseByUserId: vi.fn().mockResolvedValue(null),
+		});
+
+		it("should aggregate extra seats across multiple organizations", async () => {
+			// Pro plan: 10 users/org included
+			// Org1: 12 users = 2 extra, Org2: 8 users = 0 extra, Org3: 15 users = 5 extra
+			// Total extra seats = 7
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-1", memberCount: 12 },
+				{ organizationId: "org-2", memberCount: 8 },
+				{ organizationId: "org-3", memberCount: 15 },
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue(
+				mockStripeSubscription,
+			);
+
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.updateTotalSeatQuantityForOwner(
+				"user-789",
+				"price_seat",
+			);
+
+			// Should update with total of 7 extra seats (2 + 0 + 5)
+			expect(mockStripe.subscriptionItems.update).toHaveBeenCalledWith(
+				"si_seats",
+				{
+					quantity: 7,
+					proration_behavior: "create_prorations",
+				},
+			);
+			// Should update usage for all orgs
+			expect(mockRepository.updateUsersCount).toHaveBeenCalledTimes(3);
+		});
+
+		it("should remove seat item when no extra seats across all orgs", async () => {
+			// Pro plan: 10 users/org included
+			// All orgs have less than 10 users = 0 total extra
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-1", memberCount: 5 },
+				{ organizationId: "org-2", memberCount: 8 },
+				{ organizationId: "org-3", memberCount: 10 },
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue(
+				mockStripeSubscription,
+			);
+			mockStripe.subscriptionItems.del = vi.fn().mockResolvedValue({});
+
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.updateTotalSeatQuantityForOwner(
+				"user-789",
+				"price_seat",
+			);
+
+			expect(mockStripe.subscriptionItems.del).toHaveBeenCalledWith(
+				"si_seats",
+				{
+					proration_behavior: "create_prorations",
+				},
+			);
+			expect(mockStripe.subscriptionItems.update).not.toHaveBeenCalled();
+		});
+
+		it("should create seat item if it does not exist and there are extra seats", async () => {
+			const subscriptionWithoutSeatItem = {
+				...mockStripeSubscription,
+				items: {
+					data: [{ id: "si_base_plan", price: { id: "price_pro" } }],
+				},
+			};
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-1", memberCount: 13 }, // 3 extra
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue(
+				subscriptionWithoutSeatItem,
+			);
+
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.updateTotalSeatQuantityForOwner(
+				"user-789",
+				"price_seat",
+			);
+
+			expect(mockStripe.subscriptionItems.create).toHaveBeenCalledWith({
+				subscription: "sub_stripe_456",
+				price: "price_seat",
+				quantity: 3,
+				proration_behavior: "create_prorations",
 			});
 		});
 
-		it("returns full status for active business subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
+		it("should skip update if Stripe is not configured", async () => {
+			const serviceNoStripe = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				null,
 			);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(1);
 
-			const result = await service.getUserSubscriptionStatus("user-1");
+			await serviceNoStripe.updateTotalSeatQuantityForOwner(
+				"user-789",
+				"price_seat",
+			);
 
-			expect(result.hasSubscription).toBe(true);
-			expect(result.status).toBe("active");
-			expect(result.plan).toBe("business");
-			expect(result.isTrialing).toBe(false);
-			expect(result.limits).toEqual({
-				maxOrganizations: 1,
-				noticesPerMonth: 50,
-				usersPerOrg: 5,
-				alertsPerMonth: null,
-				transactionsPerMonth: null,
+			expect(mockStripe.subscriptions.retrieve).not.toHaveBeenCalled();
+		});
+
+		it("should skip update if no subscription exists", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(null);
+
+			await service.updateTotalSeatQuantityForOwner("user-789", "price_seat");
+
+			expect(mockStripe.subscriptions.retrieve).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("updateSubscriptionSeatQuantity (delegates to aggregated method)", () => {
+		// Mock PricingRepository that returns pro limits
+		const createMockPricingRepository = () => ({
+			getPlanByName: vi.fn().mockResolvedValue({ id: "plan_pro", name: "pro" }),
+			getLimitsForPlan: vi.fn().mockResolvedValue(proLimits),
+			getLicenseByUserId: vi.fn().mockResolvedValue(null),
+		});
+
+		it("should delegate to updateTotalSeatQuantityForOwner", async () => {
+			mockRepository.getOrganizationOwnerUserId.mockResolvedValue("user-789");
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-123", memberCount: 12 },
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_stripe_456",
+				items: {
+					data: [{ id: "si_seats", price: { id: "price_seat" } }],
+				},
 			});
-			expect(result.organizationsOwned).toBe(1);
-			expect(result.organizationsLimit).toBe(1);
+
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			// The newUserCount parameter is now ignored (kept for backwards compat)
+			await serviceWithPricing.updateSubscriptionSeatQuantity(
+				"org-123",
+				999, // This value is ignored
+				"price_seat",
+			);
+
+			// Should have gotten the owner and delegated
+			expect(mockRepository.getOrganizationOwnerUserId).toHaveBeenCalledWith(
+				"org-123",
+			);
+			expect(
+				mockRepository.getOwnedOrganizationsWithMemberCounts,
+			).toHaveBeenCalledWith("user-789");
 		});
 
-		it("returns trial days remaining for trialing subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleTrialingSubscription,
-			);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(0);
+		it("should skip update if no organization owner found", async () => {
+			mockRepository.getOrganizationOwnerUserId.mockResolvedValue(null);
 
-			const result = await service.getUserSubscriptionStatus("user-1");
+			await service.updateSubscriptionSeatQuantity("org-123", 8, "price_seat");
 
-			expect(result.isTrialing).toBe(true);
-			expect(result.trialDaysRemaining).toBeGreaterThanOrEqual(4);
-			expect(result.trialDaysRemaining).toBeLessThanOrEqual(6);
+			expect(
+				mockRepository.getOwnedOrganizationsWithMemberCounts,
+			).not.toHaveBeenCalled();
 		});
 	});
 
-	describe("canCreateOrganization", () => {
-		it("returns false when user has no subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(0);
-
-			const result = await service.canCreateOrganization("user-1");
-
-			expect(result.allowed).toBe(false);
-			expect(result.reason).toContain("subscription is required");
+	describe("handleMemberAdded", () => {
+		// Mock PricingRepository that returns pro limits
+		const createMockPricingRepository = () => ({
+			getPlanByName: vi.fn().mockResolvedValue({ id: "plan_pro", name: "pro" }),
+			getLimitsForPlan: vi.fn().mockResolvedValue(proLimits),
+			getLicenseByUserId: vi.fn().mockResolvedValue(null),
 		});
 
-		it("returns false when subscription is canceled", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce({
-				...sampleBusinessSubscription,
-				status: "canceled",
+		it("should count members and delegate to aggregated seat update", async () => {
+			mockRepository.countOrganizationMembers.mockResolvedValue(7);
+			mockRepository.getOrganizationOwnerUserId.mockResolvedValue("user-789");
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-123", memberCount: 12 },
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_stripe_456",
+				items: {
+					data: [{ id: "si_seats", price: { id: "price_seat" } }],
+				},
 			});
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(0);
 
-			const result = await service.canCreateOrganization("user-1");
-
-			expect(result.allowed).toBe(false);
-			expect(result.reason).toContain("canceled");
-		});
-
-		it("returns false when at organization limit", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
 			);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(1); // Business plan allows 1
 
-			const result = await service.canCreateOrganization("user-1");
+			await serviceWithPricing.handleMemberAdded("org-123", "price_seat");
 
-			expect(result.allowed).toBe(false);
-			expect(result.reason).toContain("limit");
-		});
-
-		it("returns true when under organization limit", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleProSubscription,
+			expect(mockRepository.countOrganizationMembers).toHaveBeenCalledWith(
+				"org-123",
 			);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(2); // Pro plan allows 5
-
-			const result = await service.canCreateOrganization("user-1");
-
-			expect(result.allowed).toBe(true);
-			expect(result.reason).toBeUndefined();
-		});
-
-		it("allows trialing subscriptions", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleTrialingSubscription,
-			);
-			mockRepository.countOrganizationsOwned.mockResolvedValueOnce(0);
-
-			const result = await service.canCreateOrganization("user-1");
-
-			expect(result.allowed).toBe(true);
+			// Should delegate to aggregated method
+			expect(
+				mockRepository.getOwnedOrganizationsWithMemberCounts,
+			).toHaveBeenCalled();
 		});
 	});
 
-	describe("getUserPlanLimits", () => {
-		it("returns limits for business plan", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
+	describe("handleMemberRemoved", () => {
+		// Mock PricingRepository that returns pro limits
+		const createMockPricingRepository = () => ({
+			getPlanByName: vi.fn().mockResolvedValue({ id: "plan_pro", name: "pro" }),
+			getLimitsForPlan: vi.fn().mockResolvedValue(proLimits),
+			getLicenseByUserId: vi.fn().mockResolvedValue(null),
+		});
 
-			const result = await service.getUserPlanLimits("user-1");
-
-			expect(result).toEqual({
-				maxOrganizations: 1,
-				noticesPerMonth: 50,
-				usersPerOrg: 5,
-				alertsPerMonth: null,
-				transactionsPerMonth: null,
+		it("should count members and delegate to aggregated seat update", async () => {
+			mockRepository.countOrganizationMembers.mockResolvedValue(4);
+			mockRepository.getOrganizationOwnerUserId.mockResolvedValue("user-789");
+			mockRepository.getUserSubscription.mockResolvedValue(mockProSubscription);
+			mockRepository.getOwnedOrganizationsWithMemberCounts.mockResolvedValue([
+				{ organizationId: "org-123", memberCount: 9 },
+			]);
+			mockStripe.subscriptions.retrieve.mockResolvedValue({
+				id: "sub_stripe_456",
+				items: {
+					data: [{ id: "si_seats", price: { id: "price_seat" } }],
+				},
 			});
-		});
 
-		it("returns null when no subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
+			const mockPricingRepo = createMockPricingRepository();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
 
-			const result = await service.getUserPlanLimits("user-1");
+			await serviceWithPricing.handleMemberRemoved("org-123", "price_seat");
 
-			expect(result).toBeNull();
+			expect(mockRepository.countOrganizationMembers).toHaveBeenCalledWith(
+				"org-123",
+			);
+			// Should delegate to aggregated method
+			expect(
+				mockRepository.getOwnedOrganizationsWithMemberCounts,
+			).toHaveBeenCalled();
 		});
 	});
 
-	describe("getUserFeatures", () => {
-		it("returns features for business plan", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-
-			const result = await service.getUserFeatures("user-1");
-
-			expect(result).toContain("data_capture");
-			expect(result).toContain("compliance_validation");
-			expect(result).not.toContain("advanced_roles");
-		});
-
-		it("returns features for pro plan", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleProSubscription,
-			);
-
-			const result = await service.getUserFeatures("user-1");
-
-			expect(result).toContain("advanced_roles");
-			expect(result).toContain("priority_support");
-		});
-
-		it("returns empty array when no subscription", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
-
-			const result = await service.getUserFeatures("user-1");
-
-			expect(result).toEqual([]);
-		});
-	});
-
-	describe("hasFeature", () => {
-		it("returns true when user has feature", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleProSubscription,
-			);
-
-			const result = await service.hasFeature("user-1", "advanced_roles");
-
-			expect(result).toBe(true);
-		});
-
-		it("returns false when user does not have feature", async () => {
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-
-			const result = await service.hasFeature("user-1", "advanced_roles");
-
-			expect(result).toBe(false);
-		});
-	});
-
-	// =========================================================================
-	// ORGANIZATION USAGE
-	// =========================================================================
-
-	describe("getOrCreateOrganizationUsage", () => {
-		it("returns existing usage", async () => {
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(sampleOrgUsage);
-
-			const result = await service.getOrCreateOrganizationUsage(
-				"org-1",
-				"user-1",
-			);
-
-			expect(result).toEqual(sampleOrgUsage);
-			expect(mockRepository.upsertOrganizationUsage).not.toHaveBeenCalled();
-		});
-
-		it("creates new usage when not found", async () => {
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(null);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-			mockRepository.upsertOrganizationUsage.mockResolvedValueOnce(
-				sampleOrgUsage,
-			);
-
-			const result = await service.getOrCreateOrganizationUsage(
-				"org-1",
-				"user-1",
-			);
-
-			expect(mockRepository.upsertOrganizationUsage).toHaveBeenCalled();
-			expect(result).toEqual(sampleOrgUsage);
-		});
-
-		it("uses default period when user has no subscription", async () => {
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(null);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
-			mockRepository.upsertOrganizationUsage.mockResolvedValueOnce(
-				sampleOrgUsage,
-			);
-
-			await service.getOrCreateOrganizationUsage("org-1", "user-1");
-
-			expect(mockRepository.upsertOrganizationUsage).toHaveBeenCalledWith(
-				"org-1",
-				"user-1",
-				expect.any(Date),
-				expect.any(Date),
-			);
-		});
-	});
-
-	describe("checkUsage", () => {
-		it("returns usage check for notices", async () => {
-			// sampleOrgUsage has noticesUsed: 50, business plan has noticesPerMonth: 50
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(sampleOrgUsage);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-
-			const result = await service.checkUsage("org-1", "user-1", "notices");
-
-			expect(result).toEqual({
-				allowed: true,
-				used: 50,
-				included: 50, // business plan limit
-				remaining: 0, // 50 - 50 = 0
-				overage: 0,
-			});
-		});
-
-		it("returns overage when over limit", async () => {
-			const overageUsage = { ...sampleOrgUsage, noticesUsed: 150 };
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(overageUsage);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-
-			const result = await service.checkUsage("org-1", "user-1", "notices");
-
-			expect(result.used).toBe(150);
-			expect(result.included).toBe(50); // business plan limit
-			expect(result.remaining).toBe(0);
-			expect(result.overage).toBe(100); // 150 - 50 = 100
-		});
-
-		it("returns unlimited for pro plan alerts", async () => {
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(sampleOrgUsage);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleProSubscription,
-			);
-
-			const result = await service.checkUsage("org-1", "user-1", "alerts");
-
-			expect(result.included).toBe(-1);
-			expect(result.remaining).toBe(-1);
-			expect(result.overage).toBe(0);
-		});
-
-		it("returns not allowed when no limits", async () => {
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(sampleOrgUsage);
-			mockRepository.getUserSubscription.mockResolvedValueOnce(null);
-
-			const result = await service.checkUsage("org-1", "user-1", "notices");
-
-			expect(result.allowed).toBe(false);
-		});
-	});
-
-	describe("reportUsage", () => {
-		it("increments usage for metric", async () => {
-			mockRepository.incrementUsage.mockResolvedValueOnce(undefined);
-
-			await service.reportUsage("org-1", "notices", 5);
-
-			expect(mockRepository.incrementUsage).toHaveBeenCalledWith(
-				"org-1",
-				"notices",
-				5,
-			);
-		});
-	});
-
-	describe("updateUsersCount", () => {
-		it("updates users count", async () => {
-			mockRepository.updateUsersCount.mockResolvedValueOnce(undefined);
-
-			await service.updateUsersCount("org-1", 10);
-
-			expect(mockRepository.updateUsersCount).toHaveBeenCalledWith("org-1", 10);
-		});
-	});
-
-	describe("resetUsageForPeriod", () => {
-		it("resets usage for new period", async () => {
-			mockRepository.resetUsage.mockResolvedValueOnce(undefined);
-
-			const start = new Date("2024-02-01");
-			const end = new Date("2024-03-01");
-			await service.resetUsageForPeriod("org-1", start, end);
-
-			expect(mockRepository.resetUsage).toHaveBeenCalledWith(
-				"org-1",
-				start,
-				end,
-			);
-		});
-	});
-
-	// =========================================================================
-	// METERED BILLING
-	// =========================================================================
-
-	describe("reportOverageToStripe", () => {
-		it("does nothing when stripe not configured", async () => {
+	describe("reportOverageToStripe (deprecated)", () => {
+		it("should log deprecation warning and do nothing", async () => {
 			const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-			await service.reportOverageToStripe("org-1", "user-1", "price_123");
+			await service.reportOverageToStripe(
+				"org-123",
+				"user-456",
+				"price_overage",
+			);
 
 			expect(consoleSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Stripe client not configured"),
+				"[Subscription] reportOverageToStripe is deprecated, use reportAlertOverageToStripe instead",
 			);
-			consoleSpy.mockRestore();
-		});
-
-		it("reports overage when stripe is configured", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			// Business plan has noticesPerMonth: 50, so 100 used = 50 overage
-			const overageUsage = { ...sampleOrgUsage, noticesUsed: 100 };
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(overageUsage);
-			// getUserPlanLimits calls getUserSubscription
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-			// reportOverageToStripe also calls getUserSubscription directly
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-			mockRepository.markOverageReported.mockResolvedValueOnce(undefined);
-
-			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-			await serviceWithStripe.reportOverageToStripe(
-				"org-1",
-				"user-1",
-				"price_123",
-			);
-
-			expect(mockRepository.markOverageReported).toHaveBeenCalled();
-			consoleSpy.mockRestore();
-		});
-
-		it("skips when no overage", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			// noticesUsed: 50 equals noticesPerMonth: 50 (business plan), so no overage
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(sampleOrgUsage);
-			// getUserPlanLimits calls getUserSubscription
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-			// reportOverageToStripe also calls getUserSubscription directly
-			mockRepository.getUserSubscription.mockResolvedValueOnce(
-				sampleBusinessSubscription,
-			);
-
-			await serviceWithStripe.reportOverageToStripe(
-				"org-1",
-				"user-1",
-				"price_123",
-			);
-
-			expect(mockRepository.markOverageReported).not.toHaveBeenCalled();
-		});
-
-		it("skips when missing data", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockRepository.getOrganizationUsage.mockResolvedValueOnce(null);
-
-			await serviceWithStripe.reportOverageToStripe(
-				"org-1",
-				"user-1",
-				"price_123",
-			);
-
-			expect(mockRepository.markOverageReported).not.toHaveBeenCalled();
-		});
-	});
-
-	// =========================================================================
-	// CARD FINGERPRINT
-	// =========================================================================
-
-	describe("isCardUsedForTrial", () => {
-		it("returns true when card used", async () => {
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(true);
-
-			const result = await service.isCardUsedForTrial("fp_123");
-
-			expect(result).toBe(true);
-		});
-
-		it("returns false when card not used", async () => {
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(false);
-
-			const result = await service.isCardUsedForTrial("fp_123");
-
-			expect(result).toBe(false);
-		});
-	});
-
-	describe("storeCardFingerprint", () => {
-		it("stores new fingerprint", async () => {
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(false);
-			mockRepository.storeCardFingerprint.mockResolvedValueOnce(undefined);
-
-			await service.storeCardFingerprint("fp_new", "user-1");
-
-			expect(mockRepository.storeCardFingerprint).toHaveBeenCalledWith(
-				"fp_new",
-				"user-1",
-			);
-		});
-
-		it("increments existing fingerprint", async () => {
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(true);
-			mockRepository.incrementCardFingerprintUsage.mockResolvedValueOnce(
-				undefined,
-			);
-
-			await service.storeCardFingerprint("fp_existing", "user-1");
-
-			expect(mockRepository.incrementCardFingerprintUsage).toHaveBeenCalledWith(
-				"fp_existing",
-			);
-		});
-	});
-
-	describe("handleCheckoutForTrialAbuse", () => {
-		it("returns no skip when stripe not configured", async () => {
-			const result = await service.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("handles stripe configured with new card", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: {
-					type: "card",
-					card: { fingerprint: "fp_new" },
-				},
-			});
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(false);
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(false);
-			mockRepository.storeCardFingerprint.mockResolvedValueOnce(undefined);
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("skips trial when card was used before", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: {
-					type: "card",
-					card: { fingerprint: "fp_used" },
-				},
-			});
-			mockRepository.isCardFingerprintUsed.mockResolvedValueOnce(true);
-			mockStripe.subscriptions.update.mockResolvedValueOnce({});
-			mockRepository.incrementCardFingerprintUsage.mockResolvedValueOnce(
-				undefined,
-			);
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(true);
-			expect(result.reason).toContain("used for a trial before");
-			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith("sub_123", {
-				trial_end: "now",
-			});
-		});
-
-		it("handles no payment method", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: null,
-			});
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("handles string payment method", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: "pm_123", // string instead of object
-			});
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("handles non-card payment method", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: {
-					type: "bank_account",
-				},
-			});
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("handles missing fingerprint", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				default_payment_method: {
-					type: "card",
-					card: { fingerprint: null },
-				},
-			});
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-		});
-
-		it("handles stripe errors gracefully", async () => {
-			const mockStripe = createMockStripe();
-			const serviceWithStripe = new SubscriptionService(
-				mockRepository as unknown as SubscriptionRepository,
-				mockStripe as unknown as import("stripe").default,
-			);
-
-			mockStripe.subscriptions.retrieve.mockRejectedValueOnce(
-				new Error("Stripe error"),
-			);
-			const consoleSpy = vi
-				.spyOn(console, "error")
-				.mockImplementation(() => {});
-
-			const result = await serviceWithStripe.handleCheckoutForTrialAbuse(
-				"sub_123",
-				"user-1",
-			);
-
-			expect(result.skipTrial).toBe(false);
-			expect(consoleSpy).toHaveBeenCalled();
 			consoleSpy.mockRestore();
 		});
 	});

@@ -5,6 +5,7 @@
  * - User subscription status
  * - Organization usage tracking
  * - Org creation limit checking
+ * - License validation and activation
  *
  * Note: Checkout, cancel, and upgrade are handled by Better Auth Stripe plugin
  * at /api/auth/subscription/* endpoints.
@@ -17,6 +18,7 @@ import {
 	SubscriptionRepository,
 	SubscriptionService,
 } from "../domain/subscription";
+import { PricingRepository, PricingService } from "../domain/pricing";
 import { getBetterAuthContext } from "../auth/instance";
 
 type SubscriptionBindings = {
@@ -66,6 +68,18 @@ function getStripe(c: SubscriptionContext): Stripe | null {
 }
 
 /**
+ * Helper to create subscription service with pricing repository
+ */
+function createSubscriptionService(
+	c: SubscriptionContext,
+): SubscriptionService {
+	const stripe = getStripe(c);
+	const repository = new SubscriptionRepository(c.env.DB);
+	const pricingRepository = new PricingRepository(c.env.DB);
+	return new SubscriptionService(repository, stripe, pricingRepository);
+}
+
+/**
  * GET /api/subscription/status
  * Get current user's subscription status
  */
@@ -75,9 +89,7 @@ subscriptionRoutes.get("/status", async (c) => {
 		return c.json({ success: false, error: "Unauthorized" }, 401);
 	}
 
-	const stripe = getStripe(c);
-	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const service = createSubscriptionService(c);
 
 	const status = await service.getUserSubscriptionStatus(user.id);
 
@@ -97,9 +109,7 @@ subscriptionRoutes.get("/can-create-org", async (c) => {
 		return c.json({ success: false, error: "Unauthorized" }, 401);
 	}
 
-	const stripe = getStripe(c);
-	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const service = createSubscriptionService(c);
 
 	const result = await service.canCreateOrganization(user.id);
 
@@ -137,9 +147,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 		);
 	}
 
-	const stripe = getStripe(c);
-	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const service = createSubscriptionService(c);
 
 	const usage = await service.getOrCreateOrganizationUsage(
 		user.organizationId,
@@ -153,16 +161,20 @@ subscriptionRoutes.get("/usage", async (c) => {
 		success: true,
 		data: {
 			usage: {
+				reports: usage.reportsUsed,
 				notices: usage.noticesUsed,
 				alerts: usage.alertsUsed,
 				transactions: usage.transactionsUsed,
+				clients: usage.clientsUsed,
 				users: usage.usersCount,
 			},
 			limits: limits
 				? {
+						reports: limits.reportsPerMonth,
 						notices: limits.noticesPerMonth,
 						alerts: limits.alertsPerMonth,
 						transactions: limits.transactionsPerMonth,
+						clients: limits.clientsPerMonth,
 						users: limits.usersPerOrg,
 					}
 				: null,
@@ -184,9 +196,7 @@ subscriptionRoutes.get("/features", async (c) => {
 		return c.json({ success: false, error: "Unauthorized" }, 401);
 	}
 
-	const stripe = getStripe(c);
-	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const service = createSubscriptionService(c);
 
 	const features = await service.getUserFeatures(user.id);
 
@@ -374,8 +384,8 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 
 		const hasOrganization = (orgMembership?.count ?? 0) > 0;
 
-		// Check for pending invitations
-		const pendingInvitations = await c.env.DB.prepare(
+		// Check for ALL pending invitations (not just one)
+		const pendingInvitationsResult = await c.env.DB.prepare(
 			`SELECT i.id, i.organizationId, i.role, i.expiresAt, i.inviterId,
 			        o.name as organizationName, o.logo as organizationLogo,
 			        u.name as inviterName, u.email as inviterEmail
@@ -385,11 +395,10 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			 WHERE i.email = (SELECT email FROM users WHERE id = ?)
 			   AND i.status = 'pending'
 			   AND (i.expiresAt IS NULL OR datetime(i.expiresAt) > datetime('now'))
-			 ORDER BY i.createdAt DESC
-			 LIMIT 1`,
+			 ORDER BY i.createdAt DESC`,
 		)
 			.bind(user.id)
-			.first<{
+			.all<{
 				id: string;
 				organizationId: string;
 				role: string;
@@ -401,10 +410,17 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				inviterEmail: string | null;
 			}>();
 
+		const pendingInvitations = pendingInvitationsResult.results || [];
+
 		// Get subscription status to determine if user can create org
 		const stripe = getStripe(c);
 		const repository = new SubscriptionRepository(c.env.DB);
-		const service = new SubscriptionService(repository, stripe);
+		const pricingRepository = new PricingRepository(c.env.DB);
+		const service = new SubscriptionService(
+			repository,
+			stripe,
+			pricingRepository,
+		);
 		const subscriptionStatus = await service.getUserSubscriptionStatus(user.id);
 
 		// Also get raw DB record for debugging
@@ -467,47 +483,60 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			}
 		}
 
+		// Check if subscription is in a valid status for creating organizations
+		// Only 'active' or 'trialing' status allows org creation - 'incomplete' does NOT
+		const isSubscriptionValid =
+			subscriptionStatus.hasSubscription &&
+			(subscriptionStatus.status === "active" ||
+				subscriptionStatus.status === "trialing");
+
+		// Can create org only if subscription is valid AND within org limit
+		const canCreateOrg =
+			isSubscriptionValid &&
+			subscriptionStatus.organizationsOwned <
+				subscriptionStatus.organizationsLimit;
+
 		// Debug: Log computed subscription status
 		console.log("[Onboarding Status] Computed subscription status:", {
 			userId: user.id,
 			hasSubscription: subscriptionStatus.hasSubscription,
 			status: subscriptionStatus.status,
+			isSubscriptionValid,
 			plan: subscriptionStatus.plan,
 			organizationsOwned: subscriptionStatus.organizationsOwned,
 			organizationsLimit: subscriptionStatus.organizationsLimit,
 			hasOrganization,
 			profileComplete: hasName,
-			canCreateOrganization:
-				subscriptionStatus.hasSubscription &&
-				subscriptionStatus.organizationsOwned <
-					subscriptionStatus.organizationsLimit,
+			canCreateOrganization: canCreateOrg,
 			stripeVerification,
 		});
+
+		// Map invitations to response format
+		const mappedInvitations = pendingInvitations.map((inv) => ({
+			id: inv.id,
+			organizationId: inv.organizationId,
+			organizationName: inv.organizationName,
+			organizationLogo: inv.organizationLogo,
+			role: inv.role,
+			inviterName: inv.inviterName,
+			inviterEmail: inv.inviterEmail,
+			expiresAt: inv.expiresAt,
+		}));
 
 		return c.json({
 			success: true,
 			data: {
 				profileComplete: hasName,
 				hasOrganization,
-				hasSubscription: subscriptionStatus.hasSubscription,
+				// Only report hasSubscription=true if subscription is in valid status
+				hasSubscription: isSubscriptionValid,
 				subscriptionStatus: subscriptionStatus.status,
 				plan: subscriptionStatus.plan,
-				pendingInvitation: pendingInvitations
-					? {
-							id: pendingInvitations.id,
-							organizationId: pendingInvitations.organizationId,
-							organizationName: pendingInvitations.organizationName,
-							organizationLogo: pendingInvitations.organizationLogo,
-							role: pendingInvitations.role,
-							inviterName: pendingInvitations.inviterName,
-							inviterEmail: pendingInvitations.inviterEmail,
-							expiresAt: pendingInvitations.expiresAt,
-						}
-					: null,
-				canCreateOrganization:
-					subscriptionStatus.hasSubscription &&
-					subscriptionStatus.organizationsOwned <
-						subscriptionStatus.organizationsLimit,
+				// Keep pendingInvitation for backward compatibility (first invitation)
+				pendingInvitation: mappedInvitations[0] || null,
+				// New field: all pending invitations
+				pendingInvitations: mappedInvitations,
+				canCreateOrganization: canCreateOrg,
 			},
 		});
 	} catch (error) {
@@ -536,47 +565,46 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 
 	const key = body.key.trim().toUpperCase();
 
-	// Look up the license
-	const license = await c.env.DB.prepare(
-		`SELECT l.*, s.name as planName
-		 FROM enterprise_licenses l
-		 LEFT JOIN subscription_plans s ON l.plan = s.id
-		 WHERE l.key = ?
-		   AND l.status = 'active'
-		   AND (l.expires_at IS NULL OR datetime(l.expires_at) > datetime('now'))`,
-	)
-		.bind(key)
-		.first<{
-			id: string;
-			key: string;
-			organization_name: string;
-			plan: string;
-			planName: string | null;
-			expires_at: string | null;
-			max_users: number;
-			notices_included: number;
-			status: string;
-		}>();
+	// Use pricing service to validate license
+	const pricingRepository = new PricingRepository(c.env.DB);
+	const pricingService = new PricingService(pricingRepository);
 
-	if (!license) {
+	const validation = await pricingService.validateLicenseKey(key);
+
+	if (!validation.valid || !validation.license) {
 		return c.json(
 			{
 				success: false,
-				error: "Invalid or expired license key",
+				error: validation.error || "Invalid or expired license key",
 			},
 			400,
 		);
 	}
 
+	const license = validation.license;
+
+	// Get plan name
+	const plan = await pricingService.getPlanById(license.planId);
+	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
+
 	return c.json({
 		success: true,
 		data: {
 			key: license.key,
-			organizationName: license.organization_name,
-			plan: license.planName || license.plan,
-			expiresAt: license.expires_at,
-			maxUsers: license.max_users,
-			noticesIncluded: license.notices_included,
+			organizationName: license.organizationName,
+			plan: plan?.displayName || plan?.name || license.planId,
+			expiresAt: license.expiresAt?.toISOString() ?? null,
+			limits: limits
+				? {
+						maxOrganizations: limits.maxOrganizations,
+						maxUsers: limits.usersPerOrg,
+						reportsIncluded: limits.reportsPerMonth,
+						noticesIncluded: limits.noticesPerMonth,
+						alertsIncluded: limits.alertsPerMonth,
+						transactionsIncluded: limits.transactionsPerMonth,
+						clientsIncluded: limits.clientsPerMonth,
+					}
+				: null,
 			isActive: license.status === "active",
 		},
 	});
@@ -599,53 +627,26 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 
 	const key = body.key.trim().toUpperCase();
 
-	// Look up and validate the license
-	const license = await c.env.DB.prepare(
-		`SELECT * FROM enterprise_licenses
-		 WHERE key = ?
-		   AND status = 'active'
-		   AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))`,
-	)
-		.bind(key)
-		.first<{
-			id: string;
-			plan: string;
-			organization_name: string;
-			expires_at: string | null;
-			max_users: number;
-			notices_included: number;
-			user_id: string | null;
-		}>();
+	// Use pricing service to activate license
+	const pricingRepository = new PricingRepository(c.env.DB);
+	const pricingService = new PricingService(pricingRepository);
 
-	if (!license) {
+	const activation = await pricingService.activateLicense(key, user.id);
+
+	if (!activation.success || !activation.license) {
 		return c.json(
 			{
 				success: false,
-				error: "Invalid or expired license key",
+				error: activation.error || "Failed to activate license",
 			},
 			400,
 		);
 	}
 
-	// Check if license is already assigned to another user
-	if (license.user_id && license.user_id !== user.id) {
-		return c.json(
-			{
-				success: false,
-				error: "This license is already in use",
-			},
-			400,
-		);
-	}
+	const license = activation.license;
 
-	// Assign license to user
-	await c.env.DB.prepare(
-		`UPDATE enterprise_licenses
-		 SET user_id = ?, activated_at = datetime('now'), updated_at = datetime('now')
-		 WHERE id = ?`,
-	)
-		.bind(user.id, license.id)
-		.run();
+	// Get plan info
+	const plan = await pricingService.getPlanById(license.planId);
 
 	// Create or update user subscription based on license
 	const existingSubscription = await c.env.DB.prepare(
@@ -654,31 +655,48 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 		.bind(user.id)
 		.first<{ id: string }>();
 
+	// Use plan name for the subscription
+	const planName = plan?.name || license.planId;
+
 	if (existingSubscription) {
 		await c.env.DB.prepare(
 			`UPDATE subscription
 			 SET plan = ?, status = 'active', licenseId = ?, updatedAt = datetime('now')
 			 WHERE id = ?`,
 		)
-			.bind(license.plan, license.id, existingSubscription.id)
+			.bind(planName, license.id, existingSubscription.id)
 			.run();
 	} else {
 		await c.env.DB.prepare(
 			`INSERT INTO subscription (id, plan, referenceId, status, licenseId, createdAt, updatedAt)
 			 VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
 		)
-			.bind(crypto.randomUUID(), license.plan, user.id, license.id)
+			.bind(crypto.randomUUID(), planName, user.id, license.id)
 			.run();
 	}
 
 	console.log(`[License] Activated license ${license.id} for user ${user.id}`);
 
+	// Get effective limits for the response
+	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
+
 	return c.json({
 		success: true,
 		data: {
 			message: "License activated successfully",
-			plan: license.plan,
-			organizationName: license.organization_name,
+			plan: plan?.displayName || planName,
+			organizationName: license.organizationName,
+			limits: limits
+				? {
+						maxOrganizations: limits.maxOrganizations,
+						maxUsers: limits.usersPerOrg,
+						reportsIncluded: limits.reportsPerMonth,
+						noticesIncluded: limits.noticesPerMonth,
+						alertsIncluded: limits.alertsPerMonth,
+						transactionsIncluded: limits.transactionsPerMonth,
+						clientsIncluded: limits.clientsPerMonth,
+					}
+				: null,
 		},
 	});
 });
@@ -769,7 +787,7 @@ subscriptionRoutes.post("/usage/report", async (c) => {
 
 	const body = await c.req.json<{
 		organizationId: string;
-		metric: "notices" | "alerts" | "transactions";
+		metric: "reports" | "notices" | "alerts" | "transactions" | "clients";
 		count?: number;
 	}>();
 
@@ -777,9 +795,7 @@ subscriptionRoutes.post("/usage/report", async (c) => {
 		return c.json({ success: false, error: "Missing required fields" }, 400);
 	}
 
-	const stripe = getStripe(c);
-	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const service = createSubscriptionService(c);
 
 	await service.reportUsage(body.organizationId, body.metric, body.count ?? 1);
 

@@ -24,6 +24,11 @@ export const dateFormatSchema = z.enum([
 export const languageCodeSchema = z.enum(["en", "es"]);
 
 /**
+ * Clock format enum schema (12-hour or 24-hour)
+ */
+export const clockFormatSchema = z.enum(["12h", "24h"]);
+
+/**
  * IANA timezone validation (basic pattern)
  */
 export const timezoneSchema = z
@@ -52,6 +57,7 @@ export const updateOrganizationSettingsSchema = z.object({
 	timezone: timezoneSchema.optional(),
 	language: languageCodeSchema.optional(),
 	dateFormat: dateFormatSchema.optional(),
+	clockFormat: clockFormatSchema.optional(),
 	avatarUrl: z.string().url().nullable().optional(),
 	metadata: z.record(z.unknown()).optional(),
 });
@@ -64,6 +70,7 @@ export const updateUserSettingsSchema = z.object({
 	timezone: timezoneSchema.nullable().optional(),
 	language: languageCodeSchema.nullable().optional(),
 	dateFormat: dateFormatSchema.nullable().optional(),
+	clockFormat: clockFormatSchema.nullable().optional(),
 	avatarUrl: z.string().url().nullable().optional(),
 	paymentMethods: z.array(paymentMethodSchema).optional(),
 	metadata: z.record(z.unknown()).optional(),

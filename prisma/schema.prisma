@@ -195,6 +195,7 @@ model OrganizationSettings {
   timezone       String   @default("UTC") // IANA timezone
   language       String   @default("en") // ISO 639-1 code
   dateFormat     String   @default("MM/DD/YYYY") @map("date_format")
+  clockFormat    String   @default("12h") @map("clock_format") // "12h" or "24h"
   avatarUrl      String?  @map("avatar_url")
   metadata       String? // JSON for extensibility
   createdAt      DateTime @default(now()) @map("created_at")
@@ -212,6 +213,7 @@ model UserSettings {
   timezone       String? // NULL = use org/browser default
   language       String? // NULL = use org/browser default
   dateFormat     String?  @map("date_format") // NULL = use org default
+  clockFormat    String?  @map("clock_format") // "12h" or "24h", NULL = use org default
   avatarUrl      String?  @map("avatar_url")
   paymentMethods String?  @map("payment_methods") // JSON array of payment method refs
   metadata       String? // JSON for extensibility
@@ -267,7 +269,7 @@ model AuditLog {
 // Better Auth Stripe subscription model (camelCase - managed by Better Auth)
 model Subscription {
   id                   String    @id @default(uuid())
-  plan                 String // "business", "pro"
+  plan                 String // "business", "pro", or references SubscriptionPlan.id
   referenceId          String // User ID (the billing entity)
   stripeCustomerId     String?
   stripeSubscriptionId String?
@@ -278,6 +280,7 @@ model Subscription {
   seats                Int?
   trialStart           DateTime?
   trialEnd             DateTime?
+  licenseId            String? // Reference to enterprise_licenses if activated via license
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -285,7 +288,85 @@ model Subscription {
   @@index([stripeCustomerId])
   @@index([stripeSubscriptionId])
   @@index([status])
+  @@index([licenseId])
   @@map("subscription")
+}
+
+// ============================================================================
+// Subscription Plans & Pricing (snake_case columns)
+// Database-driven pricing and limits configuration
+// ============================================================================
+
+// Subscription plan definitions (base plans like business, pro)
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String   @unique // internal name: "business", "pro"
+  displayName String   @map("display_name") // Display name: "Janovix Business"
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  trialDays   Int      @default(14) @map("trial_days")
+  metadata    String? // JSON for extensibility
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  prices PlanPrice[]
+  limits PlanLimit[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("subscription_plans")
+}
+
+// Plan pricing (main subscription prices and add-on fees)
+// Note: stripe_price_id is NOT unique because the same Stripe price may be 
+// shared across plans in dev/preview environments
+model PlanPrice {
+  id             String   @id @default(uuid())
+  planId         String   @map("plan_id")
+  stripePriceId  String   @map("stripe_price_id")
+  priceType      String   @map("price_type") // "subscription", "seat", "overage_report", "overage_notice", etc.
+  amount         Int // Amount in cents
+  currency       String   @default("MXN")
+  interval       String? // "month", "year", null for one-time
+  intervalCount  Int?     @map("interval_count") // 1 for monthly, 12 for yearly
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  metadata       String? // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, priceType])
+  @@index([planId])
+  @@index([priceType])
+  @@index([stripePriceId])
+  @@index([isActive])
+  @@map("plan_prices")
+}
+
+// Plan limits (configurable limits per plan)
+model PlanLimit {
+  id               String   @id @default(uuid())
+  planId           String   @map("plan_id")
+  maxOrganizations Int      @default(1) @map("max_organizations")
+  usersPerOrg      Int      @default(5) @map("users_per_org")
+  reportsPerMonth  Int      @default(0) @map("reports_per_month")
+  noticesPerMonth  Int      @default(3) @map("notices_per_month")
+  alertsPerMonth   Int      @default(50) @map("alerts_per_month")
+  transactionsPerMonth Int  @default(250) @map("transactions_per_month")
+  clientsPerMonth  Int      @default(50) @map("clients_per_month")
+  watchlistQueriesPerDay Int @default(0) @map("watchlist_queries_per_day")
+  metadata         String? // JSON for additional limits
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId])
+  @@index([planId])
+  @@map("plan_limits")
 }
 
 // ============================================================================
@@ -309,15 +390,46 @@ model UsedCardFingerprint {
   @@map("used_card_fingerprints")
 }
 
+// Enterprise licenses for direct sales (not through Stripe)
+model EnterpriseLicense {
+  id               String    @id @default(uuid())
+  key              String    @unique // License key (e.g., "ENT-XXXX-XXXX-XXXX")
+  organizationName String    @map("organization_name") // Company/org name the license is for
+  planId           String    @map("plan_id") // Reference to subscription_plans
+  userId           String?   @map("user_id") // User who activated the license
+  status           String    @default("active") // "active", "revoked", "expired"
+  expiresAt        DateTime? @map("expires_at")
+  activatedAt      DateTime? @map("activated_at")
+  // License-specific limits (override plan defaults if set)
+  maxOrganizations Int?      @map("max_organizations")
+  maxUsers         Int?      @map("max_users")
+  reportsIncluded  Int?      @map("reports_included")
+  noticesIncluded  Int?      @map("notices_included")
+  alertsIncluded   Int?      @map("alerts_included")
+  transactionsIncluded Int?  @map("transactions_included")
+  clientsIncluded  Int?      @map("clients_included")
+  metadata         String? // JSON for extensibility
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([key])
+  @@index([userId])
+  @@index([status])
+  @@index([planId])
+  @@map("enterprise_licenses")
+}
+
 // Per-organization usage tracking (for metered billing)
 // Tracks usage within each organization for the billing period
 model OrganizationUsage {
   id                  String    @id @default(uuid())
   organizationId      String    @unique @map("organization_id")
   ownerUserId         String    @map("owner_user_id")
+  reportsUsed         Int       @default(0) @map("reports_used")
   noticesUsed         Int       @default(0) @map("notices_used")
   alertsUsed          Int       @default(0) @map("alerts_used")
   transactionsUsed    Int       @default(0) @map("transactions_used")
+  clientsUsed         Int       @default(0) @map("clients_used")
   usersCount          Int       @default(0) @map("users_count")
   periodStart         DateTime  @map("period_start")
   periodEnd           DateTime  @map("period_end")

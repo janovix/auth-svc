@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 /**
- * Seed Subscription Plans
+ * Seed Subscription Plans, Prices, and Limits
  *
- * Creates subscription plans in the database with their Stripe price IDs.
+ * Creates subscription plans, their prices (with Stripe IDs), and limits in the database.
  * This should be run after creating the products/prices in Stripe Dashboard.
+ *
+ * Usage:
+ *   node scripts/seed-plans.mjs                    # Local dev
+ *   REMOTE=true node scripts/seed-plans.mjs       # Remote dev
+ *   ENV=preview REMOTE=true node scripts/seed-plans.mjs   # Preview
+ *   ENV=prod REMOTE=true node scripts/seed-plans.mjs      # Production
  */
 
 import { execSync } from "node:child_process";
@@ -14,44 +20,169 @@ import { writeFileSync, unlinkSync } from "node:fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Subscription plans configuration
-// Update these Stripe Price IDs when setting up a new environment
+// =============================================================================
+// ENVIRONMENT-SPECIFIC STRIPE IDS
+// =============================================================================
+// Update these Stripe IDs when setting up each environment.
+// Get these from your Stripe Dashboard after creating products and prices.
+
+const STRIPE_IDS = {
+	// Development environment
+	dev: {
+		watchlist: {
+			subscription: "price_placeholder_dev_watchlist_subscription",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+		},
+		business: {
+			subscription: "price_1Spb4jA9qUPmowPe47LOiLE3",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+		pro: {
+			subscription: "price_1Spb5cA9qUPmowPexCafPr3C",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+		ultra: {
+			subscription: "price_1SpaU4A9qUPmowPeQmflgSGy",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+	},
+	// Preview/staging environment
+	preview: {
+		watchlist: {
+			subscription: "price_placeholder_preview_watchlist_subscription",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+		},
+		business: {
+			subscription: "price_1Spb4jA9qUPmowPe47LOiLE3",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+		pro: {
+			subscription: "price_1Spb5cA9qUPmowPexCafPr3C",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+		ultra: {
+			subscription: "price_1SpaU4A9qUPmowPeQmflgSGy",
+			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
+			extra_org: "price_1SpaGEA9qUPmowPeLNfz70y3",
+			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
+			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
+			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
+			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
+		},
+	},
+	// Production/main environment
+	prod: {
+		watchlist: {
+			subscription: "price_REPLACE_WITH_PROD_SUBSCRIPTION_WATCHLIST",
+			seat: "price_REPLACE_WITH_PROD_SEAT_WATCHLIST",
+		},
+		business: {
+			subscription: "price_REPLACE_WITH_PROD_SUBSCRIPTION_AML_BUSINESS",
+			seat: "price_REPLACE_WITH_PROD_SEAT_AML_BUSINESS",
+			extra_org: "price_REPLACE_WITH_PROD_EXTRA_ORG_AML_BUSINESS",
+			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_BUSINESS",
+			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_BUSINESS",
+			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_BUSINESS",
+			overage_transaction:
+				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_BUSINESS",
+			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_BUSINESS",
+		},
+		pro: {
+			subscription: "price_REPLACE_WITH_PROD_SUBSCRIPTION_AML_PRO",
+			seat: "price_REPLACE_WITH_PROD_SEAT_AML_PRO",
+			extra_org: "price_REPLACE_WITH_PROD_EXTRA_ORG_AML_PRO",
+			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_PRO",
+			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_PRO",
+			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_PRO",
+			overage_transaction:
+				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_PRO",
+			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_PRO",
+		},
+		ultra: {
+			subscription: "price_REPLACE_WITH_PROD_SUBSCRIPTION_AML_ULTRA",
+			seat: "price_REPLACE_WITH_PROD_SEAT_AML_ULTRA",
+			extra_org: "price_REPLACE_WITH_PROD_EXTRA_ORG_AML_ULTRA",
+			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_ULTRA",
+			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_ULTRA",
+			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_ULTRA",
+			overage_transaction:
+				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_ULTRA",
+			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_ULTRA",
+		},
+	},
+};
+
+// =============================================================================
+// PLAN DEFINITIONS (shared across all environments)
+// =============================================================================
+// Plan naming convention:
+// - watchlist: Watchlist-only access (no AML)
+// - aml_*: AML plans (includes Watchlist access)
+// Product features:
+// - product_watchlist: Access to Watchlist product
+// - product_aml: Access to AML product (includes Watchlist)
+
 const PLANS = [
 	{
-		id: "plan-business-monthly",
-		name: "Business",
-		tier: "business",
-		billingInterval: "month",
-		stripePriceId: "price_1SoaP3A9qUPmowPeSsX2cRsS", // Dev environment
-		basePrice: 9999, // MXN centavos (9,999.00)
-		noticesIncluded: 50,
-		usersIncluded: 5,
-		transactionsIncluded: null,
-		alertsIncluded: null,
-		overagePriceId: null,
-		overagePrice: 20,
+		id: "plan_watchlist",
+		name: "watchlist",
+		displayName: "Watchlist",
+		description: "Acceso solo a consultas de listas de vigilancia",
+		features: ["product_watchlist"],
+	},
+	{
+		id: "plan_aml_business",
+		name: "business",
+		displayName: "AML Business",
+		description: "Plan ideal para pequeñas y medianas empresas",
 		features: [
+			"product_aml",
+			"product_watchlist",
 			"data_capture",
 			"compliance_validation",
 			"report_generation",
 			"acknowledgment_tracking",
 		],
-		active: true,
 	},
 	{
-		id: "plan-pro-monthly",
-		name: "Pro",
-		tier: "pro",
-		billingInterval: "month",
-		stripePriceId: "price_1SoaPTA9qUPmowPeWQ5UuqEz", // Dev environment
-		basePrice: 19999, // MXN centavos (19,999.00)
-		noticesIncluded: 150,
-		usersIncluded: 10,
-		transactionsIncluded: null,
-		alertsIncluded: null,
-		overagePriceId: null,
-		overagePrice: 15,
+		id: "plan_aml_pro",
+		name: "pro",
+		displayName: "AML Pro",
+		description: "Plan avanzado para empresas con mayor volumen de operaciones",
 		features: [
+			"product_aml",
+			"product_watchlist",
 			"data_capture",
 			"compliance_validation",
 			"report_generation",
@@ -61,111 +192,532 @@ const PLANS = [
 			"report_templates",
 			"priority_support",
 		],
-		active: true,
+	},
+	{
+		id: "plan_aml_ultra",
+		name: "ultra",
+		displayName: "AML Ultra",
+		description:
+			"Plan empresarial para grandes corporaciones con operaciones de alto volumen",
+		features: [
+			"product_aml",
+			"product_watchlist",
+			"data_capture",
+			"compliance_validation",
+			"report_generation",
+			"acknowledgment_tracking",
+			"advanced_roles",
+			"approval_flows",
+			"report_templates",
+			"priority_support",
+			"dedicated_support",
+			"custom_integrations",
+			"sla_guarantee",
+		],
 	},
 ];
+
+// =============================================================================
+// PLAN LIMITS (shared across all environments)
+// =============================================================================
+
+// Plan limits aligned with business pricing model (January 2026)
+// See pricing documentation for details on upgrade incentives
+// - watchlistQueriesPerDay: Per user per day limit for watchlist queries
+const PLAN_LIMITS = {
+	watchlist: {
+		maxOrganizations: 1,
+		usersPerOrg: 3,
+		reportsPerMonth: 0,
+		noticesPerMonth: 0,
+		alertsPerMonth: 0,
+		transactionsPerMonth: 0,
+		clientsPerMonth: 0,
+		watchlistQueriesPerDay: 50,
+	},
+	business: {
+		maxOrganizations: 1,
+		usersPerOrg: 2,
+		reportsPerMonth: 1,
+		noticesPerMonth: 2,
+		alertsPerMonth: 20,
+		transactionsPerMonth: 50,
+		clientsPerMonth: 25,
+		watchlistQueriesPerDay: 50,
+	},
+	pro: {
+		maxOrganizations: 3,
+		usersPerOrg: 10,
+		reportsPerMonth: 15,
+		noticesPerMonth: 20,
+		alertsPerMonth: 100,
+		transactionsPerMonth: 500,
+		clientsPerMonth: 250,
+		watchlistQueriesPerDay: 200,
+	},
+	ultra: {
+		maxOrganizations: 10,
+		usersPerOrg: 20,
+		reportsPerMonth: 100,
+		noticesPerMonth: 100,
+		alertsPerMonth: 500,
+		transactionsPerMonth: 2000,
+		clientsPerMonth: 1000,
+		watchlistQueriesPerDay: 500,
+	},
+};
+
+// =============================================================================
+// PRICE DEFINITIONS (amounts in centavos MXN)
+// Pricing aligned with business model (January 2026)
+// - Subscription: Base monthly fee
+// - Seat: Extra user per org per month ($599 = 59900 centavos)
+// - Extra Org: Additional organization per month ($1,499 = 149900 centavos)
+// - Overages: Usage-based charges for exceeding limits
+// =============================================================================
+
+const PRICES = {
+	watchlist: [
+		{
+			id: "price_watchlist_monthly",
+			priceType: "subscription",
+			amount: 49900, // $499 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Suscripción mensual Janovix Watchlist",
+		},
+		{
+			id: "price_watchlist_seat",
+			priceType: "seat",
+			amount: 59900, // $599 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Usuario Extra",
+		},
+	],
+	business: [
+		{
+			id: "price_aml_business_monthly",
+			priceType: "subscription",
+			amount: 299900, // $2,999 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Suscripción mensual Janovix AML Business",
+		},
+		{
+			id: "price_aml_business_seat",
+			priceType: "seat",
+			amount: 59900, // $599 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Usuario Extra",
+		},
+		{
+			id: "price_aml_business_extra_org",
+			priceType: "extra_org",
+			amount: 149900, // $1,499 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Organización Extra",
+		},
+		{
+			id: "price_aml_business_report_overage",
+			priceType: "overage_report",
+			amount: 49900, // $499 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Reporte Extra",
+		},
+		{
+			id: "price_aml_business_notice_overage",
+			priceType: "overage_notice",
+			amount: 39900, // $399 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Aviso Extra",
+		},
+		{
+			id: "price_aml_business_client_overage",
+			priceType: "overage_client",
+			amount: 2900, // $29 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Cliente Extra",
+		},
+		{
+			id: "price_aml_business_transaction_overage",
+			priceType: "overage_transaction",
+			amount: 1500, // $15 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Transacción Extra",
+		},
+		{
+			id: "price_aml_business_alert_overage",
+			priceType: "overage_alert",
+			amount: 7900, // $79 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Alerta Extra",
+		},
+	],
+	pro: [
+		{
+			id: "price_aml_pro_monthly",
+			priceType: "subscription",
+			amount: 599900, // $5,999 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Suscripción mensual Janovix AML Pro",
+		},
+		{
+			id: "price_aml_pro_seat",
+			priceType: "seat",
+			amount: 59900, // $599 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Usuario Extra",
+		},
+		{
+			id: "price_aml_pro_extra_org",
+			priceType: "extra_org",
+			amount: 149900, // $1,499 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Organización Extra",
+		},
+		{
+			id: "price_aml_pro_report_overage",
+			priceType: "overage_report",
+			amount: 49900, // $499 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Reporte Extra",
+		},
+		{
+			id: "price_aml_pro_notice_overage",
+			priceType: "overage_notice",
+			amount: 39900, // $399 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Aviso Extra",
+		},
+		{
+			id: "price_aml_pro_client_overage",
+			priceType: "overage_client",
+			amount: 2900, // $29 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Cliente Extra",
+		},
+		{
+			id: "price_aml_pro_transaction_overage",
+			priceType: "overage_transaction",
+			amount: 1500, // $15 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Transacción Extra",
+		},
+		{
+			id: "price_aml_pro_alert_overage",
+			priceType: "overage_alert",
+			amount: 7900, // $79 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Alerta Extra",
+		},
+	],
+	ultra: [
+		{
+			id: "price_aml_ultra_monthly",
+			priceType: "subscription",
+			amount: 1999900, // $19,999 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Suscripción mensual Janovix AML Ultra",
+		},
+		{
+			id: "price_aml_ultra_seat",
+			priceType: "seat",
+			amount: 59900, // $599 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Usuario Extra",
+		},
+		{
+			id: "price_aml_ultra_extra_org",
+			priceType: "extra_org",
+			amount: 149900, // $1,499 MXN
+			currency: "MXN",
+			interval: "month",
+			intervalCount: 1,
+			description: "Organización Extra",
+		},
+		{
+			id: "price_aml_ultra_report_overage",
+			priceType: "overage_report",
+			amount: 49900, // $499 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Reporte Extra",
+		},
+		{
+			id: "price_aml_ultra_notice_overage",
+			priceType: "overage_notice",
+			amount: 39900, // $399 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Aviso Extra",
+		},
+		{
+			id: "price_aml_ultra_client_overage",
+			priceType: "overage_client",
+			amount: 2900, // $29 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Cliente Extra",
+		},
+		{
+			id: "price_aml_ultra_transaction_overage",
+			priceType: "overage_transaction",
+			amount: 1500, // $15 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Transacción Extra",
+		},
+		{
+			id: "price_aml_ultra_alert_overage",
+			priceType: "overage_alert",
+			amount: 7900, // $79 MXN
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Alerta Extra",
+		},
+	],
+};
+
+// =============================================================================
+// SQL GENERATION
+// =============================================================================
 
 function escapeSqlString(str) {
 	if (str === null || str === undefined) return "NULL";
 	return `'${String(str).replace(/'/g, "''")}'`;
 }
 
-function generateSql() {
-	const values = PLANS.map((plan) => {
-		const id = escapeSqlString(plan.id);
-		const name = escapeSqlString(plan.name);
-		const tier = escapeSqlString(plan.tier);
-		const billingInterval = escapeSqlString(plan.billingInterval);
-		const stripePriceId = escapeSqlString(plan.stripePriceId);
-		const basePrice = plan.basePrice;
-		const noticesIncluded = plan.noticesIncluded;
-		const usersIncluded = plan.usersIncluded;
-		const transactionsIncluded =
-			plan.transactionsIncluded !== null ? plan.transactionsIncluded : "NULL";
-		const alertsIncluded =
-			plan.alertsIncluded !== null ? plan.alertsIncluded : "NULL";
-		const overagePriceId =
-			plan.overagePriceId !== null
-				? escapeSqlString(plan.overagePriceId)
-				: "NULL";
-		const overagePrice =
-			plan.overagePrice !== null ? plan.overagePrice : "NULL";
-		const features = escapeSqlString(JSON.stringify(plan.features));
-		const active = plan.active ? 1 : 0;
+function getStripeId(env, planName, priceType) {
+	const envIds = STRIPE_IDS[env];
+	if (!envIds) {
+		throw new Error(`Unknown environment: ${env}`);
+	}
+	const planIds = envIds[planName];
+	if (!planIds) {
+		throw new Error(`Unknown plan: ${planName}`);
+	}
+	return (
+		planIds[priceType] || `price_placeholder_${env}_${planName}_${priceType}`
+	);
+}
 
-		return `(
-    ${id},
-    ${name},
-    ${tier},
-    ${billingInterval},
-    ${stripePriceId},
-    ${basePrice},
-    ${noticesIncluded},
-    ${usersIncluded},
-    ${transactionsIncluded},
-    ${alertsIncluded},
-    ${overagePriceId},
-    ${overagePrice},
-    ${features},
-    ${active},
+function generateSql(env) {
+	const now = new Date().toISOString();
+	let sql = `-- Seed subscription plans, prices, and limits
+-- Environment: ${env}
+-- Generated: ${now}
+
+`;
+
+	// 0. Clear existing prices to avoid UNIQUE constraint conflicts on stripe_price_id
+	// (Stripe price IDs may be shared across plans in dev/preview environments)
+	sql += `-- ========================================
+-- CLEAR EXISTING DATA (to avoid UNIQUE conflicts)
+-- ========================================
+DELETE FROM plan_prices WHERE plan_id IN ('plan_watchlist', 'plan_aml_business', 'plan_aml_pro', 'plan_aml_ultra', 'plan_business', 'plan_pro', 'plan_ultra');
+DELETE FROM plan_limits WHERE plan_id IN ('plan_watchlist', 'plan_aml_business', 'plan_aml_pro', 'plan_aml_ultra', 'plan_business', 'plan_pro', 'plan_ultra');
+DELETE FROM subscription_plans WHERE id IN ('plan_business', 'plan_pro', 'plan_ultra');
+
+`;
+
+	// 1. Insert/Update plans
+	// Note: features are stored in 'metadata' column as JSON (schema doesn't have 'features' column)
+	sql += `-- ========================================
+-- SUBSCRIPTION PLANS
+-- ========================================
+`;
+	for (const plan of PLANS) {
+		const metadata = JSON.stringify({ features: plan.features });
+		sql += `INSERT INTO subscription_plans (id, name, display_name, description, metadata, created_at, updated_at)
+VALUES (
+    ${escapeSqlString(plan.id)},
+    ${escapeSqlString(plan.name)},
+    ${escapeSqlString(plan.displayName)},
+    ${escapeSqlString(plan.description)},
+    ${escapeSqlString(metadata)},
     datetime('now'),
     datetime('now')
-)`;
-	}).join(",\n");
-
-	const sql = `-- Seed subscription plans
--- Generated: ${new Date().toISOString()}
-
-INSERT INTO subscription_plans (
-    id, name, tier, billing_interval, stripe_price_id, base_price,
-    notices_included, users_included, transactions_included, alerts_included,
-    overage_price_id, overage_price, features, active, created_at, updated_at
-) VALUES 
-${values}
+)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
-    tier = excluded.tier,
-    billing_interval = excluded.billing_interval,
-    stripe_price_id = excluded.stripe_price_id,
-    base_price = excluded.base_price,
-    notices_included = excluded.notices_included,
-    users_included = excluded.users_included,
-    transactions_included = excluded.transactions_included,
-    alerts_included = excluded.alerts_included,
-    overage_price_id = excluded.overage_price_id,
-    overage_price = excluded.overage_price,
-    features = excluded.features,
-    active = excluded.active,
+    display_name = excluded.display_name,
+    description = excluded.description,
+    metadata = excluded.metadata,
     updated_at = datetime('now');
+
 `;
+	}
+
+	// 2. Insert/Update plan limits
+	sql += `-- ========================================
+-- PLAN LIMITS
+-- ========================================
+`;
+	for (const plan of PLANS) {
+		const limits = PLAN_LIMITS[plan.name];
+		// Using simple INSERT since we DELETE first (avoids UNIQUE constraint issues)
+		sql += `INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, transactions_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+VALUES (
+    ${escapeSqlString(`limit_${plan.name}`)},
+    ${escapeSqlString(plan.id)},
+    ${limits.maxOrganizations},
+    ${limits.usersPerOrg},
+    ${limits.reportsPerMonth},
+    ${limits.noticesPerMonth},
+    ${limits.alertsPerMonth},
+    ${limits.transactionsPerMonth},
+    ${limits.clientsPerMonth},
+    ${limits.watchlistQueriesPerDay},
+    datetime('now'),
+    datetime('now')
+);
+
+`;
+	}
+
+	// 3. Insert/Update prices with environment-specific Stripe IDs
+	sql += `-- ========================================
+-- PLAN PRICES (with ${env} Stripe IDs)
+-- ========================================
+`;
+	for (const plan of PLANS) {
+		const prices = PRICES[plan.name];
+		for (const price of prices) {
+			const stripePriceId = getStripeId(env, plan.name, price.priceType);
+			// Using simple INSERT since we DELETE first (avoids UNIQUE constraint on stripe_price_id)
+			sql += `INSERT INTO plan_prices (id, plan_id, stripe_price_id, price_type, amount, currency, interval, interval_count, description, is_active, created_at, updated_at)
+VALUES (
+    ${escapeSqlString(price.id)},
+    ${escapeSqlString(plan.id)},
+    ${escapeSqlString(stripePriceId)},
+    ${escapeSqlString(price.priceType)},
+    ${price.amount},
+    ${escapeSqlString(price.currency)},
+    ${price.interval ? escapeSqlString(price.interval) : "NULL"},
+    ${price.intervalCount !== null ? price.intervalCount : "NULL"},
+    ${escapeSqlString(price.description)},
+    1,
+    datetime('now'),
+    datetime('now')
+);
+
+`;
+		}
+	}
 
 	return sql;
 }
 
+// =============================================================================
+// MAIN EXECUTION
+// =============================================================================
+
 async function seedPlans() {
+	// Determine environment
+	const env = process.env.ENV || "dev";
 	const isRemote = process.env.CI === "true" || process.env.REMOTE === "true";
-	// Use WRANGLER_CONFIG if set, otherwise detect preview environment
+
+	// Validate environment
+	if (!STRIPE_IDS[env]) {
+		console.error(`❌ Unknown environment: ${env}`);
+		console.error(
+			`   Valid environments: ${Object.keys(STRIPE_IDS).join(", ")}`,
+		);
+		process.exit(1);
+	}
+
+	// Determine wrangler config file
 	let configFile = process.env.WRANGLER_CONFIG;
 	if (!configFile) {
-		if (
-			process.env.CF_PAGES_BRANCH ||
-			(process.env.WORKERS_CI_BRANCH &&
-				process.env.WORKERS_CI_BRANCH !== "main") ||
-			process.env.PREVIEW === "true"
-		) {
+		if (env === "preview") {
 			configFile = "wrangler.preview.jsonc";
+		} else if (env === "prod") {
+			configFile = "wrangler.prod.jsonc";
 		}
 	}
 	const configFlag = configFile ? `--config ${configFile}` : "";
 
-	try {
+	console.log(`
+╔══════════════════════════════════════════════════════════════════╗
+║                    JANOVIX PLAN SEEDER                           ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Environment:  ${env.padEnd(48)}║
+║  Remote:       ${(isRemote ? "yes" : "no (local)").padEnd(48)}║
+║  Config:       ${(configFile || "default").padEnd(48)}║
+╚══════════════════════════════════════════════════════════════════╝
+`);
+
+	// Check for placeholder Stripe IDs
+	const stripeIds = STRIPE_IDS[env];
+	const hasPlaceholders = Object.values(stripeIds).some((planIds) =>
+		Object.values(planIds).some((id) => id.includes("REPLACE")),
+	);
+
+	if (hasPlaceholders) {
+		console.log(`⚠️  WARNING: Some Stripe IDs contain placeholder values!`);
 		console.log(
-			`🌱 Seeding subscription plans (${isRemote ? "remote" : "local"})...`,
+			`   Please update STRIPE_IDS.${env} in seed-plans.mjs with actual Stripe price IDs.`,
 		);
+		console.log(`   Stripe IDs for ${env}:`);
+		for (const [planName, priceIds] of Object.entries(stripeIds)) {
+			console.log(`   ${planName}:`);
+			for (const [priceType, priceId] of Object.entries(priceIds)) {
+				const status = priceId.includes("REPLACE") ? "❌" : "✅";
+				console.log(`     ${status} ${priceType}: ${priceId}`);
+			}
+		}
+		console.log("");
+	}
+
+	try {
+		console.log(`🌱 Generating SQL for ${env} environment...`);
 
 		// Generate SQL
-		const sql = generateSql();
-		const sqlFile = join(__dirname, `temp-plans-${Date.now()}.sql`);
+		const sql = generateSql(env);
+		const sqlFile = join(__dirname, `temp-seed-${env}-${Date.now()}.sql`);
 
 		try {
 			writeFileSync(sqlFile, sql);
@@ -175,14 +727,42 @@ async function seedPlans() {
 				? `wrangler d1 execute DB ${configFlag} --remote --file "${sqlFile}"`
 				: `wrangler d1 execute DB ${configFlag} --local --file "${sqlFile}"`;
 
+			console.log(`📡 Executing: ${command}`);
+			console.log("");
 			execSync(command, { stdio: "inherit" });
 
-			console.log(`✅ Subscription plans seeding completed:`);
-			PLANS.forEach((plan) => {
+			console.log(`
+✅ Seeding completed successfully!
+
+Plans created/updated:`);
+			for (const plan of PLANS) {
+				const limits = PLAN_LIMITS[plan.name];
+				console.log(`   • ${plan.displayName} (${plan.name})`);
 				console.log(
-					`   - ${plan.name} (${plan.tier}): ${plan.basePrice / 100} MXN/month`,
+					`     - Max orgs: ${limits.maxOrganizations}, Users/org: ${limits.usersPerOrg}`,
 				);
-			});
+				console.log(
+					`     - Notices/mo: ${limits.noticesPerMonth}, Reports/mo: ${limits.reportsPerMonth}`,
+				);
+				console.log(
+					`     - Alerts/mo: ${limits.alertsPerMonth}, Txns/mo: ${limits.transactionsPerMonth}`,
+				);
+				console.log(`     - Clients/mo: ${limits.clientsPerMonth}`);
+				console.log(
+					`     - Watchlist queries/day: ${limits.watchlistQueriesPerDay}`,
+				);
+			}
+
+			console.log(`
+Prices seeded:
+   • Watchlist: ${PRICES.watchlist.length} prices
+   • AML Business: ${PRICES.business.length} prices
+   • AML Pro: ${PRICES.pro.length} prices
+   • AML Ultra: ${PRICES.ultra.length} prices
+
+💡 To verify, run:
+   ${isRemote ? "REMOTE=true " : ""}node scripts/seed-plans.mjs --verify
+`);
 		} finally {
 			// Clean up temp file
 			try {
@@ -192,7 +772,7 @@ async function seedPlans() {
 			}
 		}
 	} catch (error) {
-		console.error("❌ Error seeding subscription plans:", error);
+		console.error("❌ Error seeding plans:", error);
 		throw error;
 	}
 }
