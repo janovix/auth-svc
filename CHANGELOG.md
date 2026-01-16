@@ -1,3 +1,10 @@
+# [1.4.0-rc.17](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.16...v1.4.0-rc.17) (2026-01-16)
+
+
+### Bug Fixes
+
+* **tests:** update test expectations for new fields and mock pricing repo ([cdae0da](https://github.com/janovix/auth-svc/commit/cdae0da44cfde72d44d41cf3f62ccbc19a0f1c47))
+
 # [1.4.0-rc.16](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.15...v1.4.0-rc.16) (2026-01-14)
 
 
