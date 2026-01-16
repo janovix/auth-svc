@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 
-import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
+import {
+	getBetterAuthContext,
+	invalidateBetterAuthCache,
+	_setCachedPriceIdsForTesting,
+} from "./instance";
 import type { Bindings } from "../types/bindings";
 
 const SECRET = "test-secret-123456789012345678901234567890";
@@ -14,6 +18,14 @@ const baseEnv: Bindings = {
 	AUTH_INTERNAL_TOKEN: INTERNAL_TOKEN,
 } as Bindings;
 
+// Test price IDs to cache before tests
+const testPriceIds = {
+	watchlist: "price_test_watchlist",
+	business: "price_test_business",
+	pro: "price_test_pro",
+	ultra: "price_test_ultra",
+};
+
 function buildEnv(overrides: Partial<Bindings> = {}) {
 	return {
 		...baseEnv,
@@ -22,6 +34,16 @@ function buildEnv(overrides: Partial<Bindings> = {}) {
 }
 
 describe("getBetterAuthContext", () => {
+	beforeEach(() => {
+		// Set up cached price IDs before each test
+		_setCachedPriceIdsForTesting(testPriceIds);
+	});
+
+	afterEach(() => {
+		// Clean up cached price IDs after each test
+		_setCachedPriceIdsForTesting(null);
+	});
+
 	it("creates auth instance on first call", () => {
 		const env = buildEnv();
 		const context = getBetterAuthContext(env);
@@ -69,6 +91,16 @@ describe("getBetterAuthContext", () => {
 });
 
 describe("invalidateBetterAuthCache", () => {
+	beforeEach(() => {
+		// Set up cached price IDs before each test
+		_setCachedPriceIdsForTesting(testPriceIds);
+	});
+
+	afterEach(() => {
+		// Clean up cached price IDs after each test
+		_setCachedPriceIdsForTesting(null);
+	});
+
 	it("removes cached auth instance", () => {
 		const env = buildEnv({
 			ENVIRONMENT: "dev",
@@ -85,6 +117,9 @@ describe("invalidateBetterAuthCache", () => {
 
 		// Invalidate cache
 		invalidateBetterAuthCache(env);
+
+		// Re-set cached price IDs since invalidateBetterAuthCache clears them
+		_setCachedPriceIdsForTesting(testPriceIds);
 
 		// Next call should create a new instance
 		const context3 = getBetterAuthContext(env);
@@ -104,6 +139,9 @@ describe("invalidateBetterAuthCache", () => {
 
 		// Invalidate only dev environment
 		invalidateBetterAuthCache(env1);
+
+		// Re-set cached price IDs since invalidateBetterAuthCache clears them
+		_setCachedPriceIdsForTesting(testPriceIds);
 
 		// Dev should get a new instance
 		const context1b = getBetterAuthContext(env1);

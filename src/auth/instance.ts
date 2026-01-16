@@ -96,6 +96,17 @@ export function invalidateBetterAuthCache(env: Bindings) {
 }
 
 /**
+ * Set cached price IDs for testing purposes only
+ * @internal
+ */
+export function _setCachedPriceIdsForTesting(
+	priceIds: StripePriceIds | null,
+): void {
+	cachedPriceIds = priceIds;
+	priceIdsCacheTime = priceIds ? Date.now() : 0;
+}
+
+/**
  * Get Better Auth context - async version that fetches prices from database
  */
 export async function getBetterAuthContextAsync(
