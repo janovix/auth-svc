@@ -10,12 +10,6 @@ import { getTrustedOriginPatterns } from "../middleware/cors";
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
 /**
- * Timeout for Better Auth handler operations in milliseconds.
- * Prevents indefinite hangs if database or other operations become unresponsive.
- */
-const AUTH_HANDLER_TIMEOUT_MS = 25000; // 25 seconds (Cloudflare Workers timeout is 30s)
-
-/**
  * Track OTP send requests to detect rate limiting.
  * Key: requestId, Value: { email, timestamp, sent: boolean }
  * We use a simple approach: set a flag before request, callback sets sent=true
@@ -390,30 +384,10 @@ async function validateTurnstileForRequest(
 	return { valid: true, message: "Turnstile verified" };
 }
 
-/**
- * Creates a timeout promise that rejects after the specified duration.
- */
-function createTimeoutPromise(
-	timeoutMs: number,
-	pathname: string,
-): Promise<Response> {
-	return new Promise((_, reject) => {
-		setTimeout(() => {
-			console.error(
-				`[Auth] Handler timeout after ${timeoutMs}ms for ${pathname}`,
-			);
-			reject(new Error(`Auth handler timeout after ${timeoutMs}ms`));
-		}, timeoutMs);
-	});
-}
-
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
 ) {
-	const pathname = c.req.path;
-	const handlerStart = Date.now();
-
 	// Wrap Better Auth handler to ensure all errors are caught and converted to responses
 	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
 		// Better Auth uses APIError with statusCode for redirects (302)
@@ -435,7 +409,6 @@ async function handleAuthRequest(
 		// If Better Auth throws an error, convert it to a proper error response
 		// Better Auth should return responses, but if it throws, handle it gracefully
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		console.error(`[Auth] Handler error for ${pathname}:`, errorMessage);
 		return new Response(
 			JSON.stringify({
 				success: false,
@@ -454,15 +427,7 @@ async function handleAuthRequest(
 	});
 
 	try {
-		// Race the handler against a timeout to prevent indefinite hangs
-		const response = await Promise.race([
-			handlerPromise,
-			createTimeoutPromise(AUTH_HANDLER_TIMEOUT_MS, pathname),
-		]);
-
-		console.log(
-			`[Auth] Handler response received in ${Date.now() - handlerStart}ms for ${pathname}`,
-		);
+		const response = await handlerPromise;
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
@@ -499,28 +464,10 @@ async function handleAuthRequest(
 		});
 		return addCorsHeadersIfNeeded(c, await retryPromise);
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-
-		// Handle timeout errors - return 504 Gateway Timeout
-		if (errorMessage.includes("timeout")) {
-			console.error(`[Auth] Request timed out for ${pathname}`);
-			return c.json(
-				{
-					success: false,
-					errors: [
-						{
-							code: 5004,
-							message: "Request timed out. Please try again.",
-						},
-					],
-				},
-				504,
-			);
-		}
-
 		// Catch any errors from response processing
 		if (!isJwksDecryptError(error)) {
-			console.error(`[Auth] Handler error for ${pathname}:`, errorMessage);
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
 			return c.json(
 				{
 					success: false,
@@ -544,16 +491,16 @@ async function handleAuthRequest(
 			c.env,
 			executionContext,
 		);
-		const retryPromise = refreshed.handler(c.req.raw).catch((retryError) => {
-			const retryErrorMessage =
-				retryError instanceof Error ? retryError.message : String(retryError);
+		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
 			return new Response(
 				JSON.stringify({
 					success: false,
 					errors: [
 						{
 							code: 5000,
-							message: retryErrorMessage || "Internal Server Error",
+							message: errorMessage || "Internal Server Error",
 						},
 					],
 				}),
