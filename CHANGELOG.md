@@ -1,3 +1,10 @@
+# [1.4.0-rc.19](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.18...v1.4.0-rc.19) (2026-01-16)
+
+
+### Features
+
+* **auth, kv-storage:** implement timeout handling for auth requests and KV operations to prevent indefinite hangs ([1665cbc](https://github.com/janovix/auth-svc/commit/1665cbcc26c911ebb9e8c35260b2ffd205e00c19))
+
 # [1.4.0-rc.18](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.17...v1.4.0-rc.18) (2026-01-16)
 
 
