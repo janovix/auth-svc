@@ -13,12 +13,14 @@ import { PricingRepository, PricingService } from "../domain/pricing";
  * Cache for Better Auth instances.
  * We cache the full auth instance to preserve internal state needed for
  * redirect handling, session management, etc.
+ *
+ * NOTE: We use a WeakMap keyed by the DB instance to ensure that when
+ * the DB binding changes (new request context), we create a fresh instance.
+ * This helps avoid stale connection issues in Cloudflare Workers.
  */
-const authCache = new Map<
-	string,
-	{
-		auth: ReturnType<typeof betterAuth>;
-	}
+const authCacheByDb = new WeakMap<
+	D1Database,
+	Map<string, { auth: ReturnType<typeof betterAuth> }>
 >();
 
 // Cache for Stripe price IDs fetched from database
@@ -85,7 +87,11 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 
 export function invalidateBetterAuthCache(env: Bindings) {
 	const resolved = buildResolvedAuthConfig(env);
-	authCache.delete(resolved.cacheKey);
+	// Get the cache for this DB instance
+	const dbCache = authCacheByDb.get(env.DB);
+	if (dbCache) {
+		dbCache.delete(resolved.cacheKey);
+	}
 	// Also invalidate price cache
 	cachedPriceIds = null;
 }
@@ -93,10 +99,13 @@ export function invalidateBetterAuthCache(env: Bindings) {
 /**
  * Get Better Auth context for handling requests.
  *
- * This function:
- * 1. Sets the execution context for background tasks (email sending, Stripe sync)
- * 2. Fetches Stripe price IDs from database (with 5-min caching)
- * 3. Returns cached or creates new Better Auth instance
+ * This function uses a WeakMap keyed by D1Database instance to cache auth
+ * instances. This ensures that:
+ * 1. Within the same Worker isolate with the same DB binding, we reuse the instance
+ * 2. When a new request comes with a potentially different DB context, we detect it
+ *
+ * This approach balances performance (caching) with reliability (fresh connections
+ * when needed) in Cloudflare Workers.
  *
  * @param env - Cloudflare Worker bindings
  * @param executionContext - Optional execution context for waitUntil support
@@ -118,8 +127,15 @@ export async function getBetterAuthContext(
 		executionContext,
 		stripePriceIds,
 	);
-	const cached = authCache.get(resolved.cacheKey);
 
+	// Get or create cache for this specific DB instance
+	let dbCache = authCacheByDb.get(env.DB);
+	if (!dbCache) {
+		dbCache = new Map();
+		authCacheByDb.set(env.DB, dbCache);
+	}
+
+	const cached = dbCache.get(resolved.cacheKey);
 	if (cached) {
 		return {
 			auth: cached.auth,
@@ -136,7 +152,7 @@ export async function getBetterAuthContext(
 		secondaryStorage,
 	});
 
-	authCache.set(resolved.cacheKey, { auth });
+	dbCache.set(resolved.cacheKey, { auth });
 
 	return {
 		auth,

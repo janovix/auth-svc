@@ -31,31 +31,45 @@ describe("getBetterAuthContext", () => {
 		expect(context.accessPolicy).toBeDefined();
 	});
 
-	it("caches auth instance for same environment", async () => {
+	it("caches auth instance for same DB instance and environment", async () => {
 		const env = buildEnv();
 		const context1 = await getBetterAuthContext(env);
 		const context2 = await getBetterAuthContext(env);
 
-		// Should return the same cached instance
+		// Should return the same cached instance when using the same DB instance
 		expect(context1.auth).toBe(context2.auth);
 	});
 
-	it("creates different instances for different environments", async () => {
-		const env1 = buildEnv({
-			ENVIRONMENT: "dev",
-			BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
-		});
-		const env2 = buildEnv({ ENVIRONMENT: "local" });
+	it("creates different instances for different DB instances", async () => {
+		// Different DB objects simulate different request contexts
+		const env1 = buildEnv({ DB: {} as D1Database });
+		const env2 = buildEnv({ DB: {} as D1Database });
 
 		const context1 = await getBetterAuthContext(env1);
 		const context2 = await getBetterAuthContext(env2);
 
-		// Should be different instances
+		// Should be different instances because DB instances are different
+		expect(context1.auth).not.toBe(context2.auth);
+	});
+
+	it("creates different instances for different environments", async () => {
+		const sharedDb = {} as D1Database;
+		const env1 = buildEnv({
+			DB: sharedDb,
+			ENVIRONMENT: "dev",
+			BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+		});
+		const env2 = buildEnv({ DB: sharedDb, ENVIRONMENT: "local" });
+
+		const context1 = await getBetterAuthContext(env1);
+		const context2 = await getBetterAuthContext(env2);
+
+		// Should be different instances for different environments
 		expect(context1.auth).not.toBe(context2.auth);
 	});
 
 	it("handles execution context parameter", async () => {
-		const env = buildEnv();
+		const env = buildEnv({ DB: {} as D1Database });
 		const mockExecutionContext = {
 			waitUntil: () => {},
 			passThroughOnException: () => {},
@@ -69,7 +83,7 @@ describe("getBetterAuthContext", () => {
 	});
 
 	it("sets execution context for callbacks to use (critical for OTP emails)", async () => {
-		const env = buildEnv();
+		const env = buildEnv({ DB: {} as D1Database });
 		const mockExecutionContext = {
 			waitUntil: vi.fn(),
 			passThroughOnException: () => {},
@@ -114,11 +128,13 @@ describe("invalidateBetterAuthCache", () => {
 	});
 
 	it("only invalidates cache for specific environment", async () => {
+		const sharedDb = {} as D1Database;
 		const env1 = buildEnv({
+			DB: sharedDb,
 			ENVIRONMENT: "dev",
 			BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
 		});
-		const env2 = buildEnv({ ENVIRONMENT: "local" });
+		const env2 = buildEnv({ DB: sharedDb, ENVIRONMENT: "local" });
 
 		// Create instances for both environments
 		const context1a = await getBetterAuthContext(env1);
@@ -137,7 +153,7 @@ describe("invalidateBetterAuthCache", () => {
 	});
 
 	it("handles invalidation when cache is empty", () => {
-		const env = buildEnv({ ENVIRONMENT: "test" });
+		const env = buildEnv({ DB: {} as D1Database, ENVIRONMENT: "test" });
 
 		// Should not throw when cache is empty
 		expect(() => {

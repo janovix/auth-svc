@@ -82,27 +82,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Log request start for debugging hang issues
 		console.log(`[Auth] Request started: ${c.req.method} ${pathname}`);
 
-		// CRITICAL: Read the request body ONCE at the start for POST requests
-		// Cloning Request objects multiple times can cause body stream issues in
-		// Cloudflare Workers, leading to hanging requests. We read once, cache it,
-		// and create fresh requests when needed.
-		let cachedBody: string | null = null;
-		let parsedBody: Record<string, unknown> | null = null;
-
-		if (c.req.method === "POST") {
-			try {
-				// Read the body as text once (preserves for re-use)
-				cachedBody = await c.req.raw.clone().text();
-				console.log(`[Auth] Body read: ${cachedBody.length} bytes`);
-				if (cachedBody) {
-					parsedBody = JSON.parse(cachedBody) as Record<string, unknown>;
-				}
-			} catch {
-				// Body might not be JSON or might be empty
-				console.log(`[Auth] Could not parse body as JSON`);
-			}
-		}
-
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
@@ -128,13 +107,20 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c.req.method === "POST"
 		) {
 			isOtpRequest = true;
-			// Use cached parsed body instead of cloning request again
-			if (parsedBody && typeof parsedBody.email === "string") {
-				otpEmail = parsedBody.email;
-				startOtpTracking(otpEmail);
-				console.log(
-					`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
-				);
+			// Try to get email from a CLONED request body for tracking
+			// We must clone to avoid consuming the body before Better Auth reads it
+			try {
+				const clonedRequest = c.req.raw.clone();
+				const body = (await clonedRequest.json()) as { email?: string };
+				if (body.email) {
+					otpEmail = body.email;
+					startOtpTracking(otpEmail);
+					console.log(
+						`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
+					);
+				}
+			} catch {
+				console.log(`[OTP Tracking] Could not parse body for email tracking`);
 			}
 		}
 
@@ -149,7 +135,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			turnstileProtectedEndpoints.includes(pathname) &&
 			c.req.method === "POST"
 		) {
-			const turnstileResult = await validateTurnstileForRequest(c, parsedBody);
+			const turnstileResult = await validateTurnstileForRequest(c);
 			if (!turnstileResult.valid) {
 				return c.json(
 					{
@@ -226,7 +212,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
-				const response = await handleAuthRequest(c, auth, cachedBody);
+				const response = await handleAuthRequest(c, auth);
 				// Log subscription endpoint responses
 				if (pathname.startsWith("/api/auth/subscription/")) {
 					console.log(`[Subscription] Response Status: ${response.status}`);
@@ -265,7 +251,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		}
 
 		const preHandlerTime = Date.now();
-		const response = await handleAuthRequest(c, auth, cachedBody);
+		const response = await handleAuthRequest(c, auth);
 		console.log(
 			`[Auth] Handler completed in ${Date.now() - preHandlerTime}ms for ${pathname} (total: ${Date.now() - startTime}ms)`,
 		);
@@ -334,12 +320,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
  * Uses our custom verifyTurnstileToken utility which has a 5-second timeout
  * to prevent request hanging in Cloudflare Workers.
  *
+ * NOTE: Token is read from x-captcha-response header ONLY to avoid body stream issues.
+ * The Better Auth client should send the token in this header.
+ *
  * @param c - Hono context
- * @param parsedBody - Pre-parsed request body (to avoid re-reading stream)
  */
 async function validateTurnstileForRequest(
 	c: Context<{ Bindings: Bindings }>,
-	parsedBody: Record<string, unknown> | null,
 ): Promise<{ valid: boolean; message: string }> {
 	const pathname = c.req.path;
 	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
@@ -352,18 +339,9 @@ async function validateTurnstileForRequest(
 		return { valid: true, message: "Turnstile not configured" };
 	}
 
-	// Get Turnstile token from either:
-	// 1. x-captcha-response header (Better Auth client convention)
-	// 2. turnstileToken in request body (legacy/custom clients)
-	let turnstileToken = c.req.header("x-captcha-response");
-
-	if (!turnstileToken && parsedBody) {
-		// Use pre-parsed body instead of cloning request again
-		turnstileToken =
-			typeof parsedBody.turnstileToken === "string"
-				? parsedBody.turnstileToken
-				: undefined;
-	}
+	// Get Turnstile token from x-captcha-response header (Better Auth client convention)
+	// We only check header to avoid consuming/cloning the request body
+	const turnstileToken = c.req.header("x-captcha-response");
 
 	if (!turnstileToken) {
 		console.warn(`[Turnstile] Missing token for ${pathname}`);
@@ -400,47 +378,17 @@ async function validateTurnstileForRequest(
 	return { valid: true, message: "Turnstile verified" };
 }
 
-/**
- * Creates a fresh Request object with the same properties as the original,
- * but with a fresh body stream from the cached body string.
- * This prevents body stream exhaustion issues in Cloudflare Workers.
- */
-function createFreshRequest(
-	originalRequest: Request,
-	cachedBody: string | null,
-): Request {
-	const method = originalRequest.method;
-	const headers = new Headers(originalRequest.headers);
-	const url = originalRequest.url;
-
-	// For GET requests or requests with no body, no need for body
-	if (method === "GET" || !cachedBody) {
-		return new Request(url, {
-			method,
-			headers,
-		});
-	}
-
-	// For POST requests, create new Request with fresh body
-	return new Request(url, {
-		method,
-		headers,
-		body: cachedBody,
-	});
-}
-
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
-	cachedBody: string | null,
 ) {
-	// Create a fresh Request with a new body stream to avoid exhaustion issues
-	// The original request's body may have been read for pre-processing (OTP tracking, Turnstile)
-	const freshRequest = createFreshRequest(c.req.raw, cachedBody);
-	console.log(`[Auth] Created fresh request for Better Auth handler`);
+	const pathname = c.req.path;
 
-	// Wrap Better Auth handler to ensure all errors are caught and converted to responses
-	const handlerPromise = auth.handler(freshRequest).catch((error) => {
+	console.log(`[Auth] Passing request to Better Auth handler for ${pathname}`);
+
+	// Pass the original request directly to Better Auth
+	// We no longer pre-process the body to avoid any stream issues
+	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
 		// Better Auth uses APIError with statusCode for redirects (302)
 		// Convert these "errors" to proper redirect responses
 		if (isBetterAuthRedirectError(error)) {
@@ -485,89 +433,48 @@ async function handleAuthRequest(
 			return addCorsHeadersIfNeeded(c, response);
 		}
 
-		// Retry after clearing JWKS on decrypt error
-		await clearJwksAndResetAuth(c);
-		const executionContext = (
-			c as unknown as { executionCtx?: ExecutionContext }
-		).executionCtx;
-		const { auth: refreshed } = await getBetterAuthContext(
-			c.env,
-			executionContext,
+		// Clear JWKS and invalidate cache for next request
+		// Don't retry immediately as body may have been consumed
+		console.log(
+			`[Auth] JWKS decrypt error detected, cleared JWKS for next request`,
 		);
-		// Create another fresh request for retry
-		const retryRequest = createFreshRequest(c.req.raw, cachedBody);
-		const retryPromise = refreshed.handler(retryRequest).catch((error) => {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			return new Response(
-				JSON.stringify({
-					success: false,
-					errors: [
-						{
-							code: 5000,
-							message: errorMessage || "Internal Server Error",
-						},
-					],
-				}),
-				{
-					status: 500,
-					headers: { "Content-Type": "application/json" },
-				},
-			);
-		});
-		return addCorsHeadersIfNeeded(c, await retryPromise);
+		await clearJwksAndResetAuth(c);
+		return c.json(
+			{
+				success: false,
+				errors: [
+					{
+						code: 5001,
+						message: "Authentication service error. Please try again.",
+					},
+				],
+			},
+			500,
+		);
 	} catch (error) {
-		// Catch any errors from response processing
-		if (!isJwksDecryptError(error)) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			return c.json(
-				{
-					success: false,
-					errors: [
-						{
-							code: 5000,
-							message: errorMessage || "Internal Server Error",
-						},
-					],
-				},
-				500,
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error(`[Auth] Handler error for ${pathname}:`, errorMessage);
+
+		// Check if it's a JWKS decrypt error
+		if (isJwksDecryptError(error)) {
+			console.log(
+				`[Auth] JWKS decrypt error detected in catch, cleared JWKS for next request`,
 			);
+			await clearJwksAndResetAuth(c, error);
 		}
 
-		// Retry after clearing JWKS on decrypt error
-		await clearJwksAndResetAuth(c, error);
-		const executionContext = (
-			c as unknown as { executionCtx?: ExecutionContext }
-		).executionCtx;
-		const { auth: refreshed } = await getBetterAuthContext(
-			c.env,
-			executionContext,
-		);
-		// Create another fresh request for retry
-		const retryRequest2 = createFreshRequest(c.req.raw, cachedBody);
-		const retryPromise = refreshed
-			.handler(retryRequest2)
-			.catch((retryError) => {
-				const errorMessage =
-					retryError instanceof Error ? retryError.message : String(retryError);
-				return new Response(
-					JSON.stringify({
-						success: false,
-						errors: [
-							{
-								code: 5000,
-								message: errorMessage || "Internal Server Error",
-							},
-						],
-					}),
+		return c.json(
+			{
+				success: false,
+				errors: [
 					{
-						status: 500,
-						headers: { "Content-Type": "application/json" },
+						code: 5000,
+						message: errorMessage || "Internal Server Error",
 					},
-				);
-			});
-		return addCorsHeadersIfNeeded(c, await retryPromise);
+				],
+			},
+			500,
+		);
 	}
 }
 
