@@ -1,3 +1,10 @@
+# [1.4.0-rc.21](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.20...v1.4.0-rc.21) (2026-01-16)
+
+
+### Features
+
+* **auth:** implement timeout handling for Stripe API calls and enhance execution context management ([dc90923](https://github.com/janovix/auth-svc/commit/dc90923174ab7b9182a085f320e95fb71da010ee))
+
 # [1.4.0-rc.20](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.19...v1.4.0-rc.20) (2026-01-16)
 
 
