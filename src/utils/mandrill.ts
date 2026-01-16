@@ -141,7 +141,6 @@ export async function sendOtpEmail(
 	const subjectMap: Record<string, string> = {
 		"email-verification": "Tu código de verificación - Janovix",
 		"sign-in": "Tu código de inicio de sesión - Janovix",
-		"forget-password": "Tu código de recuperación - Janovix",
 	};
 	const subject = subjectMap[type] || "Tu código de verificación - Janovix";
 

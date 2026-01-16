@@ -18,8 +18,6 @@ import {
 	AuthSignOutEndpoint,
 	AuthSessionEndpoint,
 	AuthJwksEndpoint,
-	AuthForgotPasswordEndpoint,
-	AuthResetPasswordEndpoint,
 } from "./endpoints/auth/openapi";
 import {
 	GetUserSettingsEndpoint,
@@ -136,8 +134,6 @@ openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
 openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
 openapi.get("/api/auth/session", AuthSessionEndpoint);
 openapi.get("/api/auth/jwks", AuthJwksEndpoint);
-openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
-openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
 
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);

@@ -60,11 +60,7 @@ describe("Better Auth route access control", () => {
 	describe("public callback routes", () => {
 		// These routes must be accessible without internal token or origin header
 		// because users click them directly from email links (browser navigation)
-		const publicRoutes = [
-			"/api/auth/jwks",
-			"/api/auth/verify-email",
-			"/api/auth/reset-password",
-		];
+		const publicRoutes = ["/api/auth/jwks", "/api/auth/verify-email"];
 
 		publicRoutes.forEach((route) => {
 			it(`allows ${route} without internal token (email callback link)`, async () => {
@@ -449,17 +445,20 @@ describe("isBetterAuthRedirectError", () => {
 });
 
 describe("Turnstile validation edge cases", () => {
-	it("rejects forgot-password with invalid JSON body and no header token", async () => {
+	it("rejects send-verification-otp with invalid JSON body and no header token", async () => {
 		// When body is invalid JSON and no x-captcha-response header is provided,
 		// the validation falls back gracefully and returns "missing token" error
-		const request = new Request("http://localhost/api/auth/forgot-password", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				origin: "https://auth.janovix.workers.dev",
+		const request = new Request(
+			"http://localhost/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					origin: "https://auth.janovix.workers.dev",
+				},
+				body: "invalid json {",
 			},
-			body: "invalid json {",
-		});
+		);
 
 		const response = await typedWorker.fetch(
 			request,
@@ -479,15 +478,18 @@ describe("Turnstile validation edge cases", () => {
 		expect(body.message).toBe("Turnstile token is required");
 	});
 
-	it("rejects forgot-password with missing turnstile token", async () => {
-		const request = new Request("http://localhost/api/auth/forgot-password", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				origin: "https://auth.janovix.workers.dev",
+	it("rejects send-verification-otp with missing turnstile token", async () => {
+		const request = new Request(
+			"http://localhost/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					origin: "https://auth.janovix.workers.dev",
+				},
+				body: JSON.stringify({ email: "test@example.com", type: "sign-in" }),
 			},
-			body: JSON.stringify({ email: "test@example.com" }),
-		});
+		);
 
 		const response = await typedWorker.fetch(
 			request,
@@ -507,7 +509,7 @@ describe("Turnstile validation edge cases", () => {
 		expect(body.message).toBe("Turnstile token is required");
 	});
 
-	it("rejects forgot-password with invalid turnstile token (verification fails)", async () => {
+	it("rejects send-verification-otp with invalid turnstile token (verification fails)", async () => {
 		// Mock the global fetch to return a failed verification
 		const originalFetch = globalThis.fetch;
 		globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -525,17 +527,21 @@ describe("Turnstile validation edge cases", () => {
 		};
 
 		try {
-			const request = new Request("http://localhost/api/auth/forgot-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					origin: "https://auth.janovix.workers.dev",
+			const request = new Request(
+				"http://localhost/api/auth/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						origin: "https://auth.janovix.workers.dev",
+					},
+					body: JSON.stringify({
+						email: "test@example.com",
+						type: "sign-in",
+						turnstileToken: "invalid-token",
+					}),
 				},
-				body: JSON.stringify({
-					email: "test@example.com",
-					turnstileToken: "invalid-token",
-				}),
-			});
+			);
 
 			const response = await typedWorker.fetch(
 				request,
@@ -558,7 +564,7 @@ describe("Turnstile validation edge cases", () => {
 		}
 	});
 
-	it("accepts forgot-password with valid turnstile token", async () => {
+	it("accepts send-verification-otp with valid turnstile token", async () => {
 		// Mock the global fetch to return a successful verification
 		const originalFetch = globalThis.fetch;
 		globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -575,17 +581,21 @@ describe("Turnstile validation edge cases", () => {
 		};
 
 		try {
-			const request = new Request("http://localhost/api/auth/forgot-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					origin: "https://auth.janovix.workers.dev",
+			const request = new Request(
+				"http://localhost/api/auth/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						origin: "https://auth.janovix.workers.dev",
+					},
+					body: JSON.stringify({
+						email: "test@example.com",
+						type: "sign-in",
+						turnstileToken: "valid-token",
+					}),
 				},
-				body: JSON.stringify({
-					email: "test@example.com",
-					turnstileToken: "valid-token",
-				}),
-			});
+			);
 
 			const response = await typedWorker.fetch(
 				request,
@@ -625,18 +635,22 @@ describe("Turnstile validation edge cases", () => {
 		};
 
 		try {
-			const request = new Request("http://localhost/api/auth/forgot-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					origin: "https://auth.janovix.workers.dev",
-					"x-captcha-response": "valid-header-token",
+			const request = new Request(
+				"http://localhost/api/auth/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						origin: "https://auth.janovix.workers.dev",
+						"x-captcha-response": "valid-header-token",
+					},
+					body: JSON.stringify({
+						email: "test@example.com",
+						type: "sign-in",
+						// No turnstileToken in body - should use header
+					}),
 				},
-				body: JSON.stringify({
-					email: "test@example.com",
-					// No turnstileToken in body - should use header
-				}),
-			});
+			);
 
 			const response = await typedWorker.fetch(
 				request,

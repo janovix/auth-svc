@@ -128,7 +128,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// We handle this ourselves instead of using Better Auth's captcha plugin
 		// because our implementation has proper timeout handling to prevent hanging
 		const turnstileProtectedEndpoints = [
-			"/api/auth/forgot-password",
 			"/api/auth/sign-up/email",
 			"/api/auth/email-otp/send-verification-otp",
 		];
@@ -206,12 +205,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			// Public routes that can be accessed without origin header or internal token:
 			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
 			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
-			// - /api/auth/reset-password: Users click password reset links in emails (direct browser navigation)
 			// - /api/auth/subscription/*: All Stripe subscription routes (redirects, callbacks, etc.)
 			const isPublicRoute =
 				pathname === "/api/auth/jwks" ||
 				pathname === "/api/auth/verify-email" ||
-				pathname === "/api/auth/reset-password" ||
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
