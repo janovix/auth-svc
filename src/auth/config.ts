@@ -16,23 +16,59 @@ import {
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
 // ============================================================================
-// These limits are enforced by the application, not Stripe.
-// Pricing is managed entirely in Stripe Dashboard.
+// NOTE: Database (plan_limits table) is the source of truth for limits.
+// This constant serves as a fallback when PricingService is unavailable.
+// Keep in sync with seed-plans.mjs - last updated January 2026.
+//
+// Plan naming convention:
+// - watchlist: Watchlist-only access (no AML)
+// - aml_*: AML plans (includes Watchlist access)
+//
+// - All per-month metrics: Metered billing via Stripe Usage Records
+// - usersPerOrg: Seat-based billing via Stripe subscription quantity
+// - Seats are aggregated across all owned organizations (per-org calculation)
+// - watchlistQueriesPerDay: Per user per day limit for watchlist queries
 
 export const PLAN_LIMITS = {
+	watchlist: {
+		maxOrganizations: 1,
+		usersPerOrg: 3,
+		reportsPerMonth: 0,
+		noticesPerMonth: 0,
+		alertsPerMonth: 0,
+		transactionsPerMonth: 0,
+		clientsPerMonth: 0,
+		watchlistQueriesPerDay: 50,
+	},
 	business: {
 		maxOrganizations: 1,
-		noticesPerMonth: 50,
-		usersPerOrg: 5,
-		alertsPerMonth: null, // unlimited
-		transactionsPerMonth: null, // unlimited
+		usersPerOrg: 2,
+		reportsPerMonth: 1,
+		noticesPerMonth: 2,
+		alertsPerMonth: 20,
+		transactionsPerMonth: 50,
+		clientsPerMonth: 25,
+		watchlistQueriesPerDay: 50,
 	},
 	pro: {
 		maxOrganizations: 3,
-		noticesPerMonth: 150,
 		usersPerOrg: 10,
-		alertsPerMonth: null, // unlimited
-		transactionsPerMonth: null, // unlimited
+		reportsPerMonth: 15,
+		noticesPerMonth: 20,
+		alertsPerMonth: 100,
+		transactionsPerMonth: 500,
+		clientsPerMonth: 250,
+		watchlistQueriesPerDay: 200,
+	},
+	ultra: {
+		maxOrganizations: 10,
+		usersPerOrg: 20,
+		reportsPerMonth: 100,
+		noticesPerMonth: 100,
+		alertsPerMonth: 500,
+		transactionsPerMonth: 2000,
+		clientsPerMonth: 1000,
+		watchlistQueriesPerDay: 500,
 	},
 } as const;
 
@@ -101,6 +137,17 @@ export type AuthAccessPolicy = {
 	token?: string;
 };
 
+/**
+ * Stripe price IDs for subscription plans
+ * These are fetched from the database plan_prices table
+ */
+export type StripePriceIds = {
+	watchlist: string;
+	business: string;
+	pro: string;
+	ultra: string;
+};
+
 export type ResolvedAuthConfig = {
 	cacheKey: string;
 	secret: string;
@@ -116,6 +163,7 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 export function buildResolvedAuthConfig(
 	env: Bindings,
 	executionContext?: ExecutionContext,
+	stripePriceIds?: StripePriceIds,
 ): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
 	const secret = resolveSecret(env.BETTER_AUTH_SECRET, resolvedEnv);
@@ -383,7 +431,7 @@ export function buildResolvedAuthConfig(
 					},
 			}),
 			// Stripe plugin for user-based billing
-			// Pricing is managed in Stripe Dashboard, only plan names and limits are defined here
+			// Price IDs are fetched from database (plan_prices table) or fall back to env vars
 			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
 				? [
 						stripe({
@@ -394,8 +442,23 @@ export function buildResolvedAuthConfig(
 								enabled: true,
 								plans: [
 									{
+										name: "watchlist",
+										// Price ID from database (via stripePriceIds param) or env var fallback
+										priceId:
+											stripePriceIds?.watchlist ||
+											env.STRIPE_WATCHLIST_PRICE_ID ||
+											"price_watchlist",
+										limits: PLAN_LIMITS.watchlist,
+										freeTrial: {
+											days: 14,
+										},
+									},
+									{
 										name: "business",
-										priceId: env.STRIPE_BUSINESS_PRICE_ID || "price_business",
+										priceId:
+											stripePriceIds?.business ||
+											env.STRIPE_BUSINESS_PRICE_ID ||
+											"price_aml_business",
 										limits: PLAN_LIMITS.business,
 										freeTrial: {
 											days: 14,
@@ -403,8 +466,22 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "pro",
-										priceId: env.STRIPE_PRO_PRICE_ID || "price_pro",
+										priceId:
+											stripePriceIds?.pro ||
+											env.STRIPE_PRO_PRICE_ID ||
+											"price_aml_pro",
 										limits: PLAN_LIMITS.pro,
+										freeTrial: {
+											days: 14,
+										},
+									},
+									{
+										name: "ultra",
+										priceId:
+											stripePriceIds?.ultra ||
+											env.STRIPE_ULTRA_PRICE_ID ||
+											"price_aml_ultra",
+										limits: PLAN_LIMITS.ultra,
 										freeTrial: {
 											days: 14,
 										},
@@ -611,6 +688,10 @@ export function buildResolvedAuthConfig(
 					},
 				},
 			},
+			// Note: Better Auth databaseHooks doesn't support 'member' hooks.
+			// Member seat updates are handled via custom endpoints in routes/organization.ts:
+			// - POST /api/organization/update-seats (called after invitation acceptance)
+			// - POST /api/subscription/usage/sync-members (for admin sync)
 		},
 	};
 

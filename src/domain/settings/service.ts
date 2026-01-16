@@ -12,6 +12,7 @@ import type {
 	Theme,
 	LanguageCode,
 	DateFormat,
+	ClockFormat,
 } from "./types";
 
 /**
@@ -22,6 +23,7 @@ const DEFAULTS = {
 	timezone: "UTC",
 	language: "en" as LanguageCode,
 	dateFormat: "MM/DD/YYYY" as DateFormat,
+	clockFormat: "12h" as ClockFormat,
 } as const;
 
 /**
@@ -247,6 +249,19 @@ export class SettingsService {
 			dateFormatSource = "organization";
 		}
 
+		// Resolve clock format (no browser hint for this)
+		let clockFormat: ClockFormat = DEFAULTS.clockFormat;
+		let clockFormatSource: ResolvedSettings["sources"]["clockFormat"] =
+			"default";
+
+		if (userSettings?.clockFormat) {
+			clockFormat = userSettings.clockFormat;
+			clockFormatSource = "user";
+		} else if (orgSettings?.clockFormat) {
+			clockFormat = orgSettings.clockFormat;
+			clockFormatSource = "organization";
+		}
+
 		// Avatar URL - user takes precedence
 		const avatarUrl = userSettings?.avatarUrl ?? orgSettings?.avatarUrl ?? null;
 
@@ -258,6 +273,7 @@ export class SettingsService {
 			timezone,
 			language,
 			dateFormat,
+			clockFormat,
 			avatarUrl,
 			paymentMethods,
 			sources: {
@@ -265,6 +281,7 @@ export class SettingsService {
 				timezone: timezoneSource,
 				language: languageSource,
 				dateFormat: dateFormatSource,
+				clockFormat: clockFormatSource,
 			},
 		};
 	}

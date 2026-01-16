@@ -56,6 +56,7 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
+import { pricingRoutes } from "./routes/pricing";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -191,6 +192,9 @@ openapi.post("/api/audit/export", ExportAuditLogsEndpoint);
 // Register Subscription routes (usage tracking and org limits)
 // Note: Checkout, cancel, upgrade are handled by Better Auth at /api/auth/subscription/*
 app.route("/api/subscription", subscriptionRoutes);
+
+// Register Pricing routes (database-driven plans, prices, and limits)
+app.route("/api/pricing", pricingRoutes);
 
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);

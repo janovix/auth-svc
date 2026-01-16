@@ -41,5 +41,9 @@
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.com",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.com",
 		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
+		// Note: Production Stripe price IDs must be set via wrangler secret for security
+		// STRIPE_ALERT_OVERAGE_PRICE_ID: Set via wrangler secret
+		// STRIPE_TRANSACTION_OVERAGE_PRICE_ID: Set via wrangler secret
+		// STRIPE_SEAT_PRICE_ID: Set via wrangler secret
 	},
 }

@@ -7,12 +7,16 @@
  *   - How many organizations they can own (maxOrganizations)
  *   - Usage limits per organization (notices, users, etc.)
  * - Usage is tracked per organization, billed to the owner
+ *
+ * NOTE: Plan limits are now database-driven via pricing domain.
+ * See ../pricing/types.ts for PlanLimits type.
  */
 
 /**
  * Plan names matching Better Auth Stripe plugin configuration
+ * Can be extended dynamically via database subscription_plans table
  */
-export type PlanName = "business" | "pro";
+export type PlanName = string;
 
 /**
  * Subscription status from Better Auth Stripe plugin
@@ -49,13 +53,18 @@ export interface UserSubscription {
 
 /**
  * Plan limits (defined in auth config)
+ *
+ * All per-month metrics are metered and billed via Stripe Usage Records API.
+ * usersPerOrg is billed via Stripe subscription quantity.
  */
 export interface PlanLimits {
 	maxOrganizations: number;
-	noticesPerMonth: number;
 	usersPerOrg: number;
-	alertsPerMonth: number | null; // null = unlimited
-	transactionsPerMonth: number | null; // null = unlimited
+	reportsPerMonth: number; // Metered: overage billed via Stripe
+	noticesPerMonth: number; // Metered: overage billed via Stripe
+	alertsPerMonth: number; // Metered: overage billed via Stripe
+	transactionsPerMonth: number; // Metered: overage billed via Stripe
+	clientsPerMonth: number; // Metered: overage billed via Stripe
 }
 
 /**
@@ -65,9 +74,11 @@ export interface OrganizationUsage {
 	id: string;
 	organizationId: string;
 	ownerUserId: string;
+	reportsUsed: number;
 	noticesUsed: number;
 	alertsUsed: number;
 	transactionsUsed: number;
+	clientsUsed: number;
 	usersCount: number;
 	periodStart: Date;
 	periodEnd: Date;
@@ -155,9 +166,15 @@ export const PLAN_FEATURES: Record<PlanName, Feature[]> = {
 };
 
 /**
- * Usage metric types
+ * Usage metric types for metered billing
  */
-export type UsageMetric = "notices" | "alerts" | "transactions" | "users";
+export type UsageMetric =
+	| "reports"
+	| "notices"
+	| "alerts"
+	| "transactions"
+	| "clients"
+	| "users";
 
 /**
  * Report usage input

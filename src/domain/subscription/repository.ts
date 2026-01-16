@@ -138,9 +138,11 @@ export class SubscriptionRepository {
 				id: string;
 				organization_id: string;
 				owner_user_id: string;
+				reports_used: number;
 				notices_used: number;
 				alerts_used: number;
 				transactions_used: number;
+				clients_used: number;
 				users_count: number;
 				period_start: string;
 				period_end: string;
@@ -156,9 +158,11 @@ export class SubscriptionRepository {
 			id: result.id,
 			organizationId: result.organization_id,
 			ownerUserId: result.owner_user_id,
+			reportsUsed: result.reports_used,
 			noticesUsed: result.notices_used,
 			alertsUsed: result.alerts_used,
 			transactionsUsed: result.transactions_used,
+			clientsUsed: result.clients_used,
 			usersCount: result.users_count,
 			periodStart: new Date(result.period_start),
 			periodEnd: new Date(result.period_end),
@@ -187,9 +191,9 @@ export class SubscriptionRepository {
 			.prepare(
 				`
 				INSERT INTO organization_usage (
-					id, organization_id, owner_user_id, notices_used, alerts_used, 
-					transactions_used, users_count, period_start, period_end, created_at, updated_at
-				) VALUES (?, ?, ?, 0, 0, 0, 0, ?, ?, ?, ?)
+					id, organization_id, owner_user_id, reports_used, notices_used, alerts_used, 
+					transactions_used, clients_used, users_count, period_start, period_end, created_at, updated_at
+				) VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, ?, ?, ?, ?)
 				ON CONFLICT(organization_id) DO UPDATE SET
 					owner_user_id = excluded.owner_user_id,
 					period_start = excluded.period_start,
@@ -220,13 +224,15 @@ export class SubscriptionRepository {
 	 */
 	async incrementUsage(
 		organizationId: string,
-		metric: "notices" | "alerts" | "transactions",
+		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
 		count: number = 1,
 	): Promise<void> {
 		const column = {
+			reports: "reports_used",
 			notices: "notices_used",
 			alerts: "alerts_used",
 			transactions: "transactions_used",
+			clients: "clients_used",
 		}[metric];
 
 		await this.db
@@ -272,7 +278,8 @@ export class SubscriptionRepository {
 			.prepare(
 				`
 				UPDATE organization_usage 
-				SET notices_used = 0, alerts_used = 0, transactions_used = 0,
+				SET reports_used = 0, notices_used = 0, alerts_used = 0, 
+				    transactions_used = 0, clients_used = 0,
 				    period_start = ?, period_end = ?, 
 				    overage_reported_at = NULL, stripe_usage_record_id = NULL,
 				    updated_at = datetime('now')
@@ -319,6 +326,73 @@ export class SubscriptionRepository {
 			.first<{ count: number }>();
 
 		return result?.count ?? 0;
+	}
+
+	/**
+	 * Count members in an organization
+	 */
+	async countOrganizationMembers(organizationId: string): Promise<number> {
+		const result = await this.db
+			.prepare(
+				`
+				SELECT COUNT(*) as count FROM members 
+				WHERE organizationId = ?
+			`,
+			)
+			.bind(organizationId)
+			.first<{ count: number }>();
+
+		return result?.count ?? 0;
+	}
+
+	/**
+	 * Get the owner user ID of an organization
+	 */
+	async getOrganizationOwnerUserId(
+		organizationId: string,
+	): Promise<string | null> {
+		const result = await this.db
+			.prepare(
+				`
+				SELECT userId FROM members 
+				WHERE organizationId = ? AND role = 'owner'
+				LIMIT 1
+			`,
+			)
+			.bind(organizationId)
+			.first<{ userId: string }>();
+
+		return result?.userId ?? null;
+	}
+
+	/**
+	 * Get all organizations owned by a user with their member counts
+	 * Used for aggregating extra seats across all owned organizations
+	 */
+	async getOwnedOrganizationsWithMemberCounts(
+		userId: string,
+	): Promise<Array<{ organizationId: string; memberCount: number }>> {
+		const result = await this.db
+			.prepare(
+				`
+				SELECT 
+					m1.organizationId as organization_id,
+					COUNT(m2.id) as member_count
+				FROM members m1
+				JOIN members m2 ON m1.organizationId = m2.organizationId
+				WHERE m1.userId = ? AND m1.role = 'owner'
+				GROUP BY m1.organizationId
+			`,
+			)
+			.bind(userId)
+			.all<{ organization_id: string; member_count: number }>();
+
+		return (
+			result.results?.map((r) => ({
+				organizationId: r.organization_id,
+				memberCount: r.member_count,
+			})) ?? []
+		);
 	}
 
 	// =========================================================================

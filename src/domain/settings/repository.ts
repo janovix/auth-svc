@@ -12,6 +12,7 @@ import type {
 	Theme,
 	LanguageCode,
 	DateFormat,
+	ClockFormat,
 } from "./types";
 
 /**
@@ -27,6 +28,7 @@ function mapOrganizationSettingsRow(
 		timezone: row.timezone,
 		language: row.language as LanguageCode,
 		dateFormat: row.date_format as DateFormat,
+		clockFormat: (row.clock_format || "12h") as ClockFormat,
 		avatarUrl: row.avatar_url,
 		metadata: row.metadata ? JSON.parse(row.metadata) : null,
 		createdAt: new Date(row.created_at),
@@ -45,6 +47,7 @@ function mapUserSettingsRow(row: UserSettingsRow): UserSettings {
 		timezone: row.timezone,
 		language: row.language as LanguageCode | null,
 		dateFormat: row.date_format as DateFormat | null,
+		clockFormat: row.clock_format as ClockFormat | null,
 		avatarUrl: row.avatar_url,
 		paymentMethods: row.payment_methods
 			? (JSON.parse(row.payment_methods) as PaymentMethod[])
@@ -87,8 +90,8 @@ export class SettingsRepository {
 		await this.db
 			.prepare(
 				`INSERT INTO organization_settings 
-				(id, organization_id, theme, timezone, language, date_format, avatar_url, metadata, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(id, organization_id, theme, timezone, language, date_format, clock_format, avatar_url, metadata, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
@@ -97,6 +100,7 @@ export class SettingsRepository {
 				input.timezone ?? "UTC",
 				input.language ?? "en",
 				input.dateFormat ?? "MM/DD/YYYY",
+				input.clockFormat ?? "12h",
 				input.avatarUrl ?? null,
 				input.metadata ? JSON.stringify(input.metadata) : null,
 				now,
@@ -141,6 +145,10 @@ export class SettingsRepository {
 		if (input.dateFormat !== undefined) {
 			updates.push("date_format = ?");
 			values.push(input.dateFormat);
+		}
+		if (input.clockFormat !== undefined) {
+			updates.push("clock_format = ?");
+			values.push(input.clockFormat);
 		}
 		if (input.avatarUrl !== undefined) {
 			updates.push("avatar_url = ?");
@@ -194,8 +202,8 @@ export class SettingsRepository {
 		await this.db
 			.prepare(
 				`INSERT INTO user_settings 
-				(id, user_id, theme, timezone, language, date_format, avatar_url, payment_methods, metadata, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(id, user_id, theme, timezone, language, date_format, clock_format, avatar_url, payment_methods, metadata, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
@@ -204,6 +212,7 @@ export class SettingsRepository {
 				input.timezone ?? null,
 				input.language ?? null,
 				input.dateFormat ?? null,
+				input.clockFormat ?? null,
 				input.avatarUrl ?? null,
 				input.paymentMethods ? JSON.stringify(input.paymentMethods) : null,
 				input.metadata ? JSON.stringify(input.metadata) : null,
@@ -249,6 +258,10 @@ export class SettingsRepository {
 		if (input.dateFormat !== undefined) {
 			updates.push("date_format = ?");
 			values.push(input.dateFormat);
+		}
+		if (input.clockFormat !== undefined) {
+			updates.push("clock_format = ?");
+			values.push(input.clockFormat);
 		}
 		if (input.avatarUrl !== undefined) {
 			updates.push("avatar_url = ?");

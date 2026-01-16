@@ -1,7 +1,10 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
+import {
+	getBetterAuthContextAsync,
+	invalidateBetterAuthCache,
+} from "./instance";
 import type { Bindings } from "../types/bindings";
 import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
 import { originMatchesAnyPattern } from "../http/origins";
@@ -82,7 +85,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
 
-		const { auth, accessPolicy } = getBetterAuthContext(
+		const { auth, accessPolicy } = await getBetterAuthContextAsync(
 			c.env,
 			executionContext,
 		);
@@ -129,6 +132,57 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
+		// === SUBSCRIPTION ENDPOINT LOGGING ===
+		// Log all subscription-related requests for debugging
+		if (pathname.startsWith("/api/auth/subscription/")) {
+			console.log(
+				`[Subscription] ========== ${c.req.method} ${pathname} ==========`,
+			);
+			console.log(`[Subscription] Headers:`, {
+				origin: c.req.header("origin"),
+				contentType: c.req.header("content-type"),
+				authorization: c.req.header("authorization") ? "present" : "absent",
+			});
+
+			// Log request body for POST/PUT requests
+			if (c.req.method === "POST" || c.req.method === "PUT") {
+				try {
+					const bodyClone = await c.req.raw.clone().json();
+					console.log(
+						`[Subscription] Request Body:`,
+						JSON.stringify(bodyClone, null, 2),
+					);
+				} catch {
+					console.log(`[Subscription] Request Body: (could not parse)`);
+				}
+			}
+
+			// Log Stripe price IDs from database
+			try {
+				const { PricingRepository, PricingService } = await import(
+					"../domain/pricing"
+				);
+				const pricingRepository = new PricingRepository(c.env.DB);
+				const pricingService = new PricingService(pricingRepository);
+				const priceMap = await pricingService.getAllSubscriptionPrices();
+				console.log(`[Subscription] Database Stripe Price IDs:`, {
+					business: priceMap.get("business") || "NOT FOUND",
+					pro: priceMap.get("pro") || "NOT FOUND",
+					ultra: priceMap.get("ultra") || "NOT FOUND",
+				});
+			} catch (err) {
+				console.log(`[Subscription] Could not fetch prices from DB:`, err);
+				// Fall back to showing env vars
+				console.log(`[Subscription] Env Stripe Price IDs (fallback):`, {
+					STRIPE_BUSINESS_PRICE_ID: c.env.STRIPE_BUSINESS_PRICE_ID || "NOT SET",
+					STRIPE_PRO_PRICE_ID: c.env.STRIPE_PRO_PRICE_ID || "NOT SET",
+				});
+			}
+			console.log(
+				`[Subscription] ================================================`,
+			);
+		}
+
 		// Handle internal access policy if enabled
 		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
 		if (accessPolicy.enforceInternal) {
@@ -144,7 +198,26 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
-				return handleAuthRequest(c, auth);
+				const response = await handleAuthRequest(c, auth);
+				// Log subscription endpoint responses
+				if (pathname.startsWith("/api/auth/subscription/")) {
+					console.log(`[Subscription] Response Status: ${response.status}`);
+					if (response.status >= 400) {
+						try {
+							const errorBody = await response.clone().json();
+							console.log(
+								`[Subscription] Error Response:`,
+								JSON.stringify(errorBody, null, 2),
+							);
+						} catch {
+							console.log(
+								`[Subscription] Error Response: (could not parse body)`,
+							);
+						}
+					}
+					console.log(`[Subscription] =====================================`);
+				}
+				return response;
 			}
 
 			// For browser requests, Better Auth will handle origin checking via trustedOrigins
@@ -164,6 +237,23 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		}
 
 		const response = await handleAuthRequest(c, auth);
+
+		// Log subscription endpoint responses (non-public route case)
+		if (pathname.startsWith("/api/auth/subscription/")) {
+			console.log(`[Subscription] Response Status: ${response.status}`);
+			if (response.status >= 400) {
+				try {
+					const errorBody = await response.clone().json();
+					console.log(
+						`[Subscription] Error Response:`,
+						JSON.stringify(errorBody, null, 2),
+					);
+				} catch {
+					console.log(`[Subscription] Error Response: (could not parse body)`);
+				}
+			}
+			console.log(`[Subscription] =====================================`);
+		}
 
 		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
 		if (isOtpRequest && otpEmail && response.status === 200) {
@@ -311,7 +401,10 @@ async function handleAuthRequest(
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
+		const { auth: refreshed } = await getBetterAuthContextAsync(
+			c.env,
+			executionContext,
+		);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
@@ -356,7 +449,10 @@ async function handleAuthRequest(
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-		const { auth: refreshed } = getBetterAuthContext(c.env, executionContext);
+		const { auth: refreshed } = await getBetterAuthContextAsync(
+			c.env,
+			executionContext,
+		);
 		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);

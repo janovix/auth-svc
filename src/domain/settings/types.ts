@@ -22,6 +22,11 @@ export type DateFormat =
 export type LanguageCode = "en" | "es";
 
 /**
+ * Clock format options (12-hour or 24-hour)
+ */
+export type ClockFormat = "12h" | "24h";
+
+/**
  * Payment method reference stored in user settings
  */
 export interface PaymentMethod {
@@ -42,6 +47,7 @@ export interface OrganizationSettingsRow {
 	timezone: string;
 	language: string;
 	date_format: string;
+	clock_format: string;
 	avatar_url: string | null;
 	metadata: string | null;
 	created_at: string;
@@ -58,6 +64,7 @@ export interface UserSettingsRow {
 	timezone: string | null;
 	language: string | null;
 	date_format: string | null;
+	clock_format: string | null;
 	avatar_url: string | null;
 	payment_methods: string | null;
 	metadata: string | null;
@@ -75,6 +82,7 @@ export interface OrganizationSettings {
 	timezone: string;
 	language: LanguageCode;
 	dateFormat: DateFormat;
+	clockFormat: ClockFormat;
 	avatarUrl: string | null;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
@@ -91,6 +99,7 @@ export interface UserSettings {
 	timezone: string | null;
 	language: LanguageCode | null;
 	dateFormat: DateFormat | null;
+	clockFormat: ClockFormat | null;
 	avatarUrl: string | null;
 	paymentMethods: PaymentMethod[];
 	metadata: Record<string, unknown> | null;
@@ -107,6 +116,7 @@ export interface ResolvedSettings {
 	timezone: string;
 	language: LanguageCode;
 	dateFormat: DateFormat;
+	clockFormat: ClockFormat;
 	avatarUrl: string | null;
 	paymentMethods: PaymentMethod[];
 	/** Source of each setting for debugging */
@@ -115,6 +125,7 @@ export interface ResolvedSettings {
 		timezone: "user" | "organization" | "browser" | "default";
 		language: "user" | "organization" | "browser" | "default";
 		dateFormat: "user" | "organization" | "default";
+		clockFormat: "user" | "organization" | "default";
 	};
 }
 
@@ -135,6 +146,7 @@ export interface UpdateOrganizationSettingsInput {
 	timezone?: string;
 	language?: LanguageCode;
 	dateFormat?: DateFormat;
+	clockFormat?: ClockFormat;
 	avatarUrl?: string | null;
 	metadata?: Record<string, unknown>;
 }
@@ -147,6 +159,7 @@ export interface UpdateUserSettingsInput {
 	timezone?: string | null;
 	language?: LanguageCode | null;
 	dateFormat?: DateFormat | null;
+	clockFormat?: ClockFormat | null;
 	avatarUrl?: string | null;
 	paymentMethods?: PaymentMethod[];
 	metadata?: Record<string, unknown>;

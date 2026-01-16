@@ -1,9 +1,10 @@
 /**
- * Stripe Webhook Handler - Card Fingerprint Check
+ * Stripe Webhook Handler - Card Fingerprint Check & Pricing Sync
  *
  * This handler supplements Better Auth's Stripe webhook handling with:
  * - Card fingerprint checking for trial abuse prevention
  * - Usage reset on new billing periods
+ * - Price/product sync from Stripe to local database
  *
  * Note: Most subscription lifecycle events are handled by Better Auth Stripe plugin.
  * This handler focuses on custom business logic.
@@ -16,6 +17,7 @@ import {
 	SubscriptionRepository,
 	SubscriptionService,
 } from "../domain/subscription";
+import { PricingRepository, PricingService } from "../domain/pricing";
 
 type WebhookBindings = {
 	Bindings: Bindings;
@@ -48,6 +50,14 @@ const HANDLED_EVENTS = [
 	"invoice.paid",
 	"invoice.payment_failed",
 	"invoice.upcoming",
+
+	// Product/Price events - for pricing sync
+	"product.created",
+	"product.updated",
+	"product.deleted",
+	"price.created",
+	"price.updated",
+	"price.deleted",
 ];
 
 /**
@@ -111,6 +121,33 @@ function logWebhookEvent(event: Stripe.Event) {
 		case "customer.deleted": {
 			const customer = obj as { id?: string; email?: string; name?: string };
 			summary = `customer=${customer.id}, email=${customer.email}, name=${customer.name || "none"}`;
+			break;
+		}
+		case "product.created":
+		case "product.updated":
+		case "product.deleted": {
+			const product = obj as {
+				id?: string;
+				name?: string;
+				active?: boolean;
+				metadata?: Record<string, string>;
+			};
+			summary = `product=${product.id}, name="${product.name || "none"}", active=${product.active}, planId=${product.metadata?.plan_id || "none"}`;
+			break;
+		}
+		case "price.created":
+		case "price.updated":
+		case "price.deleted": {
+			const price = obj as {
+				id?: string;
+				product?: string;
+				unit_amount?: number;
+				currency?: string;
+				active?: boolean;
+				type?: string;
+				metadata?: Record<string, string>;
+			};
+			summary = `price=${price.id}, product=${price.product}, amount=${price.unit_amount} ${price.currency}, active=${price.active}, priceType=${price.metadata?.price_type || "none"}`;
 			break;
 		}
 		default:
@@ -186,7 +223,12 @@ async function handleEvent(
 	event: Stripe.Event,
 ): Promise<void> {
 	const repository = new SubscriptionRepository(c.env.DB);
-	const service = new SubscriptionService(repository, stripe);
+	const pricingRepository = new PricingRepository(c.env.DB);
+	const service = new SubscriptionService(
+		repository,
+		stripe,
+		pricingRepository,
+	);
 
 	switch (event.type) {
 		// =========================================================================
@@ -306,11 +348,18 @@ async function handleEvent(
 				cancel_at_period_end?: boolean;
 				items?: {
 					data: Array<{
+						id?: string;
+						quantity?: number;
 						price?: {
 							id?: string;
 							nickname?: string;
 							product?: string | { id: string; name?: string };
 							lookup_key?: string;
+							unit_amount?: number;
+							recurring?: {
+								interval?: string;
+								interval_count?: number;
+							};
 						};
 					}>;
 				};
@@ -344,25 +393,64 @@ async function handleEvent(
 			const priceItem = stripeSub.items?.data?.[0]?.price;
 			const priceId = priceItem?.id;
 
-			if (priceId) {
-				// Method 1: Compare against configured price IDs (most reliable)
-				const businessPriceId = c.env.STRIPE_BUSINESS_PRICE_ID;
-				const proPriceId = c.env.STRIPE_PRO_PRICE_ID;
+			// === DETAILED LOGGING FOR SUBSCRIPTION EVENTS ===
+			console.log(`[Webhook] ========== ${event.type} ==========`);
+			console.log(`[Webhook] Stripe Subscription ID: ${stripeSubscriptionId}`);
+			console.log(
+				`[Webhook] Our Subscription ID: ${ourSubscriptionId || "N/A"}`,
+			);
+			console.log(`[Webhook] User ID: ${userId || "N/A"}`);
+			console.log(`[Webhook] Status: ${status}`);
+			console.log(`[Webhook] Cancel at Period End: ${cancelAtPeriodEnd === 1}`);
+			console.log(`[Webhook] Period: ${periodStart} → ${periodEnd}`);
+			console.log(
+				`[Webhook] Trial: ${trialStart || "none"} → ${trialEnd || "none"}`,
+			);
+			console.log(
+				`[Webhook] Metadata:`,
+				JSON.stringify(stripeSub.metadata || {}),
+			);
 
-				if (businessPriceId && priceId === businessPriceId) {
-					plan = "business";
+			// Log all subscription items (prices) for debugging upgrades
+			console.log(
+				`[Webhook] Subscription Items (${stripeSub.items?.data?.length || 0}):`,
+			);
+			stripeSub.items?.data?.forEach((item, index) => {
+				console.log(`[Webhook]   Item ${index + 1}:`, {
+					itemId: item.id,
+					priceId: item.price?.id,
+					nickname: item.price?.nickname,
+					lookupKey: item.price?.lookup_key,
+					unitAmount: item.price?.unit_amount,
+					quantity: item.quantity,
+					interval: item.price?.recurring?.interval,
+					product:
+						typeof item.price?.product === "string"
+							? item.price?.product
+							: item.price?.product?.id,
+					productName:
+						typeof item.price?.product !== "string"
+							? item.price?.product?.name
+							: undefined,
+				});
+			});
+
+			console.log(`[Webhook] =====================================`);
+
+			// Method 1: Look up plan from stripe_price_id in database (primary method)
+			if (priceId) {
+				const pricingService = new PricingService(pricingRepository);
+				const detectedPlan =
+					await pricingService.getPlanNameFromStripePriceId(priceId);
+				if (detectedPlan) {
+					plan = detectedPlan;
 					console.log(
-						`[Webhook] Plan detected from configured STRIPE_BUSINESS_PRICE_ID: ${plan}`,
-					);
-				} else if (proPriceId && priceId === proPriceId) {
-					plan = "pro";
-					console.log(
-						`[Webhook] Plan detected from configured STRIPE_PRO_PRICE_ID: ${plan}`,
+						`[Webhook] Plan detected from database lookup: ${plan} (price_id: ${priceId})`,
 					);
 				}
 			}
 
-			// Method 2: Try nickname or lookup_key from price
+			// Method 2: Try nickname or lookup_key from price (fallback)
 			if (!plan && priceItem) {
 				if (priceItem.nickname) {
 					plan = priceItem.nickname.toLowerCase();
@@ -373,7 +461,7 @@ async function handleEvent(
 				}
 			}
 
-			// Method 3: Try to get product name from Stripe API
+			// Method 3: Try to get product name from Stripe API (fallback)
 			if (!plan && priceItem?.product) {
 				const productId =
 					typeof priceItem.product === "string"
@@ -405,13 +493,22 @@ async function handleEvent(
 				}
 			}
 
-			// Method 4: Pattern match on price ID as last resort
+			// Method 4: Pattern match on price ID as last resort (fallback)
 			if (!plan && priceId) {
-				if (priceId.includes("pro")) {
+				if (priceId.includes("ultra") || priceId.includes("ultra")) {
+					plan = "ultra";
+					console.log(`[Webhook] Plan detected from price ID pattern: ${plan}`);
+				} else if (priceId.includes("pro") || priceId.includes("pro")) {
 					plan = "pro";
 					console.log(`[Webhook] Plan detected from price ID pattern: ${plan}`);
-				} else if (priceId.includes("business")) {
+				} else if (
+					priceId.includes("business") ||
+					priceId.includes("business")
+				) {
 					plan = "business";
+					console.log(`[Webhook] Plan detected from price ID pattern: ${plan}`);
+				} else if (priceId.includes("watchlist")) {
+					plan = "watchlist";
 					console.log(`[Webhook] Plan detected from price ID pattern: ${plan}`);
 				}
 			}
@@ -419,10 +516,17 @@ async function handleEvent(
 			// Normalize plan name to our known values
 			if (plan) {
 				const normalizedPlan = plan.toLowerCase();
-				if (normalizedPlan.includes("pro")) {
+				if (normalizedPlan.includes("ultra") || normalizedPlan === "ultra") {
+					plan = "ultra";
+				} else if (normalizedPlan.includes("pro") || normalizedPlan === "pro") {
 					plan = "pro";
-				} else if (normalizedPlan.includes("business")) {
+				} else if (
+					normalizedPlan.includes("business") ||
+					normalizedPlan === "business"
+				) {
 					plan = "business";
+				} else if (normalizedPlan.includes("watchlist")) {
+					plan = "watchlist";
 				} else {
 					console.warn(`[Webhook] Unknown plan name "${plan}", keeping as-is`);
 				}
@@ -751,9 +855,252 @@ async function handleEvent(
 			break;
 		}
 
+		// =========================================================================
+		// PRODUCT EVENTS - Sync plan metadata from Stripe
+		// =========================================================================
+		case "product.created":
+		case "product.updated": {
+			const product = event.data.object as unknown as {
+				id: string;
+				name: string;
+				description?: string | null;
+				active: boolean;
+				metadata?: Record<string, string>;
+			};
+
+			// Check if this product is linked to a plan via metadata
+			const planId = product.metadata?.plan_id;
+			const planName = product.metadata?.plan_name;
+
+			if (planId || planName) {
+				console.log(`[Webhook] Syncing product to plan:`, {
+					productId: product.id,
+					planId,
+					planName,
+					name: product.name,
+					active: product.active,
+				});
+
+				// Update plan display name and description from Stripe product
+				if (planId) {
+					await c.env.DB.prepare(
+						`UPDATE subscription_plans 
+						 SET display_name = ?, description = ?, is_active = ?, updated_at = datetime('now')
+						 WHERE id = ?`,
+					)
+						.bind(
+							product.name,
+							product.description || null,
+							product.active ? 1 : 0,
+							planId,
+						)
+						.run();
+				} else if (planName) {
+					await c.env.DB.prepare(
+						`UPDATE subscription_plans 
+						 SET display_name = ?, description = ?, is_active = ?, updated_at = datetime('now')
+						 WHERE name = ?`,
+					)
+						.bind(
+							product.name,
+							product.description || null,
+							product.active ? 1 : 0,
+							planName,
+						)
+						.run();
+				}
+
+				console.log(
+					`[Webhook] Updated plan from product ${product.id}: "${product.name}"`,
+				);
+			} else {
+				console.log(
+					`[Webhook] Product ${product.id} not linked to any plan (missing plan_id or plan_name in metadata)`,
+				);
+			}
+			break;
+		}
+
+		case "product.deleted": {
+			const product = event.data.object as unknown as {
+				id: string;
+				metadata?: Record<string, string>;
+			};
+
+			// We don't delete plans when products are deleted in Stripe
+			// Just mark them as inactive if they're linked
+			const planId = product.metadata?.plan_id;
+			const planName = product.metadata?.plan_name;
+
+			if (planId || planName) {
+				console.log(
+					`[Webhook] Product ${product.id} deleted, marking associated plan as inactive`,
+				);
+
+				if (planId) {
+					await c.env.DB.prepare(
+						`UPDATE subscription_plans SET is_active = 0, updated_at = datetime('now') WHERE id = ?`,
+					)
+						.bind(planId)
+						.run();
+				} else if (planName) {
+					await c.env.DB.prepare(
+						`UPDATE subscription_plans SET is_active = 0, updated_at = datetime('now') WHERE name = ?`,
+					)
+						.bind(planName)
+						.run();
+				}
+			}
+			break;
+		}
+
+		// =========================================================================
+		// PRICE EVENTS - Sync pricing from Stripe
+		// =========================================================================
+		case "price.created":
+		case "price.updated": {
+			const price = event.data.object as unknown as {
+				id: string;
+				product: string;
+				unit_amount: number | null;
+				currency: string;
+				active: boolean;
+				type: string;
+				recurring?: {
+					interval: string;
+					interval_count: number;
+				} | null;
+				nickname?: string | null;
+				metadata?: Record<string, string>;
+			};
+
+			// Get plan_id from metadata or try to find by product
+			let planId: string | undefined = price.metadata?.plan_id;
+			const priceType = price.metadata?.price_type || "subscription";
+			const description = price.nickname || price.metadata?.description || null;
+
+			// If no plan_id in metadata, try to find plan by product metadata
+			if (!planId) {
+				// Fetch the product to get its metadata
+				try {
+					const stripeProduct = await stripe.products.retrieve(price.product);
+					planId =
+						stripeProduct.metadata?.plan_id ||
+						(stripeProduct.metadata?.plan_name
+							? ((await getPlanIdByName(c, stripeProduct.metadata.plan_name)) ??
+								undefined)
+							: undefined);
+				} catch (err) {
+					console.warn(
+						`[Webhook] Failed to fetch product ${price.product}:`,
+						err,
+					);
+				}
+			}
+
+			if (!planId) {
+				console.log(
+					`[Webhook] Price ${price.id} not linked to any plan (no plan_id in price or product metadata)`,
+				);
+				break;
+			}
+
+			console.log(`[Webhook] Syncing price to plan:`, {
+				priceId: price.id,
+				planId,
+				priceType,
+				amount: price.unit_amount,
+				currency: price.currency,
+				active: price.active,
+			});
+
+			// Check if price already exists
+			const existingPrice = await c.env.DB.prepare(
+				`SELECT id FROM plan_prices WHERE stripe_price_id = ?`,
+			)
+				.bind(price.id)
+				.first<{ id: string }>();
+
+			if (existingPrice) {
+				// Update existing price
+				await c.env.DB.prepare(
+					`UPDATE plan_prices 
+					 SET amount = ?, currency = ?, interval = ?, interval_count = ?, 
+					     description = ?, is_active = ?, price_type = ?, updated_at = datetime('now')
+					 WHERE stripe_price_id = ?`,
+				)
+					.bind(
+						price.unit_amount || 0,
+						price.currency.toUpperCase(),
+						price.recurring?.interval || null,
+						price.recurring?.interval_count || null,
+						description,
+						price.active ? 1 : 0,
+						priceType,
+						price.id,
+					)
+					.run();
+
+				console.log(`[Webhook] Updated price ${price.id} for plan ${planId}`);
+			} else {
+				// Create new price
+				await c.env.DB.prepare(
+					`INSERT INTO plan_prices (id, plan_id, stripe_price_id, price_type, amount, currency, interval, interval_count, description, is_active, created_at, updated_at)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+				)
+					.bind(
+						crypto.randomUUID(),
+						planId,
+						price.id,
+						priceType,
+						price.unit_amount || 0,
+						price.currency.toUpperCase(),
+						price.recurring?.interval || null,
+						price.recurring?.interval_count || null,
+						description,
+						price.active ? 1 : 0,
+					)
+					.run();
+
+				console.log(
+					`[Webhook] Created price ${price.id} for plan ${planId} (type: ${priceType})`,
+				);
+			}
+			break;
+		}
+
+		case "price.deleted": {
+			const price = event.data.object as unknown as { id: string };
+
+			console.log(`[Webhook] Price ${price.id} deleted, marking as inactive`);
+
+			// Don't actually delete, just mark as inactive
+			await c.env.DB.prepare(
+				`UPDATE plan_prices SET is_active = 0, updated_at = datetime('now') WHERE stripe_price_id = ?`,
+			)
+				.bind(price.id)
+				.run();
+			break;
+		}
+
 		default:
 			console.log(`[Webhook] Unhandled event type: ${event.type}`);
 	}
+}
+
+/**
+ * Helper to get plan ID by name
+ */
+async function getPlanIdByName(
+	c: WebhookContext,
+	planName: string,
+): Promise<string | null> {
+	const result = await c.env.DB.prepare(
+		`SELECT id FROM subscription_plans WHERE name = ?`,
+	)
+		.bind(planName)
+		.first<{ id: string }>();
+	return result?.id || null;
 }
 
 export { webhookRoutes };

@@ -9,11 +9,14 @@
  *
  * Note: Subscription lifecycle (checkout, cancel, upgrade) is handled
  * by Better Auth Stripe plugin. This service focuses on usage and limits.
+ *
+ * IMPORTANT: Plan limits are now database-driven via PricingService.
+ * The old hardcoded PLAN_LIMITS is deprecated and only used as fallback.
  */
 
 import type Stripe from "stripe";
 import { SubscriptionRepository } from "./repository";
-import { PLAN_LIMITS, type PlanName } from "../../auth/config";
+import { PricingRepository, PricingService } from "../pricing";
 import type {
 	UserSubscriptionStatus,
 	UsageCheckResult,
@@ -25,10 +28,18 @@ import type {
 import { PLAN_FEATURES } from "./types";
 
 export class SubscriptionService {
+	private readonly pricingService: PricingService | null;
+
 	constructor(
 		private readonly repository: SubscriptionRepository,
 		private readonly stripe: Stripe | null = null,
-	) {}
+		pricingRepository?: PricingRepository,
+	) {
+		// Initialize pricing service if repository is provided
+		this.pricingService = pricingRepository
+			? new PricingService(pricingRepository)
+			: null;
+	}
 
 	// =========================================================================
 	// USER SUBSCRIPTION STATUS
@@ -59,8 +70,9 @@ export class SubscriptionService {
 			};
 		}
 
-		const plan = subscription.plan as PlanName;
-		const limits = PLAN_LIMITS[plan] || null;
+		const plan = subscription.plan;
+		// Get limits from database via pricing service, or null if not available
+		const limits = await this.getUserPlanLimits(userId);
 		const isTrialing = subscription.status === "trialing";
 
 		let trialDaysRemaining: number | null = null;
@@ -119,24 +131,56 @@ export class SubscriptionService {
 
 	/**
 	 * Get plan limits for a user
+	 * Uses database-driven limits via PricingService, with fallback for backwards compatibility
 	 */
 	async getUserPlanLimits(userId: string): Promise<PlanLimits | null> {
 		const subscription = await this.repository.getUserSubscription(userId);
 		if (!subscription) return null;
 
-		const plan = subscription.plan as PlanName;
-		return PLAN_LIMITS[plan] || null;
+		const plan = subscription.plan;
+
+		// Try to get limits from database via pricing service
+		if (this.pricingService) {
+			// Check if user has a license with custom limits
+			const effectiveLimits =
+				await this.pricingService.getEffectiveLimitsForUser(userId, plan);
+			if (effectiveLimits) {
+				return {
+					maxOrganizations: effectiveLimits.maxOrganizations,
+					usersPerOrg: effectiveLimits.usersPerOrg,
+					reportsPerMonth: effectiveLimits.reportsPerMonth,
+					noticesPerMonth: effectiveLimits.noticesPerMonth,
+					alertsPerMonth: effectiveLimits.alertsPerMonth,
+					transactionsPerMonth: effectiveLimits.transactionsPerMonth,
+					clientsPerMonth: effectiveLimits.clientsPerMonth,
+				};
+			}
+		}
+
+		// Database limits not available - return null
+		// The caller should handle this case
+		console.warn(
+			`[Subscription] No limits found in database for plan "${plan}" (user ${userId})`,
+		);
+		return null;
 	}
 
 	/**
 	 * Get features for user's plan
+	 * Note: Features are still defined in PLAN_FEATURES constant for now
+	 * This could be migrated to the database in the future
 	 */
 	async getUserFeatures(userId: string): Promise<Feature[]> {
 		const subscription = await this.repository.getUserSubscription(userId);
 		if (!subscription) return [];
 
-		const plan = subscription.plan as PlanName;
-		return PLAN_FEATURES[plan] || [];
+		const plan = subscription.plan;
+		// Features are still static for now - could be moved to DB later
+		if (plan in PLAN_FEATURES) {
+			return PLAN_FEATURES[plan as keyof typeof PLAN_FEATURES] || [];
+		}
+		// For custom plans, default to business features
+		return PLAN_FEATURES.business || [];
 	}
 
 	/**
@@ -206,9 +250,13 @@ export class SubscriptionService {
 		}
 
 		let used: number;
-		let included: number | null;
+		let included: number;
 
 		switch (metric) {
+			case "reports":
+				used = usage.reportsUsed;
+				included = limits.reportsPerMonth;
+				break;
 			case "notices":
 				used = usage.noticesUsed;
 				included = limits.noticesPerMonth;
@@ -221,21 +269,14 @@ export class SubscriptionService {
 				used = usage.transactionsUsed;
 				included = limits.transactionsPerMonth;
 				break;
+			case "clients":
+				used = usage.clientsUsed;
+				included = limits.clientsPerMonth;
+				break;
 			case "users":
 				used = usage.usersCount;
 				included = limits.usersPerOrg;
 				break;
-		}
-
-		// null means unlimited
-		if (included === null) {
-			return {
-				allowed: true,
-				used,
-				included: -1, // -1 indicates unlimited
-				remaining: -1,
-				overage: 0,
-			};
 		}
 
 		const remaining = Math.max(0, included - used);
@@ -255,7 +296,7 @@ export class SubscriptionService {
 	 */
 	async reportUsage(
 		organizationId: string,
-		metric: "notices" | "alerts" | "transactions",
+		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
 		count: number = 1,
 	): Promise<void> {
 		await this.repository.incrementUsage(organizationId, metric, count);
@@ -283,17 +324,201 @@ export class SubscriptionService {
 	}
 
 	// =========================================================================
+	// SEAT-BASED BILLING (Update subscription quantity for extra users)
+	// =========================================================================
+	// NOTE: Seats are calculated PER-ORG and then AGGREGATED across all owned orgs.
+	// Formula: Total Extra Seats = Σ max(0, org_members - usersPerOrg) for each owned org
+
+	/**
+	 * Update Stripe subscription with TOTAL extra seats across ALL owned organizations
+	 * This is the correct way to calculate seat billing for multi-org owners.
+	 *
+	 * @param ownerUserId - The user who owns the organizations
+	 * @param seatPriceId - The Stripe price ID for per-seat billing
+	 */
+	async updateTotalSeatQuantityForOwner(
+		ownerUserId: string,
+		seatPriceId: string,
+	): Promise<void> {
+		if (!this.stripe) {
+			console.warn("[Subscription] Stripe client not configured");
+			return;
+		}
+
+		// Get owner's subscription and limits
+		const subscription = await this.repository.getUserSubscription(ownerUserId);
+		const limits = await this.getUserPlanLimits(ownerUserId);
+
+		if (!subscription?.stripeSubscriptionId || !limits) {
+			console.warn(
+				`[Subscription] No active subscription for user ${ownerUserId}, skipping seat update`,
+			);
+			return;
+		}
+
+		// Get all orgs owned by user with their member counts
+		const ownedOrgs =
+			await this.repository.getOwnedOrganizationsWithMemberCounts(ownerUserId);
+
+		// Calculate total extra seats across all owned organizations
+		const includedSeatsPerOrg = limits.usersPerOrg;
+		let totalExtraSeats = 0;
+		const orgBreakdown: string[] = [];
+
+		for (const org of ownedOrgs) {
+			const extraForOrg = Math.max(0, org.memberCount - includedSeatsPerOrg);
+			totalExtraSeats += extraForOrg;
+			if (extraForOrg > 0) {
+				orgBreakdown.push(
+					`${org.organizationId}: ${org.memberCount} members (${extraForOrg} extra)`,
+				);
+			}
+		}
+
+		console.log(
+			`[Subscription] Calculating total seats for user ${ownerUserId}: ` +
+				`${ownedOrgs.length} orgs, ${includedSeatsPerOrg} included/org, ` +
+				`${totalExtraSeats} total extra seats`,
+		);
+		if (orgBreakdown.length > 0) {
+			console.log(`[Subscription] Org breakdown: ${orgBreakdown.join(", ")}`);
+		}
+
+		try {
+			// Get the current subscription to find the seat item
+			const stripeSubscription = await this.stripe.subscriptions.retrieve(
+				subscription.stripeSubscriptionId,
+			);
+
+			// Find the seat subscription item by price ID
+			const seatItem = stripeSubscription.items.data.find(
+				(item) => item.price.id === seatPriceId,
+			);
+
+			if (seatItem) {
+				if (totalExtraSeats > 0) {
+					// Update existing seat item quantity
+					await this.stripe.subscriptionItems.update(seatItem.id, {
+						quantity: totalExtraSeats,
+						proration_behavior: "create_prorations",
+					});
+					console.log(
+						`[Subscription] Updated seat item ${seatItem.id} to quantity ${totalExtraSeats}`,
+					);
+				} else {
+					// Remove the seat item when no extra seats are needed
+					await this.stripe.subscriptionItems.del(seatItem.id, {
+						proration_behavior: "create_prorations",
+					});
+					console.log(
+						`[Subscription] Removed seat item ${seatItem.id} (no extra seats needed)`,
+					);
+				}
+			} else if (totalExtraSeats > 0) {
+				// Add seat item if it doesn't exist and we have extra seats
+				await this.stripe.subscriptionItems.create({
+					subscription: subscription.stripeSubscriptionId,
+					price: seatPriceId,
+					quantity: totalExtraSeats,
+					proration_behavior: "create_prorations",
+				});
+				console.log(
+					`[Subscription] Created new seat item with quantity ${totalExtraSeats}`,
+				);
+			}
+			// If no seat item and no extra seats, nothing to do
+
+			// Update local usage tracking for each org
+			for (const org of ownedOrgs) {
+				await this.repository.updateUsersCount(
+					org.organizationId,
+					org.memberCount,
+				);
+			}
+		} catch (error) {
+			console.error(
+				`[Subscription] Failed to update total seat quantity for user ${ownerUserId}:`,
+				error,
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Update Stripe subscription quantity for seat-based billing
+	 * This is called when members are added/removed from an organization
+	 * IMPORTANT: This now aggregates seats across ALL owned organizations
+	 *
+	 * @param organizationId - The organization that had member changes
+	 * @param _newUserCount - Unused, kept for backwards compatibility (member count is recalculated)
+	 * @param seatPriceId - The Stripe price ID for per-seat billing
+	 */
+	async updateSubscriptionSeatQuantity(
+		organizationId: string,
+		_newUserCount: number,
+		seatPriceId: string,
+	): Promise<void> {
+		// Get organization owner
+		const ownerUserId =
+			await this.repository.getOrganizationOwnerUserId(organizationId);
+		if (!ownerUserId) {
+			console.warn(
+				`[Subscription] No owner found for org ${organizationId}, skipping seat update`,
+			);
+			return;
+		}
+
+		// Delegate to the aggregated method that counts all owned orgs
+		await this.updateTotalSeatQuantityForOwner(ownerUserId, seatPriceId);
+	}
+
+	/**
+	 * Handle member added to organization - update seat count
+	 * Aggregates across all owned organizations
+	 */
+	async handleMemberAdded(
+		organizationId: string,
+		seatPriceId: string,
+	): Promise<void> {
+		const memberCount =
+			await this.repository.countOrganizationMembers(organizationId);
+		await this.updateSubscriptionSeatQuantity(
+			organizationId,
+			memberCount,
+			seatPriceId,
+		);
+	}
+
+	/**
+	 * Handle member removed from organization - update seat count
+	 * Aggregates across all owned organizations
+	 */
+	async handleMemberRemoved(
+		organizationId: string,
+		seatPriceId: string,
+	): Promise<void> {
+		const memberCount =
+			await this.repository.countOrganizationMembers(organizationId);
+		await this.updateSubscriptionSeatQuantity(
+			organizationId,
+			memberCount,
+			seatPriceId,
+		);
+	}
+
+	// =========================================================================
 	// METERED BILLING (Report overage to Stripe)
 	// =========================================================================
 
 	/**
-	 * Report overage usage to Stripe for metered billing
-	 * TODO: Implement proper Stripe metered billing when ready
+	 * Generic method to report overage for any metric to Stripe
+	 * Uses Stripe Usage Records API for metered billing
 	 */
-	async reportOverageToStripe(
+	async reportOverageToStripeForMetric(
 		organizationId: string,
 		ownerUserId: string,
-		_overagePriceId: string,
+		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		subscriptionItemId: string,
 	): Promise<void> {
 		if (!this.stripe) {
 			console.warn("[Subscription] Stripe client not configured");
@@ -308,24 +533,174 @@ export class SubscriptionService {
 			return;
 		}
 
-		// Calculate overage
-		const noticeOverage = Math.max(
-			0,
-			usage.noticesUsed - limits.noticesPerMonth,
-		);
+		// Calculate overage based on metric
+		let used: number;
+		let limit: number;
+		switch (metric) {
+			case "reports":
+				used = usage.reportsUsed;
+				limit = limits.reportsPerMonth;
+				break;
+			case "notices":
+				used = usage.noticesUsed;
+				limit = limits.noticesPerMonth;
+				break;
+			case "alerts":
+				used = usage.alertsUsed;
+				limit = limits.alertsPerMonth;
+				break;
+			case "transactions":
+				used = usage.transactionsUsed;
+				limit = limits.transactionsPerMonth;
+				break;
+			case "clients":
+				used = usage.clientsUsed;
+				limit = limits.clientsPerMonth;
+				break;
+		}
 
-		if (noticeOverage === 0) {
+		const overage = Math.max(0, used - limit);
+
+		if (overage === 0) {
 			return; // No overage to report
 		}
 
-		// Log overage for now - implement Stripe metered billing later
 		console.log(
-			`[Subscription] Overage detected for org ${organizationId}: ${noticeOverage} notices over limit`,
+			`[Subscription] ${metric} overage detected for org ${organizationId}: ${overage} over limit (used: ${used}, limit: ${limit})`,
 		);
 
-		// Mark as reported with a placeholder ID
-		const reportId = `overage_${organizationId}_${Date.now()}`;
-		await this.repository.markOverageReported(organizationId, reportId);
+		try {
+			// Report overage to Stripe using usage records
+			const stripeClient = this.stripe as unknown as {
+				subscriptionItems: {
+					createUsageRecord: (
+						subscriptionItemId: string,
+						params: {
+							quantity: number;
+							timestamp?: number | "now";
+							action?: "set" | "increment";
+						},
+					) => Promise<{ id: string }>;
+				};
+			};
+
+			const usageRecord =
+				await stripeClient.subscriptionItems.createUsageRecord(
+					subscriptionItemId,
+					{
+						quantity: overage,
+						timestamp: "now",
+						action: "set",
+					},
+				);
+
+			console.log(
+				`[Subscription] Reported ${overage} ${metric} overage to Stripe for org ${organizationId}, record: ${usageRecord.id}`,
+			);
+
+			await this.repository.markOverageReported(organizationId, usageRecord.id);
+		} catch (error) {
+			console.error(
+				`[Subscription] Failed to report ${metric} overage to Stripe for org ${organizationId}:`,
+				error,
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Report report overage usage to Stripe
+	 */
+	async reportReportOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		subscriptionItemId: string,
+	): Promise<void> {
+		return this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			"reports",
+			subscriptionItemId,
+		);
+	}
+
+	/**
+	 * Report notice overage usage to Stripe
+	 */
+	async reportNoticeOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		subscriptionItemId: string,
+	): Promise<void> {
+		return this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			"notices",
+			subscriptionItemId,
+		);
+	}
+
+	/**
+	 * Report alert overage usage to Stripe
+	 */
+	async reportAlertOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		subscriptionItemId: string,
+	): Promise<void> {
+		return this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			"alerts",
+			subscriptionItemId,
+		);
+	}
+
+	/**
+	 * Report transaction overage usage to Stripe
+	 */
+	async reportTransactionOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		subscriptionItemId: string,
+	): Promise<void> {
+		return this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			"transactions",
+			subscriptionItemId,
+		);
+	}
+
+	/**
+	 * Report client overage usage to Stripe
+	 */
+	async reportClientOverageToStripe(
+		organizationId: string,
+		ownerUserId: string,
+		subscriptionItemId: string,
+	): Promise<void> {
+		return this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			"clients",
+			subscriptionItemId,
+		);
+	}
+
+	/**
+	 * @deprecated Use individual report*OverageToStripe methods instead
+	 * Kept for backwards compatibility during migration
+	 */
+	async reportOverageToStripe(
+		_organizationId: string,
+		_ownerUserId: string,
+		_overagePriceId: string,
+	): Promise<void> {
+		console.warn(
+			"[Subscription] reportOverageToStripe is deprecated, use reportAlertOverageToStripe instead",
+		);
+		// No-op for backwards compatibility
 	}
 
 	// =========================================================================

@@ -22,10 +22,12 @@ DROP TABLE IF EXISTS tasks;
 -- Drop all existing tables to ensure clean state
 -- Old billing tables (organization-based - deprecated)
 DROP TABLE IF EXISTS usage_records;
-DROP TABLE IF EXISTS enterprise_licenses;
 DROP TABLE IF EXISTS organization_subscriptions;
-DROP TABLE IF EXISTS subscription_plans;
 -- New billing tables (user-based)
+DROP TABLE IF EXISTS plan_prices;
+DROP TABLE IF EXISTS plan_limits;
+DROP TABLE IF EXISTS enterprise_licenses;
+DROP TABLE IF EXISTS subscription_plans;
 DROP TABLE IF EXISTS organization_usage;
 DROP TABLE IF EXISTS used_card_fingerprints;
 DROP TABLE IF EXISTS subscription;
@@ -193,6 +195,7 @@ CREATE TABLE organization_settings (
     timezone TEXT DEFAULT 'UTC',
     language TEXT DEFAULT 'en',
     date_format TEXT DEFAULT 'MM/DD/YYYY',
+    clock_format TEXT DEFAULT '12h',
     avatar_url TEXT,
     metadata TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -210,6 +213,7 @@ CREATE TABLE user_settings (
     timezone TEXT,
     language TEXT,
     date_format TEXT,
+    clock_format TEXT,
     avatar_url TEXT,
     payment_methods TEXT,
     metadata TEXT,
@@ -272,6 +276,7 @@ CREATE TABLE subscription (
     seats INTEGER,
     trialStart DATETIME,
     trialEnd DATETIME,
+    licenseId TEXT,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -280,6 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_subscription_referenceId ON subscription(referenc
 CREATE INDEX IF NOT EXISTS idx_subscription_stripeCustomerId ON subscription(stripeCustomerId);
 CREATE INDEX IF NOT EXISTS idx_subscription_stripeSubscriptionId ON subscription(stripeSubscriptionId);
 CREATE INDEX IF NOT EXISTS idx_subscription_status ON subscription(status);
+CREATE INDEX IF NOT EXISTS idx_subscription_licenseId ON subscription(licenseId);
 
 -- ============================================================================
 -- Custom Billing Tables (snake_case columns)
@@ -308,9 +314,11 @@ CREATE TABLE organization_usage (
     id TEXT PRIMARY KEY NOT NULL,
     organization_id TEXT NOT NULL UNIQUE,
     owner_user_id TEXT NOT NULL,
+    reports_used INTEGER NOT NULL DEFAULT 0,
     notices_used INTEGER NOT NULL DEFAULT 0,
     alerts_used INTEGER NOT NULL DEFAULT 0,
     transactions_used INTEGER NOT NULL DEFAULT 0,
+    clients_used INTEGER NOT NULL DEFAULT 0,
     users_count INTEGER NOT NULL DEFAULT 0,
     period_start DATETIME NOT NULL,
     period_end DATETIME NOT NULL,
@@ -325,3 +333,118 @@ CREATE TABLE organization_usage (
 CREATE INDEX IF NOT EXISTS idx_organization_usage_organization_id ON organization_usage(organization_id);
 CREATE INDEX IF NOT EXISTS idx_organization_usage_owner_user_id ON organization_usage(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_organization_usage_period_start ON organization_usage(period_start);
+
+-- ============================================================================
+-- Subscription Plans & Pricing Tables (snake_case columns)
+-- Database-driven pricing and limits configuration
+-- ============================================================================
+
+-- Subscription plan definitions (base plans like business, pro)
+CREATE TABLE subscription_plans (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    trial_days INTEGER NOT NULL DEFAULT 14,
+    metadata TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_name ON subscription_plans(name);
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_is_active ON subscription_plans(is_active);
+
+-- Plan pricing (main subscription prices and add-on fees)
+-- Note: stripe_price_id is NOT unique because the same Stripe price may be 
+-- shared across plans in dev/preview environments
+CREATE TABLE plan_prices (
+    id TEXT PRIMARY KEY NOT NULL,
+    plan_id TEXT NOT NULL,
+    stripe_price_id TEXT NOT NULL,
+    price_type TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'MXN',
+    interval TEXT,
+    interval_count INTEGER,
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    metadata TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE,
+    UNIQUE(plan_id, price_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_prices_plan_id ON plan_prices(plan_id);
+CREATE INDEX IF NOT EXISTS idx_plan_prices_price_type ON plan_prices(price_type);
+CREATE INDEX IF NOT EXISTS idx_plan_prices_stripe_price_id ON plan_prices(stripe_price_id);
+CREATE INDEX IF NOT EXISTS idx_plan_prices_is_active ON plan_prices(is_active);
+
+-- Plan limits (configurable limits per plan)
+CREATE TABLE plan_limits (
+    id TEXT PRIMARY KEY NOT NULL,
+    plan_id TEXT NOT NULL UNIQUE,
+    max_organizations INTEGER NOT NULL DEFAULT 1,
+    users_per_org INTEGER NOT NULL DEFAULT 5,
+    reports_per_month INTEGER NOT NULL DEFAULT 0,
+    notices_per_month INTEGER NOT NULL DEFAULT 3,
+    alerts_per_month INTEGER NOT NULL DEFAULT 50,
+    transactions_per_month INTEGER NOT NULL DEFAULT 250,
+    clients_per_month INTEGER NOT NULL DEFAULT 50,
+    watchlist_queries_per_day INTEGER NOT NULL DEFAULT 0,
+    metadata TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_limits_plan_id ON plan_limits(plan_id);
+
+-- Enterprise licenses for direct sales (not through Stripe)
+CREATE TABLE enterprise_licenses (
+    id TEXT PRIMARY KEY NOT NULL,
+    key TEXT NOT NULL UNIQUE,
+    organization_name TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    user_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    expires_at DATETIME,
+    activated_at DATETIME,
+    max_organizations INTEGER,
+    max_users INTEGER,
+    reports_included INTEGER,
+    notices_included INTEGER,
+    alerts_included INTEGER,
+    transactions_included INTEGER,
+    clients_included INTEGER,
+    metadata TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_key ON enterprise_licenses(key);
+CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_user_id ON enterprise_licenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_status ON enterprise_licenses(status);
+CREATE INDEX IF NOT EXISTS idx_enterprise_licenses_plan_id ON enterprise_licenses(plan_id);
+
+-- ============================================================================
+-- Seed Data: Use the seeder script for environment-specific Stripe IDs
+-- ============================================================================
+-- After running migrations, seed the plans, prices, and limits:
+--
+--   # Local development
+--   node scripts/seed-plans.mjs
+--
+--   # Preview environment
+--   ENV=preview REMOTE=true node scripts/seed-plans.mjs
+--
+--   # Production environment  
+--   ENV=prod REMOTE=true node scripts/seed-plans.mjs
+--
+-- IMPORTANT: Update the Stripe price IDs in scripts/seed-plans.mjs before
+-- running the seeder for each environment.
+-- ============================================================================
