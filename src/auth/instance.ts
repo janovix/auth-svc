@@ -97,6 +97,11 @@ export async function getBetterAuthContextAsync(
 	env: Bindings,
 	executionContext?: ExecutionContext,
 ) {
+	// Store execution context for this request (callbacks will access it dynamically)
+	// CRITICAL: This must be called before any auth operations that trigger callbacks
+	// (like email OTP sending) to ensure waitUntil() works in Cloudflare Workers.
+	setCurrentExecutionContext(executionContext);
+
 	// Fetch prices from database (with caching)
 	const stripePriceIds = await fetchStripePriceIds(env);
 

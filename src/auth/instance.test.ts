@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
+import {
+	getBetterAuthContext,
+	getBetterAuthContextAsync,
+	invalidateBetterAuthCache,
+} from "./instance";
+import * as executionContextModule from "./execution-context";
 import type { Bindings } from "../types/bindings";
 
 const SECRET = "test-secret-123456789012345678901234567890";
@@ -65,6 +70,56 @@ describe("getBetterAuthContext", () => {
 
 		expect(context.auth).toBeDefined();
 		expect(context.accessPolicy).toBeDefined();
+	});
+
+	it("sets execution context for callbacks to use", () => {
+		const env = buildEnv();
+		const mockExecutionContext = {
+			waitUntil: vi.fn(),
+			passThroughOnException: () => {},
+			props: {},
+		} as ExecutionContext;
+
+		const setContextSpy = vi.spyOn(
+			executionContextModule,
+			"setCurrentExecutionContext",
+		);
+
+		getBetterAuthContext(env, mockExecutionContext);
+
+		expect(setContextSpy).toHaveBeenCalledWith(mockExecutionContext);
+		setContextSpy.mockRestore();
+	});
+});
+
+describe("getBetterAuthContextAsync", () => {
+	it("creates auth instance", async () => {
+		const env = buildEnv();
+		const context = await getBetterAuthContextAsync(env);
+
+		expect(context.auth).toBeDefined();
+		expect(context.accessPolicy).toBeDefined();
+	});
+
+	it("sets execution context for callbacks to use (critical for OTP emails)", async () => {
+		const env = buildEnv();
+		const mockExecutionContext = {
+			waitUntil: vi.fn(),
+			passThroughOnException: () => {},
+			props: {},
+		} as ExecutionContext;
+
+		const setContextSpy = vi.spyOn(
+			executionContextModule,
+			"setCurrentExecutionContext",
+		);
+
+		await getBetterAuthContextAsync(env, mockExecutionContext);
+
+		// This is the critical assertion - async version must set execution context
+		// for waitUntil to work in email callbacks
+		expect(setContextSpy).toHaveBeenCalledWith(mockExecutionContext);
+		setContextSpy.mockRestore();
 	});
 });
 
