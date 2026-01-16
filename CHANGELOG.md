@@ -1,3 +1,10 @@
+# [1.4.0-rc.18](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.17...v1.4.0-rc.18) (2026-01-16)
+
+
+### Features
+
+* **tests:** add tests for getBetterAuthContext and getBetterAuthContextAsync ([d51ff88](https://github.com/janovix/auth-svc/commit/d51ff88f0f1ebffaddcd5678b4f4f28ae790f6a3))
+
 # [1.4.0-rc.17](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.16...v1.4.0-rc.17) (2026-01-16)
 
 
