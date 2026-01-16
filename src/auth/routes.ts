@@ -79,6 +79,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
+		const startTime = Date.now();
+		const pathname = c.req.path;
+
+		// Log request start for debugging hang issues
+		console.log(`[Auth] Request started: ${c.req.method} ${pathname}`);
+
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
@@ -89,11 +95,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c.env,
 			executionContext,
 		);
+		console.log(
+			`[Auth] Context built in ${Date.now() - startTime}ms for ${pathname}`,
+		);
 
 		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
 		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
-
-		const pathname = c.req.path;
 
 		// Track OTP send requests to detect rate limiting
 		let isOtpRequest = false;
@@ -117,8 +124,18 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		// Validate Turnstile for forgot-password requests
-		if (pathname === "/api/auth/forgot-password" && c.req.method === "POST") {
+		// Validate Turnstile for endpoints that send emails (expensive operations)
+		// We handle this ourselves instead of using Better Auth's captcha plugin
+		// because our implementation has proper timeout handling to prevent hanging
+		const turnstileProtectedEndpoints = [
+			"/api/auth/forgot-password",
+			"/api/auth/sign-up/email",
+			"/api/auth/email-otp/send-verification-otp",
+		];
+		if (
+			turnstileProtectedEndpoints.includes(pathname) &&
+			c.req.method === "POST"
+		) {
 			const turnstileResult = await validateTurnstileForRequest(c);
 			if (!turnstileResult.valid) {
 				return c.json(
@@ -236,7 +253,11 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
+		const preHandlerTime = Date.now();
 		const response = await handleAuthRequest(c, auth);
+		console.log(
+			`[Auth] Handler completed in ${Date.now() - preHandlerTime}ms for ${pathname} (total: ${Date.now() - startTime}ms)`,
+		);
 
 		// Log subscription endpoint responses (non-public route case)
 		if (pathname.startsWith("/api/auth/subscription/")) {
@@ -294,40 +315,54 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 }
 
 /**
- * Validates Turnstile token for password reset requests.
+ * Validates Turnstile token for email-sending requests.
  *
  * If TURNSTILE_SECRET_KEY is not configured, validation is skipped (development mode).
  * This allows local development without Turnstile while enforcing it in production.
+ *
+ * Uses our custom verifyTurnstileToken utility which has a 5-second timeout
+ * to prevent request hanging in Cloudflare Workers.
  */
 async function validateTurnstileForRequest(
 	c: Context<{ Bindings: Bindings }>,
 ): Promise<{ valid: boolean; message: string }> {
+	const pathname = c.req.path;
 	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
 
 	// Skip validation if Turnstile is not configured (development mode)
 	if (!turnstileSecret) {
 		console.warn(
-			"[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation",
+			`[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation for ${pathname}`,
 		);
 		return { valid: true, message: "Turnstile not configured" };
 	}
 
-	// Parse the request body to get the turnstile token
-	// Clone the request stream to avoid exhausting it for Better Auth handler
-	let body: { turnstileToken?: string; email?: string };
-	try {
-		body = await c.req.raw.clone().json();
-	} catch {
-		return { valid: false, message: "Invalid request body" };
-	}
-
-	const { turnstileToken } = body;
+	// Get Turnstile token from either:
+	// 1. x-captcha-response header (Better Auth client convention)
+	// 2. turnstileToken in request body (legacy/custom clients)
+	let turnstileToken = c.req.header("x-captcha-response");
 
 	if (!turnstileToken) {
+		// Fallback to request body for backwards compatibility
+		// Clone the request stream to avoid exhausting it for Better Auth handler
+		try {
+			const body = (await c.req.raw.clone().json()) as {
+				turnstileToken?: string;
+			};
+			turnstileToken = body.turnstileToken;
+		} catch {
+			// Body parsing failed, but header might still have token
+		}
+	}
+
+	if (!turnstileToken) {
+		console.warn(`[Turnstile] Missing token for ${pathname}`);
 		return { valid: false, message: "Turnstile token is required" };
 	}
 
 	const clientIp = getClientIp(c.req.raw);
+	const startTime = Date.now();
+	console.log(`[Turnstile] Starting verification for ${pathname}`);
 
 	const result = await verifyTurnstileToken({
 		secretKey: turnstileSecret,
@@ -335,13 +370,22 @@ async function validateTurnstileForRequest(
 		remoteIp: clientIp,
 	});
 
+	const duration = Date.now() - startTime;
+
 	if (!result.success) {
-		console.warn("[Turnstile] Verification failed:", result["error-codes"]);
+		console.warn(
+			`[Turnstile] Verification failed for ${pathname} in ${duration}ms:`,
+			result["error-codes"],
+		);
 		return {
 			valid: false,
 			message: "Bot verification failed. Please try again.",
 		};
 	}
+
+	console.log(
+		`[Turnstile] Verification succeeded for ${pathname} in ${duration}ms`,
+	);
 
 	return { valid: true, message: "Turnstile verified" };
 }

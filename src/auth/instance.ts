@@ -4,10 +4,16 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { buildResolvedAuthConfig, type StripePriceIds } from "./config";
+import { setCurrentExecutionContext } from "./execution-context";
 import type { Bindings } from "../types/bindings";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
 import { PricingRepository, PricingService } from "../domain/pricing";
 
+/**
+ * Cache for Better Auth instances.
+ * We cache the full auth instance to preserve internal state needed for
+ * redirect handling, session management, etc.
+ */
 const authCache = new Map<
 	string,
 	{
@@ -133,6 +139,9 @@ export function getBetterAuthContext(
 	env: Bindings,
 	executionContext?: ExecutionContext,
 ) {
+	// Store execution context for this request (callbacks will access it dynamically)
+	setCurrentExecutionContext(executionContext);
+
 	// Use cached prices if available, otherwise fall back to env vars
 	const stripePriceIds = cachedPriceIds || {
 		watchlist: env.STRIPE_WATCHLIST_PRICE_ID || "price_watchlist",

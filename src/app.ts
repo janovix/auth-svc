@@ -56,6 +56,8 @@ import { subscriptionRoutes } from "./routes/subscription";
 import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
+import { adminRoutes } from "./routes/admin";
+import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 import { pricingRoutes } from "./routes/pricing";
 
 // Start a Hono app
@@ -159,6 +161,7 @@ openapi.patch(
 
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
+app.route("/internal/organizations", internalOrganizationsRoutes);
 
 // Register Settings OpenAPI documentation
 openapi.get("/api/settings/user", GetUserSettingsEndpoint);
@@ -209,6 +212,9 @@ app.route("/api/upload", uploadRoutes);
 openapi.post("/api/upload/avatar/prepare", PrepareAvatarUploadEndpoint);
 openapi.post("/api/upload/avatar", UploadAvatarEndpoint);
 openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
+
+// Register Admin routes (KV management, etc.)
+app.route("/api/admin", adminRoutes);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

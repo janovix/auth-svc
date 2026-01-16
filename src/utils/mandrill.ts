@@ -14,6 +14,13 @@ export type OrganizationInvitationEmail = {
 
 const MANDRILL_API_BASE = "https://mandrillapp.com/api/1.0";
 
+/**
+ * Default timeout for Mandrill API calls in milliseconds.
+ * Email sending should complete within 10 seconds; otherwise, consider it failed.
+ * This prevents requests from hanging indefinitely in Cloudflare Workers.
+ */
+const MANDRILL_TIMEOUT_MS = 10_000;
+
 export interface MandrillImage {
 	type: string;
 	name: string;
@@ -77,6 +84,8 @@ export async function sendMandrillTemplate(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(payload),
+		// Prevent hanging in Cloudflare Workers by adding a timeout
+		signal: AbortSignal.timeout(MANDRILL_TIMEOUT_MS),
 	});
 
 	const responseStatus = response.status;
@@ -157,11 +166,17 @@ export async function sendOtpEmail(
 			statuses: result.map((r) => r.status),
 		});
 	} catch (error) {
+		// Determine if this was a timeout error
+		const isTimeout =
+			error instanceof Error &&
+			(error.name === "TimeoutError" || error.name === "AbortError");
+
 		// Log error but don't throw - we don't want to expose email sending failures
 		console.error("[Mandrill] Failed to send OTP email", {
 			toEmail,
 			type,
 			templateName,
+			isTimeout,
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
 		});
@@ -203,6 +218,11 @@ export async function sendOrganizationInvitationEmail(
 			statuses: result.map((r) => r.status),
 		});
 	} catch (error) {
+		// Determine if this was a timeout error
+		const isTimeout =
+			error instanceof Error &&
+			(error.name === "TimeoutError" || error.name === "AbortError");
+
 		// Log error but don't throw - we don't want to expose email sending failures
 		// The error is logged for debugging, but the promise resolves to prevent
 		// exposing email sending failures to users
@@ -210,6 +230,7 @@ export async function sendOrganizationInvitationEmail(
 			toEmail: invitation.email,
 			organizationName: invitation.organizationName,
 			templateName,
+			isTimeout,
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
 		});

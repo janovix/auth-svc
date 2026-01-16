@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { emailOTP, openAPI } from "better-auth/plugins";
 import { markOtpSent } from "./routes";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
@@ -12,6 +12,7 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+import { executeInBackground } from "./execution-context";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -162,7 +163,9 @@ export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 
 export function buildResolvedAuthConfig(
 	env: Bindings,
-	executionContext?: ExecutionContext,
+	// executionContext is kept for API compatibility but no longer captured in closures.
+	// Callbacks now use executeInBackground() which gets context dynamically.
+	_executionContext?: ExecutionContext,
 	stripePriceIds?: StripePriceIds,
 ): ResolvedAuthConfig {
 	const resolvedEnv = resolveAuthEnvironment(env);
@@ -199,12 +202,16 @@ export function buildResolvedAuthConfig(
 				},
 				jwt: {
 					expirationTime: resolvedEnv === "production" ? "15m" : "30m",
-					// Include organization ID in JWT claims for multi-tenant support
+					// Include organization ID and role in JWT claims for multi-tenant support
+					// and admin authorization in downstream services (aml-svc, etc.)
 					definePayload: async ({ user, session }) => {
 						return {
 							sub: user.id,
 							email: user.email,
 							name: user.name,
+							// User role for authorization (admin, user, etc.)
+							// Used by aml-svc admin endpoints to verify admin access
+							role: user.role ?? "user",
 							// activeOrganizationId is set by better-auth organization plugin
 							// when user switches organizations via setActiveOrganization
 							organizationId: session.activeOrganizationId ?? null,
@@ -350,20 +357,11 @@ export function buildResolvedAuthConfig(
 							role: data.role,
 						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							executionContext.waitUntil(invitationPromise);
-						} else {
-							// Fallback: ensure promise completes and errors are handled
-							invitationPromise.catch((error) => {
-								console.error(
-									"[Org Invitation] Unhandled email promise rejection",
-									error,
-								);
-							});
-						}
+						// Use dynamic execution context to handle background task
+						executeInBackground(
+							invitationPromise,
+							`Org invitation email to ${email}`,
+						);
 					},
 			}),
 			emailOTP({
@@ -386,6 +384,7 @@ export function buildResolvedAuthConfig(
 						otp: string;
 						type: string;
 					}) => {
+						const callbackStart = Date.now();
 						console.log(
 							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
 						);
@@ -407,27 +406,27 @@ export function buildResolvedAuthConfig(
 							: trimmedEmail || email;
 
 						// Use waitUntil for Cloudflare Workers to ensure async operation completes
+						// even after the response is sent to the client.
+						// IMPORTANT: We do NOT await this promise to prevent blocking the response.
 						const emailPromise = sendOtpEmail(
 							apiKey,
 							email,
 							userName,
 							otp,
 							type,
-						);
+						).then(() => {
+							console.log(
+								`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
+							);
+						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							executionContext.waitUntil(emailPromise);
-						} else {
-							emailPromise.catch((error) => {
-								console.error(
-									"[Email OTP] Unhandled email promise rejection",
-									error,
-								);
-							});
-						}
+						// Use dynamic execution context to handle background task
+						executeInBackground(emailPromise, `OTP email to ${email}`);
+
+						// Callback returns immediately; email sends in background via waitUntil
+						console.log(
+							`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (email sending in background)`,
+						);
 					},
 			}),
 			// Stripe plugin for user-based billing
@@ -508,23 +507,10 @@ export function buildResolvedAuthConfig(
 						}),
 					]
 				: []),
-			// Cloudflare Turnstile captcha protection for email-sending endpoints
-			// Protects against bots triggering expensive email operations
-			...(env.TURNSTILE_SECRET_KEY
-				? [
-						captcha({
-							provider: "cloudflare-turnstile",
-							secretKey: env.TURNSTILE_SECRET_KEY,
-							// Protect only endpoints that SEND emails (expensive operation)
-							// /sign-in/email-otp is NOT included - it verifies OTP, doesn't send email
-							endpoints: [
-								"/sign-up/email", // Sends verification OTP on signup
-								"/email-otp/send-verification-otp", // Send/resend OTP email
-								"/forget-password", // Password reset email
-							],
-						}),
-					]
-				: []),
+			// NOTE: Cloudflare Turnstile captcha protection is handled in routes.ts
+			// with proper 5-second timeout to prevent request hanging in Cloudflare Workers.
+			// Better Auth's captcha plugin doesn't support timeouts, which can cause
+			// indefinite hangs when Turnstile is slow to respond.
 		],
 		session: {
 			updateAge: 60 * 30,
@@ -534,7 +520,10 @@ export function buildResolvedAuthConfig(
 			cookieCache: {
 				enabled: true,
 				strategy: "jwe",
-				refreshCache: true,
+				// Short maxAge ensures banned users are checked against DB frequently
+				// This enables immediate session revocation when users are banned
+				maxAge: 60, // 1 minute - sessions revalidate against DB every minute
+				refreshCache: false, // Disable auto-refresh to force DB validation on expiry
 			},
 		},
 		rateLimit: RATE_LIMITS[resolvedEnv],
@@ -671,7 +660,7 @@ export function buildResolvedAuthConfig(
 							}
 						};
 
-						// Use waitUntil for async operation if available
+						// Use dynamic execution context to handle background task
 						const promise = syncStripeCustomer().catch((error) => {
 							console.error(
 								`[Stripe Sync] Error syncing user to Stripe:`,
@@ -679,12 +668,7 @@ export function buildResolvedAuthConfig(
 							);
 						});
 
-						if (
-							executionContext &&
-							typeof executionContext.waitUntil === "function"
-						) {
-							executionContext.waitUntil(promise);
-						}
+						executeInBackground(promise, `Stripe sync for user ${user.id}`);
 					},
 				},
 			},

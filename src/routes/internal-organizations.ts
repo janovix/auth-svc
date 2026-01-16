@@ -3,18 +3,65 @@
  *
  * These routes are called by the admin panel to manage all organizations
  * regardless of the admin user's membership.
+ *
+ * ARCHITECTURE NOTE:
+ * These internal routes use a mix of:
+ * 1. Better Auth API methods - for operations that benefit from plugin hooks
+ *    and built-in functionality (slug validation)
+ * 2. Raw SQL - for operations that need to bypass user permissions
+ *    (listing ALL organizations, viewing members, admin-only deletions, etc.)
+ *
+ * Better Auth API methods used:
+ * - auth.api.checkOrganizationSlug - validates slug uniqueness
+ *
+ * These internal routes are protected by separate admin authentication
+ * and are not accessible to regular users.
+ *
+ * NOTE: Member management operations (invite, remove, update role, cancel invitation)
+ * have been removed from this admin panel as they require more complex logic
+ * that should be handled through the standard user-facing organization management.
  */
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
+import { getBetterAuthContext } from "../auth/instance";
 
 type InternalBindings = {
 	Bindings: Bindings;
 };
 
+type InternalContext = Context<InternalBindings>;
+
 const internalOrganizationsRoutes = new Hono<InternalBindings>();
 
 /**
+ * Type definitions for Better Auth Organization plugin API methods
+ * These are used to properly type the auth.api object which includes
+ * organization plugin methods added dynamically
+ */
+type OrganizationApiMethods = {
+	checkOrganizationSlug: (params: {
+		body: { slug: string };
+	}) => Promise<{ status: boolean }>;
+};
+
+/**
+ * Helper to get Better Auth instance for API calls
+ * Returns the auth instance with organization plugin methods properly typed
+ */
+function getAuth(c: InternalContext) {
+	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
+		.executionCtx;
+	const { auth } = getBetterAuthContext(c.env, executionContext);
+	// Cast to include organization plugin methods which are added dynamically
+	return auth as typeof auth & {
+		api: typeof auth.api & OrganizationApiMethods;
+	};
+}
+
+/**
  * Organization row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type OrganizationRow = {
 	id: string;
@@ -22,19 +69,20 @@ type OrganizationRow = {
 	slug: string;
 	logo: string | null;
 	metadata: string | null;
-	created_at: string;
-	updated_at: string;
+	createdAt: string;
+	updatedAt: string;
 };
 
 /**
  * Member row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type MemberRow = {
 	id: string;
-	organization_id: string;
-	user_id: string;
+	organizationId: string;
+	userId: string;
 	role: string;
-	created_at: string;
+	createdAt: string;
 	user_name: string | null;
 	user_email: string;
 	user_image: string | null;
@@ -42,16 +90,17 @@ type MemberRow = {
 
 /**
  * Invitation row from database
+ * Note: Better Auth managed tables use camelCase columns
  */
 type InvitationRow = {
 	id: string;
-	organization_id: string;
+	organizationId: string;
 	email: string;
 	role: string;
 	status: string;
-	inviter_id: string;
-	expires_at: string;
-	created_at: string;
+	inviterId: string;
+	expiresAt: string;
+	createdAt: string;
 };
 
 /**
@@ -70,6 +119,7 @@ internalOrganizationsRoutes.get("/", async (c) => {
 
 	try {
 		// Build the query
+		// Note: organizations table uses camelCase columns (Better Auth managed)
 		let countQuery = "SELECT COUNT(*) as total FROM organizations";
 		let dataQuery = `
 			SELECT 
@@ -78,9 +128,9 @@ internalOrganizationsRoutes.get("/", async (c) => {
 				o.slug,
 				o.logo,
 				o.metadata,
-				o.created_at,
-				o.updated_at,
-				(SELECT COUNT(*) FROM members WHERE organization_id = o.id) as member_count
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
 			FROM organizations o
 		`;
 
@@ -94,7 +144,7 @@ internalOrganizationsRoutes.get("/", async (c) => {
 			params.push(`%${search}%`, `%${search}%`);
 		}
 
-		dataQuery += " ORDER BY o.created_at DESC LIMIT ? OFFSET ?";
+		dataQuery += " ORDER BY o.createdAt DESC LIMIT ? OFFSET ?";
 
 		// Execute count query
 		const countResult = await c.env.DB.prepare(countQuery)
@@ -117,8 +167,8 @@ internalOrganizationsRoutes.get("/", async (c) => {
 			logo: org.logo,
 			metadata: org.metadata ? JSON.parse(org.metadata) : null,
 			memberCount: org.member_count,
-			createdAt: org.created_at,
-			updatedAt: org.updated_at,
+			createdAt: org.createdAt,
+			updatedAt: org.updatedAt,
 		}));
 
 		return c.json({
@@ -161,9 +211,9 @@ internalOrganizationsRoutes.get("/:id", async (c) => {
 				o.slug,
 				o.logo,
 				o.metadata,
-				o.created_at,
-				o.updated_at,
-				(SELECT COUNT(*) FROM members WHERE organization_id = o.id) as member_count
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
 			FROM organizations o
 			WHERE o.id = ?
 		`,
@@ -184,8 +234,8 @@ internalOrganizationsRoutes.get("/:id", async (c) => {
 				logo: org.logo,
 				metadata: org.metadata ? JSON.parse(org.metadata) : null,
 				memberCount: org.member_count,
-				createdAt: org.created_at,
-				updatedAt: org.updated_at,
+				createdAt: org.createdAt,
+				updatedAt: org.updatedAt,
 			},
 		});
 	} catch (error) {
@@ -213,17 +263,17 @@ internalOrganizationsRoutes.get("/:id/members", async (c) => {
 			`
 			SELECT 
 				m.id,
-				m.organization_id,
-				m.user_id,
+				m.organizationId,
+				m.userId,
 				m.role,
-				m.created_at,
+				m.createdAt,
 				u.name as user_name,
 				u.email as user_email,
 				u.image as user_image
 			FROM members m
-			LEFT JOIN users u ON u.id = m.user_id
-			WHERE m.organization_id = ?
-			ORDER BY m.created_at ASC
+			LEFT JOIN users u ON u.id = m.userId
+			WHERE m.organizationId = ?
+			ORDER BY m.createdAt ASC
 		`,
 		)
 			.bind(id)
@@ -234,12 +284,12 @@ internalOrganizationsRoutes.get("/:id/members", async (c) => {
 			data: {
 				members: members.results.map((m) => ({
 					id: m.id,
-					organizationId: m.organization_id,
-					userId: m.user_id,
+					organizationId: m.organizationId,
+					userId: m.userId,
 					role: m.role,
-					createdAt: m.created_at,
+					createdAt: m.createdAt,
 					user: {
-						id: m.user_id,
+						id: m.userId,
 						name: m.user_name || "Unknown",
 						email: m.user_email,
 						image: m.user_image,
@@ -274,16 +324,16 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 			`
 			SELECT 
 				id,
-				organization_id,
+				organizationId,
 				email,
 				role,
 				status,
-				inviter_id,
-				expires_at,
-				created_at
+				inviterId,
+				expiresAt,
+				createdAt
 			FROM invitations
-			WHERE organization_id = ? AND status = ?
-			ORDER BY created_at DESC
+			WHERE organizationId = ? AND status = ?
+			ORDER BY createdAt DESC
 		`,
 		)
 			.bind(id, status)
@@ -294,13 +344,13 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 			data: {
 				invitations: invitations.results.map((inv) => ({
 					id: inv.id,
-					organizationId: inv.organization_id,
+					organizationId: inv.organizationId,
 					email: inv.email,
 					role: inv.role,
 					status: inv.status,
-					inviterId: inv.inviter_id,
-					expiresAt: inv.expires_at,
-					createdAt: inv.created_at,
+					inviterId: inv.inviterId,
+					expiresAt: inv.expiresAt,
+					createdAt: inv.createdAt,
 				})),
 				total: invitations.results.length,
 			},
@@ -312,6 +362,181 @@ internalOrganizationsRoutes.get("/:id/invitations", async (c) => {
 				success: false,
 				error:
 					error instanceof Error ? error.message : "Failed to list invitations",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * PATCH /internal/organizations/:id
+ * Update an organization's details (admin only)
+ *
+ * Body: { name?: string, slug?: string, logo?: string | null, metadata?: Record<string, unknown> | null }
+ */
+internalOrganizationsRoutes.patch("/:id", async (c) => {
+	const id = c.req.param("id");
+	const body = await c.req.json<{
+		name?: string;
+		slug?: string;
+		logo?: string | null;
+		metadata?: Record<string, unknown> | null;
+	}>();
+
+	// Validate that at least one field is being updated
+	if (
+		body.name === undefined &&
+		body.slug === undefined &&
+		body.logo === undefined &&
+		body.metadata === undefined
+	) {
+		return c.json(
+			{
+				success: false,
+				error:
+					"At least one field (name, slug, logo, metadata) must be provided",
+			},
+			400,
+		);
+	}
+
+	// Validate name if provided
+	if (
+		body.name !== undefined &&
+		(!body.name || body.name.trim().length === 0)
+	) {
+		return c.json(
+			{ success: false, error: "Organization name cannot be empty" },
+			400,
+		);
+	}
+
+	// Validate slug if provided
+	if (body.slug !== undefined) {
+		if (!body.slug || body.slug.trim().length === 0) {
+			return c.json(
+				{ success: false, error: "Organization slug cannot be empty" },
+				400,
+			);
+		}
+		// Validate slug format (lowercase, alphanumeric, hyphens only)
+		const slugRegex = /^[a-z0-9-]+$/;
+		if (!slugRegex.test(body.slug)) {
+			return c.json(
+				{
+					success: false,
+					error:
+						"Slug must be lowercase and contain only letters, numbers, and hyphens",
+				},
+				400,
+			);
+		}
+	}
+
+	try {
+		// Check if organization exists
+		const existingOrg = await c.env.DB.prepare(
+			"SELECT id, slug FROM organizations WHERE id = ?",
+		)
+			.bind(id)
+			.first<{ id: string; slug: string }>();
+
+		if (!existingOrg) {
+			return c.json({ success: false, error: "Organization not found" }, 404);
+		}
+
+		// Check slug uniqueness if slug is being changed using Better Auth API
+		if (body.slug && body.slug !== existingOrg.slug) {
+			const auth = getAuth(c);
+			const slugCheck = await auth.api.checkOrganizationSlug({
+				body: { slug: body.slug },
+			});
+
+			// checkOrganizationSlug returns { status: true } if slug is available
+			if (!slugCheck.status) {
+				return c.json(
+					{ success: false, error: "Organization slug is already taken" },
+					400,
+				);
+			}
+		}
+
+		// Build update query dynamically
+		const updates: string[] = [];
+		const values: (string | null)[] = [];
+
+		if (body.name !== undefined) {
+			updates.push("name = ?");
+			values.push(body.name.trim());
+		}
+
+		if (body.slug !== undefined) {
+			updates.push("slug = ?");
+			values.push(body.slug.toLowerCase().trim());
+		}
+
+		if (body.logo !== undefined) {
+			updates.push("logo = ?");
+			values.push(body.logo);
+		}
+
+		if (body.metadata !== undefined) {
+			updates.push("metadata = ?");
+			values.push(body.metadata ? JSON.stringify(body.metadata) : null);
+		}
+
+		updates.push("updatedAt = datetime('now')");
+
+		// Execute update
+		await c.env.DB.prepare(
+			`UPDATE organizations SET ${updates.join(", ")} WHERE id = ?`,
+		)
+			.bind(...values, id)
+			.run();
+
+		// Fetch and return the updated organization
+		const updatedOrg = await c.env.DB.prepare(
+			`
+			SELECT 
+				o.id,
+				o.name,
+				o.slug,
+				o.logo,
+				o.metadata,
+				o.createdAt,
+				o.updatedAt,
+				(SELECT COUNT(*) FROM members WHERE organizationId = o.id) as member_count
+			FROM organizations o
+			WHERE o.id = ?
+		`,
+		)
+			.bind(id)
+			.first<OrganizationRow & { member_count: number }>();
+
+		return c.json({
+			success: true,
+			data: {
+				id: updatedOrg!.id,
+				name: updatedOrg!.name,
+				slug: updatedOrg!.slug,
+				logo: updatedOrg!.logo,
+				metadata: updatedOrg!.metadata
+					? JSON.parse(updatedOrg!.metadata)
+					: null,
+				memberCount: updatedOrg!.member_count,
+				createdAt: updatedOrg!.createdAt,
+				updatedAt: updatedOrg!.updatedAt,
+			},
+		});
+	} catch (error) {
+		console.error("[Internal Organizations] Update error:", error);
+		return c.json(
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to update organization",
 			},
 			500,
 		);
@@ -360,187 +585,5 @@ internalOrganizationsRoutes.delete("/:id", async (c) => {
 		);
 	}
 });
-
-/**
- * DELETE /internal/organizations/:id/members/:memberId
- * Remove a member from an organization
- */
-internalOrganizationsRoutes.delete("/:id/members/:memberId", async (c) => {
-	const orgId = c.req.param("id");
-	const memberId = c.req.param("memberId");
-
-	try {
-		// Check if member exists
-		const member = await c.env.DB.prepare(
-			"SELECT id, role FROM members WHERE id = ? AND organization_id = ?",
-		)
-			.bind(memberId, orgId)
-			.first<{ id: string; role: string }>();
-
-		if (!member) {
-			return c.json({ success: false, error: "Member not found" }, 404);
-		}
-
-		// Prevent removing the last owner
-		if (member.role === "owner") {
-			const ownerCount = await c.env.DB.prepare(
-				"SELECT COUNT(*) as count FROM members WHERE organization_id = ? AND role = 'owner'",
-			)
-				.bind(orgId)
-				.first<{ count: number }>();
-
-			if (ownerCount && ownerCount.count <= 1) {
-				return c.json(
-					{
-						success: false,
-						error: "Cannot remove the last owner of the organization",
-					},
-					400,
-				);
-			}
-		}
-
-		await c.env.DB.prepare("DELETE FROM members WHERE id = ?")
-			.bind(memberId)
-			.run();
-
-		return c.json({
-			success: true,
-			message: "Member removed",
-		});
-	} catch (error) {
-		console.error("[Internal Organizations] Remove member error:", error);
-		return c.json(
-			{
-				success: false,
-				error:
-					error instanceof Error ? error.message : "Failed to remove member",
-			},
-			500,
-		);
-	}
-});
-
-/**
- * PATCH /internal/organizations/:id/members/:memberId
- * Update a member's role
- */
-internalOrganizationsRoutes.patch("/:id/members/:memberId", async (c) => {
-	const orgId = c.req.param("id");
-	const memberId = c.req.param("memberId");
-	const body = await c.req.json<{ role: string }>();
-
-	if (!body.role || !["owner", "admin", "member"].includes(body.role)) {
-		return c.json(
-			{
-				success: false,
-				error: "Invalid role. Must be owner, admin, or member",
-			},
-			400,
-		);
-	}
-
-	try {
-		// Check if member exists
-		const member = await c.env.DB.prepare(
-			"SELECT id, role FROM members WHERE id = ? AND organization_id = ?",
-		)
-			.bind(memberId, orgId)
-			.first<{ id: string; role: string }>();
-
-		if (!member) {
-			return c.json({ success: false, error: "Member not found" }, 404);
-		}
-
-		// Prevent demoting the last owner
-		if (member.role === "owner" && body.role !== "owner") {
-			const ownerCount = await c.env.DB.prepare(
-				"SELECT COUNT(*) as count FROM members WHERE organization_id = ? AND role = 'owner'",
-			)
-				.bind(orgId)
-				.first<{ count: number }>();
-
-			if (ownerCount && ownerCount.count <= 1) {
-				return c.json(
-					{
-						success: false,
-						error: "Cannot demote the last owner of the organization",
-					},
-					400,
-				);
-			}
-		}
-
-		await c.env.DB.prepare(
-			"UPDATE members SET role = ?, updated_at = datetime('now') WHERE id = ?",
-		)
-			.bind(body.role, memberId)
-			.run();
-
-		return c.json({
-			success: true,
-			message: "Member role updated",
-		});
-	} catch (error) {
-		console.error("[Internal Organizations] Update member role error:", error);
-		return c.json(
-			{
-				success: false,
-				error:
-					error instanceof Error
-						? error.message
-						: "Failed to update member role",
-			},
-			500,
-		);
-	}
-});
-
-/**
- * DELETE /internal/organizations/:id/invitations/:invitationId
- * Cancel an invitation
- */
-internalOrganizationsRoutes.delete(
-	"/:id/invitations/:invitationId",
-	async (c) => {
-		const orgId = c.req.param("id");
-		const invitationId = c.req.param("invitationId");
-
-		try {
-			const invitation = await c.env.DB.prepare(
-				"SELECT id FROM invitations WHERE id = ? AND organization_id = ?",
-			)
-				.bind(invitationId, orgId)
-				.first<{ id: string }>();
-
-			if (!invitation) {
-				return c.json({ success: false, error: "Invitation not found" }, 404);
-			}
-
-			await c.env.DB.prepare(
-				"UPDATE invitations SET status = 'canceled', updated_at = datetime('now') WHERE id = ?",
-			)
-				.bind(invitationId)
-				.run();
-
-			return c.json({
-				success: true,
-				message: "Invitation canceled",
-			});
-		} catch (error) {
-			console.error("[Internal Organizations] Cancel invitation error:", error);
-			return c.json(
-				{
-					success: false,
-					error:
-						error instanceof Error
-							? error.message
-							: "Failed to cancel invitation",
-				},
-				500,
-			);
-		}
-	},
-);
 
 export { internalOrganizationsRoutes };
