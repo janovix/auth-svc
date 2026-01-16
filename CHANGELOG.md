@@ -1,3 +1,15 @@
+# [1.4.0-rc.20](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.19...v1.4.0-rc.20) (2026-01-16)
+
+
+### Features
+
+* **auth:** optimize request body handling to prevent stream exhaustion in Cloudflare Workers ([6b28db2](https://github.com/janovix/auth-svc/commit/6b28db216a43ae52b3434664dfd634986339a6cc))
+
+
+### Reverts
+
+* Revert "feat(auth, kv-storage): implement timeout handling for auth requests and KV operations to prevent indefinite hangs" ([8ff552b](https://github.com/janovix/auth-svc/commit/8ff552bac777cac57ba22b1ef53213b441eea59e))
+
 # [1.4.0-rc.19](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.18...v1.4.0-rc.19) (2026-01-16)
 
 
