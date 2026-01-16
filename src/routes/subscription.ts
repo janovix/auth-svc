@@ -36,7 +36,7 @@ async function getAuthenticatedUser(
 	c: SubscriptionContext,
 ): Promise<{ id: string; organizationId: string | null } | null> {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});
@@ -357,7 +357,7 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
  */
 subscriptionRoutes.get("/onboarding-status", async (c) => {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});
@@ -708,7 +708,7 @@ subscriptionRoutes.post("/license/activate", async (c) => {
  */
 subscriptionRoutes.post("/portal", async (c) => {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});

@@ -1,10 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import {
-	getBetterAuthContextAsync,
-	invalidateBetterAuthCache,
-} from "./instance";
+import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import type { Bindings } from "../types/bindings";
 import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
 import { originMatchesAnyPattern } from "../http/origins";
@@ -91,7 +88,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
 
-		const { auth, accessPolicy } = await getBetterAuthContextAsync(
+		const { auth, accessPolicy } = await getBetterAuthContext(
 			c.env,
 			executionContext,
 		);
@@ -442,7 +439,7 @@ async function handleAuthRequest(
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-		const { auth: refreshed } = await getBetterAuthContextAsync(
+		const { auth: refreshed } = await getBetterAuthContext(
 			c.env,
 			executionContext,
 		);
@@ -490,7 +487,7 @@ async function handleAuthRequest(
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-		const { auth: refreshed } = await getBetterAuthContextAsync(
+		const { auth: refreshed } = await getBetterAuthContext(
 			c.env,
 			executionContext,
 		);

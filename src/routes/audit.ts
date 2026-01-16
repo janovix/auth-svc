@@ -28,7 +28,7 @@ async function getAuthenticatedUser(
 	c: AuditContext,
 ): Promise<{ id: string; role: string } | null> {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});

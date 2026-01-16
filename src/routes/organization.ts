@@ -27,7 +27,7 @@ const organizationRoutes = new Hono<OrganizationBindings>();
  */
 organizationRoutes.get("/invitation/:invitationId", async (c) => {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});
@@ -122,7 +122,7 @@ organizationRoutes.get("/invitation/:invitationId", async (c) => {
  */
 organizationRoutes.post("/update-seats", async (c) => {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});
@@ -218,7 +218,7 @@ organizationRoutes.post("/update-seats", async (c) => {
  */
 organizationRoutes.post("/sync-all-seats", async (c) => {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});

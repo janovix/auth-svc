@@ -49,10 +49,10 @@ type OrganizationApiMethods = {
  * Helper to get Better Auth instance for API calls
  * Returns the auth instance with organization plugin methods properly typed
  */
-function getAuth(c: InternalContext) {
+async function getAuth(c: InternalContext) {
 	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
 		.executionCtx;
-	const { auth } = getBetterAuthContext(c.env, executionContext);
+	const { auth } = await getBetterAuthContext(c.env, executionContext);
 	// Cast to include organization plugin methods which are added dynamically
 	return auth as typeof auth & {
 		api: typeof auth.api & OrganizationApiMethods;
@@ -447,7 +447,7 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 
 		// Check slug uniqueness if slug is being changed using Better Auth API
 		if (body.slug && body.slug !== existingOrg.slug) {
-			const auth = getAuth(c);
+			const auth = await getAuth(c);
 			const slugCheck = await auth.api.checkOrganizationSlug({
 				body: { slug: body.slug },
 			});

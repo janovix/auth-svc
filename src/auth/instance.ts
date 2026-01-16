@@ -91,9 +91,17 @@ export function invalidateBetterAuthCache(env: Bindings) {
 }
 
 /**
- * Get Better Auth context - async version that fetches prices from database
+ * Get Better Auth context for handling requests.
+ *
+ * This function:
+ * 1. Sets the execution context for background tasks (email sending, Stripe sync)
+ * 2. Fetches Stripe price IDs from database (with 5-min caching)
+ * 3. Returns cached or creates new Better Auth instance
+ *
+ * @param env - Cloudflare Worker bindings
+ * @param executionContext - Optional execution context for waitUntil support
  */
-export async function getBetterAuthContextAsync(
+export async function getBetterAuthContext(
 	env: Bindings,
 	executionContext?: ExecutionContext,
 ) {
@@ -104,56 +112,6 @@ export async function getBetterAuthContextAsync(
 
 	// Fetch prices from database (with caching)
 	const stripePriceIds = await fetchStripePriceIds(env);
-
-	const resolved = buildResolvedAuthConfig(
-		env,
-		executionContext,
-		stripePriceIds,
-	);
-	const cached = authCache.get(resolved.cacheKey);
-
-	if (cached) {
-		return {
-			auth: cached.auth,
-			accessPolicy: resolved.accessPolicy,
-		};
-	}
-
-	const prisma = createPrismaClient(env.DB);
-	const secondaryStorage = createKVSecondaryStorage(env.KV);
-
-	const auth = betterAuth({
-		...resolved.options,
-		database: prismaAdapter(prisma, { provider: "sqlite", transaction: false }),
-		secondaryStorage,
-	});
-
-	authCache.set(resolved.cacheKey, { auth });
-
-	return {
-		auth,
-		accessPolicy: resolved.accessPolicy,
-	};
-}
-
-/**
- * Get Better Auth context - synchronous version (uses cached prices or env vars)
- * @deprecated Use getBetterAuthContextAsync for database-backed prices
- */
-export function getBetterAuthContext(
-	env: Bindings,
-	executionContext?: ExecutionContext,
-) {
-	// Store execution context for this request (callbacks will access it dynamically)
-	setCurrentExecutionContext(executionContext);
-
-	// Use cached prices if available, otherwise fall back to env vars
-	const stripePriceIds = cachedPriceIds || {
-		watchlist: env.STRIPE_WATCHLIST_PRICE_ID || "price_watchlist",
-		business: env.STRIPE_BUSINESS_PRICE_ID || "price_aml_business",
-		pro: env.STRIPE_PRO_PRICE_ID || "price_aml_pro",
-		ultra: env.STRIPE_ULTRA_PRICE_ID || "price_aml_ultra",
-	};
 
 	const resolved = buildResolvedAuthConfig(
 		env,

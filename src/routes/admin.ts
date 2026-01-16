@@ -27,7 +27,7 @@ async function getAuthenticatedAdmin(c: AdminContext): Promise<{
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-		const { auth } = getBetterAuthContext(c.env, executionContext);
+		const { auth } = await getBetterAuthContext(c.env, executionContext);
 
 		let session;
 		try {

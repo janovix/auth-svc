@@ -34,7 +34,7 @@ async function getAuthenticatedUser(
 	c: UploadContext,
 ): Promise<{ id: string } | null> {
 	try {
-		const { auth } = getBetterAuthContext(c.env);
+		const { auth } = await getBetterAuthContext(c.env);
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
 		});
