@@ -82,6 +82,27 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Log request start for debugging hang issues
 		console.log(`[Auth] Request started: ${c.req.method} ${pathname}`);
 
+		// CRITICAL: Read the request body ONCE at the start for POST requests
+		// Cloning Request objects multiple times can cause body stream issues in
+		// Cloudflare Workers, leading to hanging requests. We read once, cache it,
+		// and create fresh requests when needed.
+		let cachedBody: string | null = null;
+		let parsedBody: Record<string, unknown> | null = null;
+
+		if (c.req.method === "POST") {
+			try {
+				// Read the body as text once (preserves for re-use)
+				cachedBody = await c.req.raw.clone().text();
+				console.log(`[Auth] Body read: ${cachedBody.length} bytes`);
+				if (cachedBody) {
+					parsedBody = JSON.parse(cachedBody) as Record<string, unknown>;
+				}
+			} catch {
+				// Body might not be JSON or might be empty
+				console.log(`[Auth] Could not parse body as JSON`);
+			}
+		}
+
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
@@ -107,17 +128,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c.req.method === "POST"
 		) {
 			isOtpRequest = true;
-			try {
-				const body = (await c.req.raw.clone().json()) as { email?: string };
-				otpEmail = body.email || null;
-				if (otpEmail) {
-					startOtpTracking(otpEmail);
-					console.log(
-						`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
-					);
-				}
-			} catch {
-				// Ignore parse errors
+			// Use cached parsed body instead of cloning request again
+			if (parsedBody && typeof parsedBody.email === "string") {
+				otpEmail = parsedBody.email;
+				startOtpTracking(otpEmail);
+				console.log(
+					`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
+				);
 			}
 		}
 
@@ -132,7 +149,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			turnstileProtectedEndpoints.includes(pathname) &&
 			c.req.method === "POST"
 		) {
-			const turnstileResult = await validateTurnstileForRequest(c);
+			const turnstileResult = await validateTurnstileForRequest(c, parsedBody);
 			if (!turnstileResult.valid) {
 				return c.json(
 					{
@@ -209,7 +226,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
-				const response = await handleAuthRequest(c, auth);
+				const response = await handleAuthRequest(c, auth, cachedBody);
 				// Log subscription endpoint responses
 				if (pathname.startsWith("/api/auth/subscription/")) {
 					console.log(`[Subscription] Response Status: ${response.status}`);
@@ -248,7 +265,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		}
 
 		const preHandlerTime = Date.now();
-		const response = await handleAuthRequest(c, auth);
+		const response = await handleAuthRequest(c, auth, cachedBody);
 		console.log(
 			`[Auth] Handler completed in ${Date.now() - preHandlerTime}ms for ${pathname} (total: ${Date.now() - startTime}ms)`,
 		);
@@ -316,9 +333,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
  *
  * Uses our custom verifyTurnstileToken utility which has a 5-second timeout
  * to prevent request hanging in Cloudflare Workers.
+ *
+ * @param c - Hono context
+ * @param parsedBody - Pre-parsed request body (to avoid re-reading stream)
  */
 async function validateTurnstileForRequest(
 	c: Context<{ Bindings: Bindings }>,
+	parsedBody: Record<string, unknown> | null,
 ): Promise<{ valid: boolean; message: string }> {
 	const pathname = c.req.path;
 	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
@@ -336,17 +357,12 @@ async function validateTurnstileForRequest(
 	// 2. turnstileToken in request body (legacy/custom clients)
 	let turnstileToken = c.req.header("x-captcha-response");
 
-	if (!turnstileToken) {
-		// Fallback to request body for backwards compatibility
-		// Clone the request stream to avoid exhausting it for Better Auth handler
-		try {
-			const body = (await c.req.raw.clone().json()) as {
-				turnstileToken?: string;
-			};
-			turnstileToken = body.turnstileToken;
-		} catch {
-			// Body parsing failed, but header might still have token
-		}
+	if (!turnstileToken && parsedBody) {
+		// Use pre-parsed body instead of cloning request again
+		turnstileToken =
+			typeof parsedBody.turnstileToken === "string"
+				? parsedBody.turnstileToken
+				: undefined;
 	}
 
 	if (!turnstileToken) {
@@ -384,12 +400,47 @@ async function validateTurnstileForRequest(
 	return { valid: true, message: "Turnstile verified" };
 }
 
+/**
+ * Creates a fresh Request object with the same properties as the original,
+ * but with a fresh body stream from the cached body string.
+ * This prevents body stream exhaustion issues in Cloudflare Workers.
+ */
+function createFreshRequest(
+	originalRequest: Request,
+	cachedBody: string | null,
+): Request {
+	const method = originalRequest.method;
+	const headers = new Headers(originalRequest.headers);
+	const url = originalRequest.url;
+
+	// For GET requests or requests with no body, no need for body
+	if (method === "GET" || !cachedBody) {
+		return new Request(url, {
+			method,
+			headers,
+		});
+	}
+
+	// For POST requests, create new Request with fresh body
+	return new Request(url, {
+		method,
+		headers,
+		body: cachedBody,
+	});
+}
+
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
+	cachedBody: string | null,
 ) {
+	// Create a fresh Request with a new body stream to avoid exhaustion issues
+	// The original request's body may have been read for pre-processing (OTP tracking, Turnstile)
+	const freshRequest = createFreshRequest(c.req.raw, cachedBody);
+	console.log(`[Auth] Created fresh request for Better Auth handler`);
+
 	// Wrap Better Auth handler to ensure all errors are caught and converted to responses
-	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
+	const handlerPromise = auth.handler(freshRequest).catch((error) => {
 		// Better Auth uses APIError with statusCode for redirects (302)
 		// Convert these "errors" to proper redirect responses
 		if (isBetterAuthRedirectError(error)) {
@@ -443,7 +494,9 @@ async function handleAuthRequest(
 			c.env,
 			executionContext,
 		);
-		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
+		// Create another fresh request for retry
+		const retryRequest = createFreshRequest(c.req.raw, cachedBody);
+		const retryPromise = refreshed.handler(retryRequest).catch((error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 			return new Response(
@@ -491,25 +544,29 @@ async function handleAuthRequest(
 			c.env,
 			executionContext,
 		);
-		const retryPromise = refreshed.handler(c.req.raw).catch((error) => {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			return new Response(
-				JSON.stringify({
-					success: false,
-					errors: [
-						{
-							code: 5000,
-							message: errorMessage || "Internal Server Error",
-						},
-					],
-				}),
-				{
-					status: 500,
-					headers: { "Content-Type": "application/json" },
-				},
-			);
-		});
+		// Create another fresh request for retry
+		const retryRequest2 = createFreshRequest(c.req.raw, cachedBody);
+		const retryPromise = refreshed
+			.handler(retryRequest2)
+			.catch((retryError) => {
+				const errorMessage =
+					retryError instanceof Error ? retryError.message : String(retryError);
+				return new Response(
+					JSON.stringify({
+						success: false,
+						errors: [
+							{
+								code: 5000,
+								message: errorMessage || "Internal Server Error",
+							},
+						],
+					}),
+					{
+						status: 500,
+						headers: { "Content-Type": "application/json" },
+					},
+				);
+			});
 		return addCorsHeadersIfNeeded(c, await retryPromise);
 	}
 }
