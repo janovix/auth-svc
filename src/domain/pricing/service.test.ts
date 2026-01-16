@@ -210,6 +210,7 @@ describe("PricingService", () => {
 				alertsPerMonth: 50,
 				transactionsPerMonth: 250,
 				clientsPerMonth: 50,
+				watchlistQueriesPerDay: 50,
 			});
 		});
 

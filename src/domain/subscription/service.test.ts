@@ -80,15 +80,33 @@ const mockSubscription: UserSubscription = {
 };
 
 // Business plan limits for reference in tests (updated January 2026)
-const _businessLimits: PlanLimits = {
+const businessLimits: PlanLimits = {
 	maxOrganizations: 1,
 	usersPerOrg: 2,
 	reportsPerMonth: 1,
 	noticesPerMonth: 2,
-	alertsPerMonth: 20,
+	alertsPerMonth: 25, // 75 used - 25 limit = 50 overage for test
 	transactionsPerMonth: 50,
 	clientsPerMonth: 25,
 };
+
+// Mock PricingRepository for alert overage tests
+const createMockPricingRepositoryForBusiness = () => ({
+	getPlanByName: vi
+		.fn()
+		.mockResolvedValue({ id: "plan_business", name: "business" }),
+	getLimitsForPlan: vi.fn().mockResolvedValue(businessLimits),
+	getLicenseByUserId: vi.fn().mockResolvedValue(null),
+	getActivePlans: vi.fn(),
+	getAllPlans: vi.fn(),
+	getPlanById: vi.fn(),
+	getLimitsByPlanName: vi.fn(),
+	getPricesForPlan: vi.fn(),
+	getLicenseByKey: vi.fn(),
+	getLicenseById: vi.fn(),
+	activateLicense: vi.fn(),
+	getPriceByStripePriceId: vi.fn(),
+});
 
 // Pro plan limits for multi-org tests
 const proLimits: PlanLimits = {
@@ -141,13 +159,21 @@ describe("SubscriptionService", () => {
 				id: "usage_record_123",
 			});
 
-			await service.reportAlertOverageToStripe(
+			// Create service with pricing repository so getUserPlanLimits works
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.reportAlertOverageToStripe(
 				"org-123",
 				"user-456",
 				"si_alert_overage",
 			);
 
-			// Should have calculated 50 overage (150 used - 100 limit)
+			// Should have calculated 50 overage (75 used - 25 limit)
 			expect(
 				mockStripe.subscriptionItems.createUsageRecord,
 			).toHaveBeenCalledWith("si_alert_overage", {
@@ -162,11 +188,19 @@ describe("SubscriptionService", () => {
 		});
 
 		it("should not report overage when usage is within limit", async () => {
-			const usageWithinLimit = { ...mockUsage, alertsUsed: 50 };
+			const usageWithinLimit = { ...mockUsage, alertsUsed: 20 }; // Within 25 limit
 			mockRepository.getOrganizationUsage.mockResolvedValue(usageWithinLimit);
 			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
 
-			await service.reportAlertOverageToStripe(
+			// Create service with pricing repository so getUserPlanLimits works
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			await serviceWithPricing.reportAlertOverageToStripe(
 				"org-123",
 				"user-456",
 				"si_alert_overage",
