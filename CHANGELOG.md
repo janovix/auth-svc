@@ -1,3 +1,10 @@
+# [1.4.0-rc.22](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.21...v1.4.0-rc.22) (2026-01-17)
+
+
+### Bug Fixes
+
+* **auth:** enhance error handling and logging in OTP email sending process ([1dd40b5](https://github.com/janovix/auth-svc/commit/1dd40b5bc7f884bb3e6306132715fe2de2b50672))
+
 # [1.4.0-rc.21](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.20...v1.4.0-rc.21) (2026-01-16)
 
 
