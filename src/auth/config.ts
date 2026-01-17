@@ -389,44 +389,62 @@ export function buildResolvedAuthConfig(
 							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
 						);
 
-						// Mark that OTP callback was called (for rate-limit detection)
-						markOtpSent(email);
+						try {
+							// Mark that OTP callback was called (for rate-limit detection)
+							markOtpSent(email);
 
-						const apiKey = env.MANDRILL_API_KEY;
-						if (!apiKey) {
-							console.error(
-								"[Email OTP] MANDRILL_API_KEY is not configured; OTP email skipped",
-							);
-							return;
-						}
+							const apiKey = env.MANDRILL_API_KEY;
+							if (!apiKey) {
+								console.error(
+									"[Email OTP] MANDRILL_API_KEY is not configured; OTP email skipped",
+								);
+								console.log(
+									`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (no API key)`,
+								);
+								return;
+							}
 
-						const trimmedEmail = email.trim();
-						const userName = trimmedEmail.includes("@")
-							? trimmedEmail.split("@")[0]
-							: trimmedEmail || email;
+							const trimmedEmail = email.trim();
+							const userName = trimmedEmail.includes("@")
+								? trimmedEmail.split("@")[0]
+								: trimmedEmail || email;
 
-						// Use waitUntil for Cloudflare Workers to ensure async operation completes
-						// even after the response is sent to the client.
-						// IMPORTANT: We do NOT await this promise to prevent blocking the response.
-						const emailPromise = sendOtpEmail(
-							apiKey,
-							email,
-							userName,
-							otp,
-							type,
-						).then(() => {
+							// Use waitUntil for Cloudflare Workers to ensure async operation completes
+							// even after the response is sent to the client.
+							// IMPORTANT: We do NOT await this promise to prevent blocking the response.
+							const emailPromise = sendOtpEmail(
+								apiKey,
+								email,
+								userName,
+								otp,
+								type,
+							).then(() => {
+								console.log(
+									`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
+								);
+							});
+
+							// Use dynamic execution context to handle background task
 							console.log(
-								`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
+								`[Email OTP] Scheduling background email task for ${email}`,
 							);
-						});
+							executeInBackground(emailPromise, `OTP email to ${email}`);
 
-						// Use dynamic execution context to handle background task
-						executeInBackground(emailPromise, `OTP email to ${email}`);
-
-						// Callback returns immediately; email sends in background via waitUntil
-						console.log(
-							`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (email sending in background)`,
-						);
+							// Callback returns immediately; email sends in background via waitUntil
+							console.log(
+								`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (email sending in background)`,
+							);
+						} catch (error) {
+							// Log any unexpected errors that would cause callback to fail silently
+							console.error(
+								`[Email OTP] UNEXPECTED ERROR in sendVerificationOTP for ${email}:`,
+								error instanceof Error ? error.message : String(error),
+								error instanceof Error ? error.stack : undefined,
+							);
+							console.log(
+								`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (with error)`,
+							);
+						}
 					},
 			}),
 			// Stripe plugin for user-based billing
