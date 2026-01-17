@@ -89,8 +89,9 @@
 		"test": "node -e \"if(process.platform==='win32'){console.log('⚠️  Skipping auth-svc tests on Windows (vitest-pool-workers module resolution issue)');process.exit(0)}else{process.exit(1)}\" || npm run vitest",
 		"test:force": "npm run vitest",
 		"sentry:sourcemaps": "_SENTRY_RELEASE=$(sentry-cli releases propose-version) && sentry-cli releases new $_SENTRY_RELEASE && sentry-cli sourcemaps upload --release=$_SENTRY_RELEASE --strip-prefix 'dist/..' dist",
-		"postdeploy:dev": "pnpm sentry:sourcemaps || true",
-		"postdeploy:prod": "pnpm sentry:sourcemaps || true"
+		"postdeploy:preview": "pnpm seed:plans:preview",
+		"postdeploy:dev": "pnpm seed:plans:dev && (pnpm sentry:sourcemaps || true)",
+		"postdeploy:prod": "pnpm seed:plans:prod && (pnpm sentry:sourcemaps || true)"
 	},
 	"lint-staged": {
 		"**/*.{js,cjs,mjs,ts,tsx,cts,mts,json,md,yaml,yml}": [
