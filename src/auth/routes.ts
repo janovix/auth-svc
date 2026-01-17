@@ -88,6 +88,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
 
+		console.log(
+			`[Auth] Execution context available: ${!!executionContext}, hasWaitUntil: ${executionContext ? typeof executionContext.waitUntil : "N/A"}`,
+		);
+
 		const { auth, accessPolicy, cleanup } = await getBetterAuthContext(
 			c.env,
 			executionContext,

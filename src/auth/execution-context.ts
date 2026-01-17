@@ -54,6 +54,9 @@ export function setCurrentExecutionContext(
 	ctx: ExecutionContext | undefined,
 ): () => void {
 	if (!ctx) {
+		console.warn(
+			`[ExecutionContext] setCurrentExecutionContext called with undefined context! Background tasks will not work.`,
+		);
 		return () => {}; // No-op cleanup for undefined context
 	}
 
@@ -65,12 +68,18 @@ export function setCurrentExecutionContext(
 	};
 
 	contextStack.push(entry);
+	console.log(
+		`[ExecutionContext] Context set: ${requestId}, stackSize: ${contextStack.length}`,
+	);
 
 	// Cleanup function to remove this specific context
 	return () => {
 		const index = contextStack.findIndex((e) => e.requestId === requestId);
 		if (index !== -1) {
 			contextStack.splice(index, 1);
+			console.log(
+				`[ExecutionContext] Context cleaned up: ${requestId}, stackSize: ${contextStack.length}`,
+			);
 		}
 	};
 }
@@ -166,6 +175,10 @@ export function executeInBackground(
 ): void {
 	const ctx = getCurrentExecutionContext();
 
+	console.log(
+		`[Background] executeInBackground called for: ${errorContext}, hasContext: ${!!ctx}, stackSize: ${contextStack.length}`,
+	);
+
 	// Wrap promise with error handling and timeout to prevent hanging
 	const safePromise = Promise.race([
 		promise,
@@ -181,7 +194,11 @@ export function executeInBackground(
 
 	if (ctx && typeof ctx.waitUntil === "function") {
 		try {
+			console.log(`[Background] Calling waitUntil for: ${errorContext}`);
 			ctx.waitUntil(safePromise);
+			console.log(
+				`[Background] waitUntil called successfully for: ${errorContext}`,
+			);
 		} catch (err) {
 			// waitUntil can throw if called after response is sent
 			console.warn(
@@ -189,6 +206,10 @@ export function executeInBackground(
 				err,
 			);
 		}
+	} else {
+		console.warn(
+			`[Background] NO EXECUTION CONTEXT for ${errorContext} - email will not be sent! ctx=${ctx}, hasWaitUntil=${ctx ? typeof ctx.waitUntil : "N/A"}`,
+		);
 	}
 	// If no context or waitUntil failed, the promise runs detached
 	// (it's already been started and has error handling)
