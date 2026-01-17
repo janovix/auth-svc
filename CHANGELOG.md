@@ -1,3 +1,10 @@
+# [1.4.0-rc.24](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.23...v1.4.0-rc.24) (2026-01-17)
+
+
+### Bug Fixes
+
+* **auth:** update cleanup strategy for execution context to prevent premature cleanup of background tasks ([f3a5c0e](https://github.com/janovix/auth-svc/commit/f3a5c0e22f6413a1ace733466bd044cd14adc1d3))
+
 # [1.4.0-rc.23](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.22...v1.4.0-rc.23) (2026-01-17)
 
 
