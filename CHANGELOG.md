@@ -1,3 +1,10 @@
+# [1.4.0-rc.23](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.22...v1.4.0-rc.23) (2026-01-17)
+
+
+### Features
+
+* **auth:** improve logging for execution context and background task handling ([82fde64](https://github.com/janovix/auth-svc/commit/82fde64a0a340885b9dacee72ae7c0777df0d805))
+
 # [1.4.0-rc.22](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.21...v1.4.0-rc.22) (2026-01-17)
 
 
