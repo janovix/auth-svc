@@ -97,14 +97,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			executionContext,
 		);
 
-		// Ensure cleanup is called when request completes (success or error)
-		// This prevents execution context from leaking to other requests
-		c.executionCtx?.waitUntil?.(
-			Promise.resolve().then(() => {
-				// Cleanup will be called after response is sent
-				setTimeout(cleanup, 100);
-			}),
-		);
+		// NOTE: We intentionally do NOT cleanup the context on a timer here.
+		// The old approach (setTimeout(cleanup, 100)) was cleaning up before
+		// the sendVerificationOTP callback ran, causing background tasks to fail.
+		// Instead, we rely on:
+		// 1. The MAX_CONTEXT_AGE_MS (30s) staleness detection to clean up eventually
+		// 2. Cleanup after the entire handler chain completes (see below)
 
 		console.log(
 			`[Auth] Context built in ${Date.now() - startTime}ms for ${pathname}`,
@@ -301,6 +299,15 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 						string,
 						unknown
 					>;
+					// Schedule cleanup after a delay to allow background tasks to complete
+					c.executionCtx?.waitUntil?.(
+						new Promise<void>((resolve) => {
+							setTimeout(() => {
+								cleanup();
+								resolve();
+							}, 5000); // 5 seconds should be enough for email to be sent
+						}),
+					);
 					return new Response(
 						JSON.stringify({
 							...originalBody,
@@ -320,6 +327,17 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				console.log(`[OTP Tracking] OTP for ${otpEmail} was SENT successfully`);
 			}
 		}
+
+		// Schedule cleanup after a delay to allow background tasks (like email sending) to complete
+		// This must happen AFTER the handler has run so background tasks can use waitUntil
+		c.executionCtx?.waitUntil?.(
+			new Promise<void>((resolve) => {
+				setTimeout(() => {
+					cleanup();
+					resolve();
+				}, 5000); // 5 seconds should be enough for background tasks
+			}),
+		);
 
 		return response;
 	});
