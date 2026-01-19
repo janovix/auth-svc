@@ -1,3 +1,10 @@
+# [1.4.0-rc.26](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.25...v1.4.0-rc.26) (2026-01-19)
+
+
+### Features
+
+* **auth:** implement auto-selection of user's first organization during session creation ([1ca7848](https://github.com/janovix/auth-svc/commit/1ca784867953c066b65d65ce01a53b73e861ee6a))
+
 # [1.4.0-rc.25](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.24...v1.4.0-rc.25) (2026-01-19)
 
 
