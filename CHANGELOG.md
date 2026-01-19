@@ -1,3 +1,10 @@
+# [1.4.0-rc.25](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.24...v1.4.0-rc.25) (2026-01-19)
+
+
+### Bug Fixes
+
+* **seed-plans:** update monthly subscription price to $9,999 MXN ([8a823d5](https://github.com/janovix/auth-svc/commit/8a823d5f40e3cf0a495fa888a54f82c403d26ac3))
+
 # [1.4.0-rc.24](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.23...v1.4.0-rc.24) (2026-01-17)
 
 
