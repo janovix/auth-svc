@@ -273,6 +273,8 @@ CREATE TABLE subscription (
     periodStart DATETIME,
     periodEnd DATETIME,
     cancelAtPeriodEnd INTEGER DEFAULT 0,
+    cancelAt DATETIME,
+    canceledAt DATETIME,
     seats INTEGER,
     trialStart DATETIME,
     trialEnd DATETIME,
