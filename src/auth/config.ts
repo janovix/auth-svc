@@ -213,7 +213,9 @@ export function buildResolvedAuthConfig(
 							// Used by aml-svc admin endpoints to verify admin access
 							role: user.role ?? "user",
 							// activeOrganizationId is set by better-auth organization plugin
-							// when user switches organizations via setActiveOrganization
+							// when user switches organizations via setActiveOrganization.
+							// For users who haven't explicitly selected an org, we auto-select
+							// their first organization in session.create.before hook (see databaseHooks).
 							organizationId: session.activeOrganizationId ?? null,
 						};
 					},
@@ -553,6 +555,48 @@ export function buildResolvedAuthConfig(
 		// when createCustomerOnSignUp: true is set. Users are the billing entity, not orgs.
 		// Database hooks for syncing user changes to Stripe
 		databaseHooks: {
+			session: {
+				create: {
+					// Auto-select user's first organization when session is created
+					// This handles existing users who login without going through onboarding
+					// (which would have called setActiveOrganization after org creation)
+					before: async (session) => {
+						// Skip if session already has an active organization
+						if (session.activeOrganizationId) {
+							return { data: session };
+						}
+
+						try {
+							// Find user's first organization membership
+							const memberResult = await env.DB.prepare(
+								`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
+							)
+								.bind(session.userId)
+								.first<{ organizationId: string }>();
+
+							if (memberResult?.organizationId) {
+								console.log(
+									`[Session] Auto-selected organization ${memberResult.organizationId} for user ${session.userId}`,
+								);
+								return {
+									data: {
+										...session,
+										activeOrganizationId: memberResult.organizationId,
+									},
+								};
+							}
+						} catch (error) {
+							console.error(
+								`[Session] Error auto-selecting organization for user ${session.userId}:`,
+								error,
+							);
+						}
+
+						// No organization found or error occurred - return session unchanged
+						return { data: session };
+					},
+				},
+			},
 			user: {
 				update: {
 					after: async (user: {
