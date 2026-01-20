@@ -277,6 +277,8 @@ model Subscription {
   periodStart          DateTime?
   periodEnd            DateTime?
   cancelAtPeriodEnd    Boolean   @default(false)
+  cancelAt             DateTime? // When the subscription is scheduled to cancel
+  canceledAt           DateTime? // When the subscription was actually canceled
   seats                Int?
   trialStart           DateTime?
   trialEnd             DateTime?

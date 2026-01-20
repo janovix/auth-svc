@@ -77,7 +77,7 @@
 		"prepare": "husky",
 		"schema": "npx chanfana",
 		"prisma:generate": "prisma generate",
-		"seedLocalDb": "wrangler d1 migrations apply DB --local",
+		"seedLocalDb": "wrangler d1 migrations apply DB --local && pnpm run seed:plans && npx prisma generate",
 		"seed:plans": "node scripts/seed-plans.mjs",
 		"seed:plans:dev": "REMOTE=true node scripts/seed-plans.mjs",
 		"seed:plans:preview": "ENV=preview REMOTE=true node scripts/seed-plans.mjs",

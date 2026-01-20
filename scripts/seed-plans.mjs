@@ -375,7 +375,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_monthly",
 			priceType: "subscription",
-			amount: 599900, // $5,999 MXN
+			amount: 999900, // $9,999 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
