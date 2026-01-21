@@ -1,5 +1,20 @@
 // Prisma schema for D1 database
 // Learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// IMPORTANT: Column naming convention
+// ============================================================================
+// Better Auth managed tables use camelCase column names because Better Auth
+// generates its own SQL queries that bypass Prisma's @map directives.
+// Models affected: User, Session, Account, Verification, Jwks, Organization, Member, Invitation, Subscription
+//
+// Custom auth-svc tables use snake_case column names via @map directives.
+// Models affected: OrganizationSettings, UserSettings, AuditLog, UsedCardFingerprint, OrganizationUsage
+//
+// BILLING MODEL: User-based (not organization-based)
+// - Users are Stripe customers and hold subscriptions via Better Auth Stripe plugin
+// - Subscription limits determine how many organizations a user can own
+// - Usage tracking is per-organization, billed to the owner's subscription
+// ============================================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -10,24 +25,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================================
+// Better Auth Managed Models (camelCase columns - NO @map directives)
+// These models are managed by Better Auth which bypasses Prisma's @map
+// ============================================================================
+
 // Better Auth User model
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
+  id            String    @id @default(uuid())
+  email         String    @unique
   phone         String?
   name          String?
-  emailVerified Boolean  @default(false)
+  emailVerified Boolean   @default(false)
   image         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   // Better Auth admin plugin fields
-  role          String   @default("user")
-  banned        Boolean  @default(false)
+  role          String    @default("user")
+  banned        Boolean   @default(false)
   banReason     String?
   banExpires    DateTime?
 
-  sessions Session[]
-  accounts Account[]
+  sessions        Session[]
+  accounts        Account[]
   // Better Auth organization plugin relations
   memberships     Member[]
   invitationsSent Invitation[]
@@ -37,45 +57,45 @@ model User {
 
 // Better Auth Session model
 model Session {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
+  id                   String   @id @default(uuid())
+  token                String   @unique
+  expiresAt            DateTime
+  ipAddress            String?
+  userAgent            String?
   // Better Auth Organization plugin: current "active" org for the session.
   activeOrganizationId String?
   // Better Auth admin plugin: ID of admin user impersonating this session.
-  impersonatedBy String?
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  impersonatedBy       String?
+  userId               String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("sessions")
   @@index([userId])
+  @@map("sessions")
 }
 
 // Better Auth Account model
 model Account {
-  id                     String   @id @default(uuid())
-  accountId              String
-  providerId             String
-  userId                 String
-  accessToken            String?
-  refreshToken           String?
-  idToken                String?
-  accessTokenExpiresAt   DateTime?
-  refreshTokenExpiresAt  DateTime?
-  scope                  String?
-  password               String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("accounts")
   @@index([userId])
+  @@map("accounts")
 }
 
 // Better Auth Verification model
@@ -87,40 +107,40 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@map("verifications")
   @@index([identifier])
+  @@map("verifications")
 }
 
-// Used by the Better Auth JWT plugin to persist key pairs for JWKS.
+// Better Auth JWT plugin - JWKS storage
 model Jwks {
-  id        String   @id @default(uuid())
-  publicKey String
+  id         String    @id @default(uuid())
+  publicKey  String
   privateKey String
-  createdAt DateTime @default(now())
-  expiresAt DateTime?
-  alg       String?
-  crv       String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  alg        String?
+  crv        String?
 
-  @@map("jwks")
   @@index([createdAt])
   @@index([expiresAt])
+  @@map("jwks")
 }
 
 // Better Auth Organization model
 model Organization {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  logo        String?
-  metadata    String?  // JSON string for organization settings (RFC, vulnerable activity, etc.)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   members     Member[]
   invitations Invitation[]
 
-  @@map("organizations")
   @@index([slug])
+  @@map("organizations")
 }
 
 // Better Auth Organization Member model
@@ -136,9 +156,9 @@ model Member {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
-  @@map("members")
   @@index([organizationId])
   @@index([userId])
+  @@map("members")
 }
 
 // Better Auth Organization Invitation model
@@ -156,8 +176,272 @@ model Invitation {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviter      User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
-  @@map("invitations")
   @@index([organizationId])
   @@index([email])
   @@index([status])
+  @@map("invitations")
+}
+
+// ============================================================================
+// Custom Auth-SVC Models (snake_case columns via @map directives)
+// These models are NOT managed by Better Auth and use standard conventions
+// ============================================================================
+
+// Organization-level default settings (custom - snake_case)
+model OrganizationSettings {
+  id             String   @id @default(uuid())
+  organizationId String   @unique @map("organization_id")
+  theme          String   @default("system") // light/dark/system
+  timezone       String   @default("UTC") // IANA timezone
+  language       String   @default("en") // ISO 639-1 code
+  dateFormat     String   @default("MM/DD/YYYY") @map("date_format")
+  clockFormat    String   @default("12h") @map("clock_format") // "12h" or "24h"
+  avatarUrl      String?  @map("avatar_url")
+  metadata       String? // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("organization_settings")
+}
+
+// User-level settings (custom - snake_case)
+model UserSettings {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  theme          String? // NULL = use org/browser default
+  timezone       String? // NULL = use org/browser default
+  language       String? // NULL = use org/browser default
+  dateFormat     String?  @map("date_format") // NULL = use org default
+  clockFormat    String?  @map("clock_format") // "12h" or "24h", NULL = use org default
+  avatarUrl      String?  @map("avatar_url")
+  paymentMethods String?  @map("payment_methods") // JSON array of payment method refs
+  metadata       String? // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("user_settings")
+}
+
+// Audit log entry with signature chain (custom - snake_case)
+model AuditLog {
+  id                  String   @id @default(uuid())
+  // Event identification
+  eventType           String   @map("event_type") // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entityType          String   @map("entity_type") // user, organization, transaction, etc.
+  entityId            String?  @map("entity_id") // ID of affected entity
+  // Actor information
+  actorUserId         String?  @map("actor_user_id")
+  actorOrganizationId String?  @map("actor_organization_id")
+  actorIp             String?  @map("actor_ip")
+  actorUserAgent      String?  @map("actor_user_agent")
+  // Change data (immutable snapshot)
+  previousState       String?  @map("previous_state") // JSON
+  newState            String?  @map("new_state") // JSON
+  changeSummary       String?  @map("change_summary") // JSON field-level diff
+  // Context
+  sourceService       String   @map("source_service") // aml-svc, auth-svc, etc.
+  requestId           String?  @map("request_id") // Correlation ID
+  metadata            String? // JSON additional context
+  // Integrity chain
+  signature           String // SHA-256 hash
+  previousSignature   String?  @map("previous_signature")
+  // Timestamps
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([actorOrganizationId])
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([sourceService])
+  @@index([signature])
+  @@index([previousSignature])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// Better Auth Stripe Plugin Tables (camelCase columns - required by Better Auth)
+// User-based billing: users are Stripe customers, not organizations
+// ============================================================================
+
+// Better Auth Stripe subscription model (camelCase - managed by Better Auth)
+model Subscription {
+  id                   String    @id @default(uuid())
+  plan                 String // "business", "pro", or references SubscriptionPlan.id
+  referenceId          String // User ID (the billing entity)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  status               String? // "trialing", "active", "canceled", "past_due", "unpaid"
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  cancelAt             DateTime? // When the subscription is scheduled to cancel
+  canceledAt           DateTime? // When the subscription was actually canceled
+  seats                Int?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  licenseId            String? // Reference to enterprise_licenses if activated via license
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([referenceId])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
+  @@index([licenseId])
+  @@map("subscription")
+}
+
+// ============================================================================
+// Subscription Plans & Pricing (snake_case columns)
+// Database-driven pricing and limits configuration
+// ============================================================================
+
+// Subscription plan definitions (base plans like business, pro)
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String   @unique // internal name: "business", "pro"
+  displayName String   @map("display_name") // Display name: "Janovix Business"
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  trialDays   Int      @default(14) @map("trial_days")
+  metadata    String? // JSON for extensibility
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  prices PlanPrice[]
+  limits PlanLimit[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("subscription_plans")
+}
+
+// Plan pricing (main subscription prices and add-on fees)
+// Note: stripe_price_id is NOT unique because the same Stripe price may be 
+// shared across plans in dev/preview environments
+model PlanPrice {
+  id             String   @id @default(uuid())
+  planId         String   @map("plan_id")
+  stripePriceId  String   @map("stripe_price_id")
+  priceType      String   @map("price_type") // "subscription", "seat", "overage_report", "overage_notice", etc.
+  amount         Int // Amount in cents
+  currency       String   @default("MXN")
+  interval       String? // "month", "year", null for one-time
+  intervalCount  Int?     @map("interval_count") // 1 for monthly, 12 for yearly
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  metadata       String? // JSON for extensibility
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, priceType])
+  @@index([planId])
+  @@index([priceType])
+  @@index([stripePriceId])
+  @@index([isActive])
+  @@map("plan_prices")
+}
+
+// Plan limits (configurable limits per plan)
+model PlanLimit {
+  id               String   @id @default(uuid())
+  planId           String   @map("plan_id")
+  maxOrganizations Int      @default(1) @map("max_organizations")
+  usersPerOrg      Int      @default(5) @map("users_per_org")
+  reportsPerMonth  Int      @default(0) @map("reports_per_month")
+  noticesPerMonth  Int      @default(3) @map("notices_per_month")
+  alertsPerMonth   Int      @default(50) @map("alerts_per_month")
+  transactionsPerMonth Int  @default(250) @map("transactions_per_month")
+  clientsPerMonth  Int      @default(50) @map("clients_per_month")
+  watchlistQueriesPerDay Int @default(0) @map("watchlist_queries_per_day")
+  metadata         String? // JSON for additional limits
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId])
+  @@index([planId])
+  @@map("plan_limits")
+}
+
+// ============================================================================
+// Custom Billing Tables (snake_case columns)
+// ============================================================================
+
+// Card fingerprint tracking for trial abuse prevention
+// Stores fingerprints of cards that have been used for trials
+// If a fingerprint exists, deny trial and charge immediately
+model UsedCardFingerprint {
+  id          String   @id @default(uuid())
+  fingerprint String   @unique
+  firstUserId String   @map("first_user_id")
+  firstUsedAt DateTime @default(now()) @map("first_used_at")
+  lastUsedAt  DateTime @default(now()) @map("last_used_at")
+  usageCount  Int      @default(1) @map("usage_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([fingerprint])
+  @@index([firstUserId])
+  @@map("used_card_fingerprints")
+}
+
+// Enterprise licenses for direct sales (not through Stripe)
+model EnterpriseLicense {
+  id               String    @id @default(uuid())
+  key              String    @unique // License key (e.g., "ENT-XXXX-XXXX-XXXX")
+  organizationName String    @map("organization_name") // Company/org name the license is for
+  planId           String    @map("plan_id") // Reference to subscription_plans
+  userId           String?   @map("user_id") // User who activated the license
+  status           String    @default("active") // "active", "revoked", "expired"
+  expiresAt        DateTime? @map("expires_at")
+  activatedAt      DateTime? @map("activated_at")
+  // License-specific limits (override plan defaults if set)
+  maxOrganizations Int?      @map("max_organizations")
+  maxUsers         Int?      @map("max_users")
+  reportsIncluded  Int?      @map("reports_included")
+  noticesIncluded  Int?      @map("notices_included")
+  alertsIncluded   Int?      @map("alerts_included")
+  transactionsIncluded Int?  @map("transactions_included")
+  clientsIncluded  Int?      @map("clients_included")
+  metadata         String? // JSON for extensibility
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([key])
+  @@index([userId])
+  @@index([status])
+  @@index([planId])
+  @@map("enterprise_licenses")
+}
+
+// Per-organization usage tracking (for metered billing)
+// Tracks usage within each organization for the billing period
+model OrganizationUsage {
+  id                  String    @id @default(uuid())
+  organizationId      String    @unique @map("organization_id")
+  ownerUserId         String    @map("owner_user_id")
+  reportsUsed         Int       @default(0) @map("reports_used")
+  noticesUsed         Int       @default(0) @map("notices_used")
+  alertsUsed          Int       @default(0) @map("alerts_used")
+  transactionsUsed    Int       @default(0) @map("transactions_used")
+  clientsUsed         Int       @default(0) @map("clients_used")
+  usersCount          Int       @default(0) @map("users_count")
+  periodStart         DateTime  @map("period_start")
+  periodEnd           DateTime  @map("period_end")
+  overageReportedAt   DateTime? @map("overage_reported_at")
+  stripeUsageRecordId String?   @map("stripe_usage_record_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([ownerUserId])
+  @@index([periodStart])
+  @@map("organization_usage")
 }

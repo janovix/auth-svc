@@ -1,0 +1,65 @@
+# Auth-SVC Cursor Rules
+
+## Database Column Naming Convention - IMPORTANT EXCEPTION
+
+This service has a **hybrid column naming convention** due to Better Auth's requirements:
+
+### Better Auth Managed Tables (camelCase columns)
+Better Auth generates its own SQL queries that **bypass Prisma's `@map` directives**. 
+These tables MUST use camelCase column names in the database:
+
+| Table | Example Columns |
+|-------|----------------|
+| `users` | `emailVerified`, `banReason`, `banExpires`, `createdAt`, `updatedAt` |
+| `sessions` | `expiresAt`, `ipAddress`, `userAgent`, `activeOrganizationId`, `impersonatedBy`, `userId` |
+| `accounts` | `accountId`, `providerId`, `userId`, `accessToken`, `refreshToken`, `idToken`, `accessTokenExpiresAt` |
+| `verifications` | `expiresAt`, `createdAt`, `updatedAt` |
+| `jwks` | `publicKey`, `privateKey`, `createdAt`, `expiresAt` |
+| `organizations` | `createdAt`, `updatedAt` |
+| `members` | `organizationId`, `userId`, `createdAt`, `updatedAt` |
+| `invitations` | `organizationId`, `inviterId`, `expiresAt`, `createdAt`, `updatedAt` |
+
+**DO NOT add `@map` directives to these models in `schema.prisma`** - they will be ignored by Better Auth.
+
+### Custom Auth-SVC Tables (snake_case columns)
+Tables that are NOT managed by Better Auth use standard snake_case via `@map` directives:
+
+| Table | Example Columns |
+|-------|----------------|
+| `organization_settings` | `organization_id`, `date_format`, `avatar_url`, `created_at` |
+| `user_settings` | `user_id`, `date_format`, `avatar_url`, `payment_methods` |
+| `audit_logs` | `event_type`, `entity_type`, `actor_user_id`, `created_at` |
+| `subscription_plans` | `billing_interval`, `stripe_price_id`, `base_price`, `notices_included` |
+| `organization_subscriptions` | `organization_id`, `stripe_customer_id`, `plan_id`, `current_period_start` |
+| `enterprise_licenses` | `organization_id`, `license_key`, `notices_per_month`, `issued_at` |
+| `usage_records` | `organization_id`, `subscription_id`, `period_start`, `notices_created` |
+
+**Always use `@map("snake_case")` directives in Prisma for these models.**
+
+## Why This Exception Exists
+
+Better Auth's Prisma adapter generates raw SQL queries using the Prisma model field names directly, 
+completely bypassing Prisma's column mapping layer. This is a known limitation of Better Auth.
+
+Options considered:
+1. ✅ **Accept camelCase for Better Auth tables** (chosen) - Works with the library, not against it
+2. ❌ **Force snake_case everywhere** - Would require forking/patching Better Auth
+
+## Migration File Convention
+
+The single migration file `migrations/0001_initial_schema.sql` contains:
+- Better Auth tables with camelCase columns (top section)
+- Custom tables with snake_case columns (bottom section)
+
+Each section is clearly marked with comments explaining the convention.
+
+## Testing After Schema Changes
+
+Always run after any schema changes:
+```bash
+pnpm run seedLocalDb     # Apply migrations to local D1
+pnpm prisma generate     # Regenerate Prisma client
+pnpm typecheck           # Verify types
+pnpm lint                # Check linting
+pnpm test                # Run tests (may skip on Windows)
+```

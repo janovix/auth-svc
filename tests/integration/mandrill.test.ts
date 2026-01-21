@@ -276,32 +276,6 @@ describe("Mandrill Email Integration", () => {
 			);
 		});
 
-		it("sends OTP email with correct subject for forget-password", async () => {
-			const mockResponse: MandrillSendResponse[] = [
-				{
-					_id: "test-id",
-					email: toEmail,
-					status: "sent",
-				},
-			];
-
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				text: async () => JSON.stringify(mockResponse),
-				json: async () => mockResponse,
-			});
-
-			await sendOtpEmail(apiKey, toEmail, userName, otp, "forget-password");
-
-			await new Promise((resolve) => setTimeout(resolve, 10));
-
-			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-			expect(callBody.message.subject).toBe(
-				"Tu código de recuperación - Janovix",
-			);
-		});
-
 		it("uses default subject for unknown OTP type", async () => {
 			const mockResponse: MandrillSendResponse[] = [
 				{

@@ -80,4 +80,110 @@ export type Bindings = Env & {
 	 * Configured via Cloudflare Dashboard secrets or wrangler vars.
 	 */
 	SENTRY_DSN?: string;
+	/**
+	 * Service binding to aml-svc for worker-to-worker communication.
+	 * Used to proxy AML compliance settings requests securely.
+	 */
+	AML_SERVICE?: Fetcher;
+
+	// =========================================================================
+	// STRIPE BILLING
+	// =========================================================================
+
+	/**
+	 * Stripe secret key for server-side API calls.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	STRIPE_SECRET_KEY?: string;
+
+	/**
+	 * Stripe publishable key for client-side use.
+	 * Can be public, configured via wrangler vars.
+	 */
+	STRIPE_PUBLISHABLE_KEY?: string;
+
+	/**
+	 * Stripe webhook signing secret for verifying webhook events.
+	 * Configured via Cloudflare Dashboard secrets.
+	 */
+	STRIPE_WEBHOOK_SECRET?: string;
+
+	/**
+	 * Stripe Price ID for Watchlist plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_WATCHLIST_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for AML Business plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_BUSINESS_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for AML Pro plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_PRO_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for AML Ultra plan subscription.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_ULTRA_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for metered alert overage billing.
+	 * Used to report alert overage via Stripe Usage Records API.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_ALERT_OVERAGE_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for metered transaction overage billing.
+	 * Used to report transaction overage via Stripe Usage Records API.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_TRANSACTION_OVERAGE_PRICE_ID?: string;
+
+	/**
+	 * Stripe Price ID for per-seat (extra user) billing.
+	 * Used to update subscription quantity when members are added/removed.
+	 * Created in Stripe Dashboard, configured via wrangler vars.
+	 */
+	STRIPE_SEAT_PRICE_ID?: string;
+
+	// =========================================================================
+	// ENTERPRISE LICENSING (DEPRECATED - Using Better Auth Stripe)
+	// =========================================================================
+
+	/**
+	 * Ed25519 private key for signing enterprise license JWTs.
+	 * Configured via Cloudflare Dashboard secrets.
+	 * PEM format with headers.
+	 */
+	LICENSE_PRIVATE_KEY?: string;
+
+	/**
+	 * Ed25519 public key for verifying enterprise license JWTs.
+	 * Can be public, used by other services for offline verification.
+	 * PEM format with headers.
+	 */
+	LICENSE_PUBLIC_KEY?: string;
+
+	// =========================================================================
+	// R2 STORAGE
+	// =========================================================================
+
+	/**
+	 * R2 bucket for storing user avatar images.
+	 * Used for onboarding and profile avatar uploads.
+	 */
+	AVATARS_BUCKET?: R2Bucket;
+
+	/**
+	 * Public URL prefix for accessing avatar images.
+	 * Example: `https://avatars.janovix.com` or `https://pub-xxx.r2.dev`
+	 */
+	AVATARS_PUBLIC_URL?: string;
 };

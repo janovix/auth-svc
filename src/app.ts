@@ -18,9 +18,45 @@ import {
 	AuthSignOutEndpoint,
 	AuthSessionEndpoint,
 	AuthJwksEndpoint,
-	AuthForgotPasswordEndpoint,
-	AuthResetPasswordEndpoint,
 } from "./endpoints/auth/openapi";
+import {
+	GetUserSettingsEndpoint,
+	UpdateUserSettingsEndpoint,
+	GetOrganizationSettingsEndpoint,
+	UpdateOrganizationSettingsEndpoint,
+	GetResolvedSettingsEndpoint,
+	GetOrganizationMembershipEndpoint,
+} from "./endpoints/settings/openapi";
+import {
+	ListAuditLogsEndpoint,
+	GetAuditLogEndpoint,
+	VerifyAuditChainEndpoint,
+	ExportAuditLogsEndpoint,
+} from "./endpoints/audit/openapi";
+// Note: Subscription management is now handled by Better Auth Stripe plugin
+// Our custom routes only handle usage tracking and org limit checks
+import {
+	GetAmlComplianceSettingsEndpoint,
+	PutAmlComplianceSettingsEndpoint,
+	PatchAmlComplianceSettingsEndpoint,
+} from "./endpoints/aml-settings/openapi";
+import {
+	PrepareAvatarUploadEndpoint,
+	UploadAvatarEndpoint,
+	DeleteAvatarEndpoint,
+} from "./endpoints/upload/openapi";
+import { settingsRoutes } from "./routes/settings";
+import { internalSettingsRoutes } from "./routes/internal-settings";
+import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
+import { auditRoutes } from "./routes/audit";
+import { internalAuditRoutes } from "./routes/internal-audit";
+import { subscriptionRoutes } from "./routes/subscription";
+import { organizationRoutes } from "./routes/organization";
+import { webhookRoutes } from "./routes/webhooks";
+import { uploadRoutes } from "./routes/upload";
+import { adminRoutes } from "./routes/admin";
+import { internalOrganizationsRoutes } from "./routes/internal-organizations";
+import { pricingRoutes } from "./routes/pricing";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -98,8 +134,83 @@ openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
 openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
 openapi.get("/api/auth/session", AuthSessionEndpoint);
 openapi.get("/api/auth/jwks", AuthJwksEndpoint);
-openapi.post("/api/auth/forgot-password", AuthForgotPasswordEndpoint);
-openapi.post("/api/auth/reset-password", AuthResetPasswordEndpoint);
+
+// Register Settings routes (actual implementation)
+app.route("/api/settings", settingsRoutes);
+
+// Register AML Compliance Settings proxy routes (proxies to aml-svc via service binding)
+app.route("/api/settings/aml-compliance", amlSettingsProxyRoutes);
+
+// Register AML Settings OpenAPI documentation
+openapi.get(
+	"/api/settings/aml-compliance/:orgId",
+	GetAmlComplianceSettingsEndpoint,
+);
+openapi.put(
+	"/api/settings/aml-compliance/:orgId",
+	PutAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId",
+	PatchAmlComplianceSettingsEndpoint,
+);
+
+// Register Internal routes for service bindings
+app.route("/internal/settings", internalSettingsRoutes);
+app.route("/internal/organizations", internalOrganizationsRoutes);
+
+// Register Settings OpenAPI documentation
+openapi.get("/api/settings/user", GetUserSettingsEndpoint);
+openapi.patch("/api/settings/user", UpdateUserSettingsEndpoint);
+openapi.get(
+	"/api/settings/organization/:orgId",
+	GetOrganizationSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/organization/:orgId",
+	UpdateOrganizationSettingsEndpoint,
+);
+openapi.get(
+	"/api/settings/organization/:orgId/membership",
+	GetOrganizationMembershipEndpoint,
+);
+openapi.get("/api/settings/resolved", GetResolvedSettingsEndpoint);
+
+// Register Audit routes (actual implementation)
+app.route("/api/audit", auditRoutes);
+
+// Register Internal Audit routes for service bindings
+app.route("/internal/audit", internalAuditRoutes);
+
+// Register Audit OpenAPI documentation
+openapi.get("/api/audit", ListAuditLogsEndpoint);
+openapi.get("/api/audit/verify", VerifyAuditChainEndpoint);
+openapi.get("/api/audit/:id", GetAuditLogEndpoint);
+openapi.post("/api/audit/export", ExportAuditLogsEndpoint);
+
+// Register Subscription routes (usage tracking and org limits)
+// Note: Checkout, cancel, upgrade are handled by Better Auth at /api/auth/subscription/*
+app.route("/api/subscription", subscriptionRoutes);
+
+// Register Pricing routes (database-driven plans, prices, and limits)
+app.route("/api/pricing", pricingRoutes);
+
+// Register Organization routes (invitation lookup by ID)
+app.route("/api/organization", organizationRoutes);
+
+// Register Stripe Webhooks (card fingerprint check and usage reset)
+app.route("/webhooks", webhookRoutes);
+
+// Register Upload routes (avatar uploads via R2)
+app.route("/api/upload", uploadRoutes);
+
+// Register Upload OpenAPI documentation
+openapi.post("/api/upload/avatar/prepare", PrepareAvatarUploadEndpoint);
+openapi.post("/api/upload/avatar", UploadAvatarEndpoint);
+openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
+
+// Register Admin routes (KV management, etc.)
+app.route("/api/admin", adminRoutes);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

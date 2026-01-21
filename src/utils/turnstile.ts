@@ -8,6 +8,12 @@
 const TURNSTILE_VERIFY_URL =
 	"https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
+/**
+ * Default timeout for Turnstile verification in milliseconds.
+ * Turnstile should respond quickly; timeout prevents request hanging.
+ */
+const TURNSTILE_TIMEOUT_MS = 5_000;
+
 export interface TurnstileVerifyResult {
 	success: boolean;
 	/** ISO timestamp of the challenge */
@@ -53,6 +59,8 @@ export async function verifyTurnstileToken(
 		const response = await fetch(TURNSTILE_VERIFY_URL, {
 			method: "POST",
 			body: formData,
+			// Prevent hanging in Cloudflare Workers by adding a timeout
+			signal: AbortSignal.timeout(TURNSTILE_TIMEOUT_MS),
 		});
 
 		if (!response.ok) {
@@ -65,10 +73,19 @@ export async function verifyTurnstileToken(
 		const result = (await response.json()) as TurnstileVerifyResult;
 		return result;
 	} catch (error) {
-		console.error("[Turnstile] Verification failed:", error);
+		// Determine if this was a timeout error
+		const isTimeout =
+			error instanceof Error &&
+			(error.name === "TimeoutError" || error.name === "AbortError");
+
+		console.error("[Turnstile] Verification failed:", {
+			isTimeout,
+			error: error instanceof Error ? error.message : String(error),
+		});
+
 		return {
 			success: false,
-			"error-codes": ["network-error"],
+			"error-codes": [isTimeout ? "timeout-error" : "network-error"],
 		};
 	}
 }

@@ -22,10 +22,22 @@
 			"id": "bc9ed2441eaa4660a619e64e603cdccc",
 		},
 	],
+	"r2_buckets": [
+		{
+			"binding": "AVATARS_BUCKET",
+			"bucket_name": "avatar",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "test",
 		"BETTER_AUTH_URL": "https://auth-svc.test.local",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.test.local",
+		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
+		"STRIPE_BUSINESS_PRICE_ID": "price_test_business",
+		"STRIPE_PRO_PRICE_ID": "price_test_pro",
+		"STRIPE_ALERT_OVERAGE_PRICE_ID": "price_test_alert_overage",
+		"STRIPE_TRANSACTION_OVERAGE_PRICE_ID": "price_test_transaction_overage",
+		"STRIPE_SEAT_PRICE_ID": "price_test_seat",
 	},
 }

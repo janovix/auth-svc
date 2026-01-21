@@ -1,3 +1,196 @@
+# [1.4.0-rc.26](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.25...v1.4.0-rc.26) (2026-01-19)
+
+
+### Features
+
+* **auth:** implement auto-selection of user's first organization during session creation ([1ca7848](https://github.com/janovix/auth-svc/commit/1ca784867953c066b65d65ce01a53b73e861ee6a))
+
+# [1.4.0-rc.25](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.24...v1.4.0-rc.25) (2026-01-19)
+
+
+### Bug Fixes
+
+* **seed-plans:** update monthly subscription price to $9,999 MXN ([8a823d5](https://github.com/janovix/auth-svc/commit/8a823d5f40e3cf0a495fa888a54f82c403d26ac3))
+
+# [1.4.0-rc.24](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.23...v1.4.0-rc.24) (2026-01-17)
+
+
+### Bug Fixes
+
+* **auth:** update cleanup strategy for execution context to prevent premature cleanup of background tasks ([f3a5c0e](https://github.com/janovix/auth-svc/commit/f3a5c0e22f6413a1ace733466bd044cd14adc1d3))
+
+# [1.4.0-rc.23](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.22...v1.4.0-rc.23) (2026-01-17)
+
+
+### Features
+
+* **auth:** improve logging for execution context and background task handling ([82fde64](https://github.com/janovix/auth-svc/commit/82fde64a0a340885b9dacee72ae7c0777df0d805))
+
+# [1.4.0-rc.22](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.21...v1.4.0-rc.22) (2026-01-17)
+
+
+### Bug Fixes
+
+* **auth:** enhance error handling and logging in OTP email sending process ([1dd40b5](https://github.com/janovix/auth-svc/commit/1dd40b5bc7f884bb3e6306132715fe2de2b50672))
+
+# [1.4.0-rc.21](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.20...v1.4.0-rc.21) (2026-01-16)
+
+
+### Features
+
+* **auth:** implement timeout handling for Stripe API calls and enhance execution context management ([dc90923](https://github.com/janovix/auth-svc/commit/dc90923174ab7b9182a085f320e95fb71da010ee))
+
+# [1.4.0-rc.20](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.19...v1.4.0-rc.20) (2026-01-16)
+
+
+### Features
+
+* **auth:** optimize request body handling to prevent stream exhaustion in Cloudflare Workers ([6b28db2](https://github.com/janovix/auth-svc/commit/6b28db216a43ae52b3434664dfd634986339a6cc))
+
+
+### Reverts
+
+* Revert "feat(auth, kv-storage): implement timeout handling for auth requests and KV operations to prevent indefinite hangs" ([8ff552b](https://github.com/janovix/auth-svc/commit/8ff552bac777cac57ba22b1ef53213b441eea59e))
+
+# [1.4.0-rc.19](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.18...v1.4.0-rc.19) (2026-01-16)
+
+
+### Features
+
+* **auth, kv-storage:** implement timeout handling for auth requests and KV operations to prevent indefinite hangs ([1665cbc](https://github.com/janovix/auth-svc/commit/1665cbcc26c911ebb9e8c35260b2ffd205e00c19))
+
+# [1.4.0-rc.18](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.17...v1.4.0-rc.18) (2026-01-16)
+
+
+### Features
+
+* **tests:** add tests for getBetterAuthContext and getBetterAuthContextAsync ([d51ff88](https://github.com/janovix/auth-svc/commit/d51ff88f0f1ebffaddcd5678b4f4f28ae790f6a3))
+
+# [1.4.0-rc.17](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.16...v1.4.0-rc.17) (2026-01-16)
+
+
+### Bug Fixes
+
+* **tests:** update test expectations for new fields and mock pricing repo ([cdae0da](https://github.com/janovix/auth-svc/commit/cdae0da44cfde72d44d41cf3f62ccbc19a0f1c47))
+
+# [1.4.0-rc.16](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.15...v1.4.0-rc.16) (2026-01-14)
+
+
+### Features
+
+* enhance invitation handling in internal organizations routes with raw SQL and email notifications ([44f62ae](https://github.com/janovix/auth-svc/commit/44f62aef2617c099bff56327dd38cde731517acd))
+
+# [1.4.0-rc.15](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.14...v1.4.0-rc.15) (2026-01-14)
+
+
+### Features
+
+* implement dynamic execution context handling for background tasks ([c0d8940](https://github.com/janovix/auth-svc/commit/c0d8940d7ae6ba9bb0a0dc47c8c52eabf65c9ddd))
+
+# [1.4.0-rc.14](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.13...v1.4.0-rc.14) (2026-01-14)
+
+
+### Features
+
+* enhance email and Turnstile verification with timeout handling and logging improvements ([ac91410](https://github.com/janovix/auth-svc/commit/ac91410d0d693c35515a909db4a6d9823017cbc1))
+
+# [1.4.0-rc.13](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.12...v1.4.0-rc.13) (2026-01-14)
+
+
+### Features
+
+* implement member management and invitation handling in internal organizations routes ([8dc21c1](https://github.com/janovix/auth-svc/commit/8dc21c120c5ea4145ae25b334c23a001710e0965))
+
+# [1.4.0-rc.12](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.11...v1.4.0-rc.12) (2026-01-14)
+
+
+### Features
+
+* add invitation management and organization update routes to internal organizations ([96ab49a](https://github.com/janovix/auth-svc/commit/96ab49a40d88a1ede8030e47d2656539dfbdfed1))
+
+# [1.4.0-rc.11](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.10...v1.4.0-rc.11) (2026-01-14)
+
+
+### Features
+
+* add internal organizations route to the application ([1e044b3](https://github.com/janovix/auth-svc/commit/1e044b383195eb3c1cc22f370d761f7e67b55578))
+
+# [1.4.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.9...v1.4.0-rc.10) (2026-01-14)
+
+
+### Features
+
+* enhance JWT payload to include user role for authorization ([c43a5b2](https://github.com/janovix/auth-svc/commit/c43a5b2c3e70b715924a8054a67741705284a9c0))
+
+# [1.4.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.8...v1.4.0-rc.9) (2026-01-14)
+
+
+### Features
+
+* add admin routes and OpenAPI documentation for KV cache management ([b8e1df2](https://github.com/janovix/auth-svc/commit/b8e1df2eb9cf1f8fa27efb86981e0e9978297cad))
+* integrate Better Auth Stripe plugin for user-based billing and organization usage tracking ([eb632ad](https://github.com/janovix/auth-svc/commit/eb632ad61d87628ffb2aeaf1c6e858d50cd0e417))
+
+# [1.4.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.7...v1.4.0-rc.8) (2026-01-12)
+
+
+### Bug Fixes
+
+* correct subscription status test for none tier case ([5b0176d](https://github.com/janovix/auth-svc/commit/5b0176dc4bc4ac999b63c469cc4f0feaef58068e))
+
+# [1.4.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.6...v1.4.0-rc.7) (2026-01-12)
+
+
+### Features
+
+* add internal organizations API for admin panel ([f5c668c](https://github.com/janovix/auth-svc/commit/f5c668c3c288db31e58ed60c1882dc377555cb8a))
+
+# [1.4.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.5...v1.4.0-rc.6) (2026-01-12)
+
+
+### Features
+
+* add seeding script for subscription plans and update SQL seed file ([e216af6](https://github.com/janovix/auth-svc/commit/e216af6d45ba843cebc797f6d936a272c28289b2))
+
+# [1.4.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.4...v1.4.0-rc.5) (2026-01-12)
+
+
+### Features
+
+* update OpenAPI documentation and add subscription and license management endpoints ([97f3559](https://github.com/janovix/auth-svc/commit/97f3559dee7ba6ab9ba04a222c591c0853ffc7b2))
+
+# [1.4.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.3...v1.4.0-rc.4) (2026-01-12)
+
+
+### Bug Fixes
+
+* remove invalid column rename in migration 0008 ([6fb8782](https://github.com/janovix/auth-svc/commit/6fb8782c4a937f3e0cbc7e809fca035a1c96599f))
+
+
+### Features
+
+* implement subscription and license management with Stripe integration ([e91716e](https://github.com/janovix/auth-svc/commit/e91716e5ace466cd307e745edac73b95a76864ae))
+
+# [1.4.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.2...v1.4.0-rc.3) (2026-01-11)
+
+
+### Bug Fixes
+
+* refactor AML settings proxy routes to improve error handling and logging ([84188f8](https://github.com/janovix/auth-svc/commit/84188f840a08bf71922ef669fba5596c4b618c2f))
+
+# [1.4.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.1...v1.4.0-rc.2) (2026-01-11)
+
+
+### Features
+
+* add AML compliance settings proxy routes and update service bindings ([7b4cd8d](https://github.com/janovix/auth-svc/commit/7b4cd8d514ff86b60eb6013cb3e6151dd2ee36f2))
+
+# [1.4.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.3.1...v1.4.0-rc.1) (2026-01-11)
+
+
+### Features
+
+* add user and organization settings management with audit logging ([0168963](https://github.com/janovix/auth-svc/commit/0168963dd2da88459a82e6e33fa2e19559695d1b))
+
 ## [1.3.1](https://github.com/janovix/auth-svc/compare/v1.3.0...v1.3.1) (2026-01-10)
 
 

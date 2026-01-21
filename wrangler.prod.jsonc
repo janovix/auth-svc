@@ -23,10 +23,27 @@
 			"id": "bdce8bcdb45b485fb0518fec19ab664b",
 		},
 	],
+	"services": [
+		{
+			"binding": "AML_SERVICE",
+			"service": "aml-svc-prod",
+		},
+	],
+	"r2_buckets": [
+		{
+			"binding": "AVATARS_BUCKET",
+			"bucket_name": "avatar",
+		},
+	],
 	"vars": {
 		"ENVIRONMENT": "production",
 		"BETTER_AUTH_URL": "https://auth-svc.janovix.com",
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.com",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.com",
+		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
+		// Note: Production Stripe price IDs must be set via wrangler secret for security
+		// STRIPE_ALERT_OVERAGE_PRICE_ID: Set via wrangler secret
+		// STRIPE_TRANSACTION_OVERAGE_PRICE_ID: Set via wrangler secret
+		// STRIPE_SEAT_PRICE_ID: Set via wrangler secret
 	},
 }

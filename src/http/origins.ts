@@ -15,7 +15,9 @@ function hostMatchesPattern(host: string, patternHost: string) {
 	// Common wildcard form: https://*.example.com
 	if (patternHost.startsWith("*.")) {
 		const base = patternHost.slice(2);
-		return host.endsWith(`.${base}`) && host !== base;
+		if (!base.includes("*")) {
+			return host.endsWith(`.${base}`) && host !== base;
+		}
 	}
 
 	if (!patternHost.includes("*")) return false;

@@ -13,16 +13,19 @@ const typedWorker = worker as unknown as {
 
 const TEST_SECRET = "test-secret-1234567890123456789012345";
 
-describe("Turnstile validation on forgot-password", () => {
-	it("rejects forgot-password requests without turnstile token when configured", async () => {
-		const request = new Request("http://localhost/api/auth/forgot-password", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Origin: "http://localhost:3000",
+describe("Turnstile validation on send-verification-otp", () => {
+	it("rejects send-verification-otp requests without turnstile token when configured", async () => {
+		const request = new Request(
+			"http://localhost/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({ email: "test@example.com", type: "sign-in" }),
 			},
-			body: JSON.stringify({ email: "test@example.com" }),
-		});
+		);
 
 		const response = await typedWorker.fetch(
 			request,
@@ -45,14 +48,17 @@ describe("Turnstile validation on forgot-password", () => {
 	});
 
 	it("skips turnstile validation when TURNSTILE_SECRET_KEY is not configured", async () => {
-		const request = new Request("http://localhost/api/auth/forgot-password", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Origin: "http://localhost:3000",
+		const request = new Request(
+			"http://localhost/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({ email: "test@example.com", type: "sign-in" }),
 			},
-			body: JSON.stringify({ email: "test@example.com" }),
-		});
+		);
 
 		const response = await typedWorker.fetch(
 			request,
