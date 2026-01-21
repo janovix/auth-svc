@@ -1,3 +1,40 @@
+# [1.4.0](https://github.com/janovix/auth-svc/compare/v1.3.1...v1.4.0) (2026-01-21)
+
+
+### Bug Fixes
+
+* **auth:** enhance error handling and logging in OTP email sending process ([1dd40b5](https://github.com/janovix/auth-svc/commit/1dd40b5bc7f884bb3e6306132715fe2de2b50672))
+* **auth:** update cleanup strategy for execution context to prevent premature cleanup of background tasks ([f3a5c0e](https://github.com/janovix/auth-svc/commit/f3a5c0e22f6413a1ace733466bd044cd14adc1d3))
+* correct subscription status test for none tier case ([5b0176d](https://github.com/janovix/auth-svc/commit/5b0176dc4bc4ac999b63c469cc4f0feaef58068e))
+* refactor AML settings proxy routes to improve error handling and logging ([84188f8](https://github.com/janovix/auth-svc/commit/84188f840a08bf71922ef669fba5596c4b618c2f))
+* remove invalid column rename in migration 0008 ([6fb8782](https://github.com/janovix/auth-svc/commit/6fb8782c4a937f3e0cbc7e809fca035a1c96599f))
+* **seed-plans:** update monthly subscription price to $9,999 MXN ([8a823d5](https://github.com/janovix/auth-svc/commit/8a823d5f40e3cf0a495fa888a54f82c403d26ac3))
+* **tests:** update test expectations for new fields and mock pricing repo ([cdae0da](https://github.com/janovix/auth-svc/commit/cdae0da44cfde72d44d41cf3f62ccbc19a0f1c47))
+
+
+### Features
+
+* add admin routes and OpenAPI documentation for KV cache management ([b8e1df2](https://github.com/janovix/auth-svc/commit/b8e1df2eb9cf1f8fa27efb86981e0e9978297cad))
+* add AML compliance settings proxy routes and update service bindings ([7b4cd8d](https://github.com/janovix/auth-svc/commit/7b4cd8d514ff86b60eb6013cb3e6151dd2ee36f2))
+* add internal organizations API for admin panel ([f5c668c](https://github.com/janovix/auth-svc/commit/f5c668c3c288db31e58ed60c1882dc377555cb8a))
+* add internal organizations route to the application ([1e044b3](https://github.com/janovix/auth-svc/commit/1e044b383195eb3c1cc22f370d761f7e67b55578))
+* add invitation management and organization update routes to internal organizations ([96ab49a](https://github.com/janovix/auth-svc/commit/96ab49a40d88a1ede8030e47d2656539dfbdfed1))
+* add seeding script for subscription plans and update SQL seed file ([e216af6](https://github.com/janovix/auth-svc/commit/e216af6d45ba843cebc797f6d936a272c28289b2))
+* add user and organization settings management with audit logging ([0168963](https://github.com/janovix/auth-svc/commit/0168963dd2da88459a82e6e33fa2e19559695d1b))
+* **auth:** implement auto-selection of user's first organization during session creation ([1ca7848](https://github.com/janovix/auth-svc/commit/1ca784867953c066b65d65ce01a53b73e861ee6a))
+* **auth:** implement timeout handling for Stripe API calls and enhance execution context management ([dc90923](https://github.com/janovix/auth-svc/commit/dc90923174ab7b9182a085f320e95fb71da010ee))
+* **auth:** improve logging for execution context and background task handling ([82fde64](https://github.com/janovix/auth-svc/commit/82fde64a0a340885b9dacee72ae7c0777df0d805))
+* **auth:** optimize request body handling to prevent stream exhaustion in Cloudflare Workers ([6b28db2](https://github.com/janovix/auth-svc/commit/6b28db216a43ae52b3434664dfd634986339a6cc))
+* enhance email and Turnstile verification with timeout handling and logging improvements ([ac91410](https://github.com/janovix/auth-svc/commit/ac91410d0d693c35515a909db4a6d9823017cbc1))
+* enhance invitation handling in internal organizations routes with raw SQL and email notifications ([44f62ae](https://github.com/janovix/auth-svc/commit/44f62aef2617c099bff56327dd38cde731517acd))
+* enhance JWT payload to include user role for authorization ([c43a5b2](https://github.com/janovix/auth-svc/commit/c43a5b2c3e70b715924a8054a67741705284a9c0))
+* implement dynamic execution context handling for background tasks ([c0d8940](https://github.com/janovix/auth-svc/commit/c0d8940d7ae6ba9bb0a0dc47c8c52eabf65c9ddd))
+* implement member management and invitation handling in internal organizations routes ([8dc21c1](https://github.com/janovix/auth-svc/commit/8dc21c120c5ea4145ae25b334c23a001710e0965))
+* implement subscription and license management with Stripe integration ([e91716e](https://github.com/janovix/auth-svc/commit/e91716e5ace466cd307e745edac73b95a76864ae))
+* integrate Better Auth Stripe plugin for user-based billing and organization usage tracking ([eb632ad](https://github.com/janovix/auth-svc/commit/eb632ad61d87628ffb2aeaf1c6e858d50cd0e417))
+* **tests:** add tests for getBetterAuthContext and getBetterAuthContextAsync ([d51ff88](https://github.com/janovix/auth-svc/commit/d51ff88f0f1ebffaddcd5678b4f4f28ae790f6a3))
+* update OpenAPI documentation and add subscription and license management endpoints ([97f3559](https://github.com/janovix/auth-svc/commit/97f3559dee7ba6ab9ba04a222c591c0853ffc7b2))
+
 # [1.4.0-rc.26](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.25...v1.4.0-rc.26) (2026-01-19)
 
 
