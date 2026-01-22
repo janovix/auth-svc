@@ -370,6 +370,7 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			id: string;
 			name: string | null;
 			image?: string | null;
+			role?: string;
 		};
 
 		// Check if profile is complete (has name)
@@ -523,6 +524,10 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			expiresAt: inv.expiresAt,
 		}));
 
+		// Get user role (visitor, user, admin)
+		const userRole = user.role ?? "user";
+		const isVisitor = userRole === "visitor";
+
 		return c.json({
 			success: true,
 			data: {
@@ -537,6 +542,9 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				// New field: all pending invitations
 				pendingInvitations: mappedInvitations,
 				canCreateOrganization: canCreateOrg,
+				// User role for beta access flow
+				role: userRole,
+				isVisitor,
 			},
 		});
 	} catch (error) {

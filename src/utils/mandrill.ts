@@ -12,6 +12,12 @@ export type OrganizationInvitationEmail = {
 	role?: string;
 };
 
+export type BetaPromotionEmail = {
+	email: string;
+	userName: string;
+	loginUrl: string;
+};
+
 const MANDRILL_API_BASE = "https://mandrillapp.com/api/1.0";
 
 /**
@@ -228,6 +234,54 @@ export async function sendOrganizationInvitationEmail(
 		console.error("[Mandrill] Failed to send org invitation email", {
 			toEmail: invitation.email,
 			organizationName: invitation.organizationName,
+			templateName,
+			isTimeout,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+		});
+		// Don't rethrow - allow the promise to resolve to prevent exposing failures
+	}
+}
+
+/**
+ * Sends a beta promotion email to a user who has been promoted from visitor to user.
+ *
+ * @param apiKey - Mandrill API key
+ * @param promotion - Promotion email payload (user email, name, login URL)
+ * @param templateName - Mandrill template name (default: janovix-beta-promotion-template)
+ */
+export async function sendPromotionEmail(
+	apiKey: string,
+	promotion: BetaPromotionEmail,
+	templateName = "janovix-beta-promotion-template",
+): Promise<void> {
+	try {
+		const result = await sendMandrillTemplate(apiKey, {
+			to: [{ email: promotion.email, type: "to" }],
+			from_email: "noreply@janovix.com",
+			from_name: "Janovix",
+			subject: "¡Tu acceso a Janovix ha sido activado!",
+			template_name: templateName,
+			global_merge_vars: [
+				{ name: "user_name", content: promotion.userName },
+				{ name: "login_url", content: promotion.loginUrl },
+			],
+			images: TEMPLATE_IMAGES,
+		});
+		console.log("[Mandrill] Beta promotion email sent successfully", {
+			toEmail: promotion.email,
+			messageIds: result.map((r) => r._id),
+			statuses: result.map((r) => r.status),
+		});
+	} catch (error) {
+		// Determine if this was a timeout error
+		const isTimeout =
+			error instanceof Error &&
+			(error.name === "TimeoutError" || error.name === "AbortError");
+
+		// Log error but don't throw - we don't want to expose email sending failures
+		console.error("[Mandrill] Failed to send beta promotion email", {
+			toEmail: promotion.email,
 			templateName,
 			isTimeout,
 			error: error instanceof Error ? error.message : String(error),

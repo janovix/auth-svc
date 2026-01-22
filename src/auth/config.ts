@@ -224,7 +224,9 @@ export function buildResolvedAuthConfig(
 			admin({
 				// Admin users can manage all users, roles, and perform admin operations
 				// Users with "admin" role or in adminUserIds list get admin privileges
-				defaultRole: "user",
+				// New users start as "visitor" until manually promoted to "user" by an admin
+				// This enables a beta access flow where visitors see a waiting page
+				defaultRole: "visitor",
 				adminRoles: ["admin"],
 			}),
 			organization({
