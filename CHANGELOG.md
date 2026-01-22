@@ -1,3 +1,10 @@
+# [1.4.0-rc.27](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.26...v1.4.0-rc.27) (2026-01-22)
+
+
+### Features
+
+* **auth:** implement visitor role and promote endpoint for beta access ([0059eff](https://github.com/janovix/auth-svc/commit/0059eff8fa6eb13f80768ff209a7b44ecc1f6ea4))
+
 # [1.4.0-rc.26](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.25...v1.4.0-rc.26) (2026-01-19)
 
 
