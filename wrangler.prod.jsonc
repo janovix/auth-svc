@@ -28,6 +28,10 @@
 			"binding": "AML_SERVICE",
 			"service": "aml-svc-prod",
 		},
+		{
+			"binding": "NOTIFICATIONS_SERVICE",
+			"service": "notifications-svc-prod",
+		},
 	],
 	"r2_buckets": [
 		{

@@ -513,6 +513,37 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 			.bind(id)
 			.first<OrganizationRow & { member_count: number }>();
 
+		// Dispatch notification to all organization members
+		if (c.env.NOTIFICATIONS_SERVICE) {
+			try {
+				await c.env.NOTIFICATIONS_SERVICE.fetch(
+					new Request("https://internal/notify", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: "Bearer service-token",
+						},
+						body: JSON.stringify({
+							tenantId: id,
+							target: { kind: "org" },
+							channelSlug: "system",
+							type: "organization.updated",
+							title: "Organization Settings Updated",
+							body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
+							sourceService: "auth-svc",
+							sourceEvent: "internal_organizations.patch",
+						}),
+					}),
+				);
+			} catch (error) {
+				// Log notification error but don't fail the update
+				console.error(
+					"[Internal Organizations] Failed to send notification:",
+					error,
+				);
+			}
+		}
+
 		return c.json({
 			success: true,
 			data: {

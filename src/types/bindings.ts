@@ -86,6 +86,12 @@ export type Bindings = Env & {
 	 */
 	AML_SERVICE?: Fetcher;
 
+	/**
+	 * Service binding to notifications-svc for worker-to-worker communication.
+	 * Used to dispatch notifications for organization events.
+	 */
+	NOTIFICATIONS_SERVICE?: Fetcher;
+
 	// =========================================================================
 	// STRIPE BILLING
 	// =========================================================================
