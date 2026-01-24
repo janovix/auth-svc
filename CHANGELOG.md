@@ -1,3 +1,10 @@
+# [1.4.0-rc.28](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.27...v1.4.0-rc.28) (2026-01-24)
+
+
+### Features
+
+* **notifications:** add notifications service binding and dispatch logic for organization updates ([1f78692](https://github.com/janovix/auth-svc/commit/1f786920d41f14076596804f2ed38d51d3774cb6))
+
 # [1.4.0-rc.27](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.26...v1.4.0-rc.27) (2026-01-22)
 
 
