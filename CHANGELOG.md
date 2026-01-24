@@ -1,3 +1,10 @@
+# [1.4.0-rc.29](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.28...v1.4.0-rc.29) (2026-01-24)
+
+
+### Bug Fixes
+
+* **notifications:** enhance notification dispatch logging and error handling for organization updates ([475266c](https://github.com/janovix/auth-svc/commit/475266c08be1b8961ba0e777c2ff673663761ced))
+
 # [1.4.0-rc.28](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.27...v1.4.0-rc.28) (2026-01-24)
 
 
