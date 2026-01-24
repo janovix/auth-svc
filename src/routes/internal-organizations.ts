@@ -516,8 +516,11 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 		// Dispatch notification to all organization members
 		if (c.env.NOTIFICATIONS_SERVICE) {
 			try {
-				await c.env.NOTIFICATIONS_SERVICE.fetch(
-					new Request("https://internal/notify", {
+				console.log(
+					`[Internal Organizations] Dispatching notification for org update: ${id}`,
+				);
+				const notificationResponse = await c.env.NOTIFICATIONS_SERVICE.fetch(
+					new Request("https://notifications-svc/internal/notify", {
 						method: "POST",
 						headers: {
 							"Content-Type": "application/json",
@@ -535,6 +538,20 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 						}),
 					}),
 				);
+
+				const notificationResult = await notificationResponse.json();
+				console.log(
+					`[Internal Organizations] Notification dispatch result:`,
+					notificationResponse.status,
+					notificationResult,
+				);
+
+				if (!notificationResponse.ok) {
+					console.error(
+						`[Internal Organizations] Notification dispatch failed:`,
+						notificationResult,
+					);
+				}
 			} catch (error) {
 				// Log notification error but don't fail the update
 				console.error(
@@ -542,6 +559,10 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 					error,
 				);
 			}
+		} else {
+			console.warn(
+				"[Internal Organizations] NOTIFICATIONS_SERVICE binding not available",
+			);
 		}
 
 		return c.json({
