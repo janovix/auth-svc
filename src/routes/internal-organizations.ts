@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import { sendOrgNotification } from "../utils/notifications";
 
 type InternalBindings = {
 	Bindings: Bindings;
@@ -514,56 +515,14 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 			.first<OrganizationRow & { member_count: number }>();
 
 		// Dispatch notification to all organization members
-		if (c.env.NOTIFICATIONS_SERVICE) {
-			try {
-				console.log(
-					`[Internal Organizations] Dispatching notification for org update: ${id}`,
-				);
-				const notificationResponse = await c.env.NOTIFICATIONS_SERVICE.fetch(
-					new Request("https://notifications-svc/internal/notify", {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							Authorization: "Bearer service-token",
-						},
-						body: JSON.stringify({
-							tenantId: id,
-							target: { kind: "org" },
-							channelSlug: "system",
-							type: "organization.updated",
-							title: "Organization Settings Updated",
-							body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
-							sourceService: "auth-svc",
-							sourceEvent: "internal_organizations.patch",
-						}),
-					}),
-				);
-
-				const notificationResult = await notificationResponse.json();
-				console.log(
-					`[Internal Organizations] Notification dispatch result:`,
-					notificationResponse.status,
-					notificationResult,
-				);
-
-				if (!notificationResponse.ok) {
-					console.error(
-						`[Internal Organizations] Notification dispatch failed:`,
-						notificationResult,
-					);
-				}
-			} catch (error) {
-				// Log notification error but don't fail the update
-				console.error(
-					"[Internal Organizations] Failed to send notification:",
-					error,
-				);
-			}
-		} else {
-			console.warn(
-				"[Internal Organizations] NOTIFICATIONS_SERVICE binding not available",
-			);
-		}
+		await sendOrgNotification(c.env.NOTIFICATIONS_SERVICE, id, {
+			channelSlug: "system",
+			type: "organization.updated",
+			title: "Organization Settings Updated",
+			body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
+			sourceService: "auth-svc",
+			sourceEvent: "internal_organizations.patch",
+		});
 
 		return c.json({
 			success: true,
