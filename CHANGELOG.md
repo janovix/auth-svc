@@ -1,3 +1,10 @@
+# [1.4.0-rc.30](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.29...v1.4.0-rc.30) (2026-01-27)
+
+
+### Features
+
+* **notifications:** add absolute callbackUrl to org settings notification ([30bbf07](https://github.com/janovix/auth-svc/commit/30bbf079520760916137b609c32f36b70d915531))
+
 # [1.4.0-rc.29](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.28...v1.4.0-rc.29) (2026-01-24)
 
 
