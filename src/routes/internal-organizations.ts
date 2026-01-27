@@ -515,11 +515,15 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 			.first<OrganizationRow & { member_count: number }>();
 
 		// Dispatch notification to all organization members
+		// Use absolute URL so it works across all apps (auth, aml, watchlist, etc.)
+		const authAppUrl =
+			c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
 		await sendOrgNotification(c.env.NOTIFICATIONS_SERVICE, id, {
 			channelSlug: "system",
 			type: "organization.updated",
 			title: "Organization Settings Updated",
 			body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
+			callbackUrl: `${authAppUrl}/settings/organization`,
 			sourceService: "auth-svc",
 			sourceEvent: "internal_organizations.patch",
 		});
