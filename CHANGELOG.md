@@ -1,3 +1,10 @@
+# [1.4.0-rc.31](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.30...v1.4.0-rc.31) (2026-01-28)
+
+
+### Features
+
+* **auth:** add Google OAuth configuration for social login ([9c44357](https://github.com/janovix/auth-svc/commit/9c443570856c5045b5018ed7f50b9c905f6a1ec9))
+
 # [1.4.0-rc.30](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.29...v1.4.0-rc.30) (2026-01-27)
 
 
