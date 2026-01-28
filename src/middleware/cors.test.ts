@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTrustedOriginPatterns } from "./cors";
 import type { Bindings } from "../types/bindings";
 
@@ -15,11 +15,6 @@ const baseEnv: Bindings = {
 } as unknown as Bindings;
 
 describe("CORS Middleware", () => {
-	beforeEach(() => {
-		// Clear cache between tests by creating new env objects
-		// (cache is keyed by env properties)
-	});
-
 	describe("getTrustedOriginPatterns", () => {
 		it("handles undefined environment variables", () => {
 			const env = {
@@ -62,31 +57,7 @@ describe("CORS Middleware", () => {
 			expect(Array.isArray(patterns)).toBe(true);
 		});
 
-		it("caches results based on cache key", () => {
-			const env1 = {
-				...baseEnv,
-				ENVIRONMENT: "test",
-				AUTH_COOKIE_DOMAIN: "example.com",
-				AUTH_TRUSTED_ORIGINS: "https://example.com",
-				BETTER_AUTH_URL: "https://auth.example.com",
-			} as unknown as Bindings;
-
-			const env2 = {
-				...baseEnv,
-				ENVIRONMENT: "test",
-				AUTH_COOKIE_DOMAIN: "example.com",
-				AUTH_TRUSTED_ORIGINS: "https://example.com",
-				BETTER_AUTH_URL: "https://auth.example.com",
-			} as unknown as Bindings;
-
-			const patterns1 = getTrustedOriginPatterns(env1);
-			const patterns2 = getTrustedOriginPatterns(env2);
-
-			// Should return same reference due to caching
-			expect(patterns1).toBe(patterns2);
-		});
-
-		it("returns different cache for different environments", () => {
+		it("returns patterns for different environments", () => {
 			const env1 = {
 				...baseEnv,
 				ENVIRONMENT: "dev",
@@ -96,7 +67,7 @@ describe("CORS Middleware", () => {
 
 			const env2 = {
 				...baseEnv,
-				ENVIRONMENT: "prod",
+				ENVIRONMENT: "production",
 				BETTER_AUTH_URL: "https://auth-svc.janovix.com",
 				AUTH_INTERNAL_TOKEN: "token-2-1234567890",
 			} as unknown as Bindings;
@@ -104,7 +75,7 @@ describe("CORS Middleware", () => {
 			const patterns1 = getTrustedOriginPatterns(env1);
 			const patterns2 = getTrustedOriginPatterns(env2);
 
-			// Should return different arrays (may have different content)
+			// Both should return valid arrays
 			expect(Array.isArray(patterns1)).toBe(true);
 			expect(Array.isArray(patterns2)).toBe(true);
 		});
@@ -125,7 +96,7 @@ describe("CORS Middleware", () => {
 			const patterns1 = getTrustedOriginPatterns(env1);
 			const patterns2 = getTrustedOriginPatterns(env2);
 
-			// Should cache separately based on cookie domain
+			// Should return valid arrays with potentially different patterns
 			expect(Array.isArray(patterns1)).toBe(true);
 			expect(Array.isArray(patterns2)).toBe(true);
 		});
@@ -146,7 +117,7 @@ describe("CORS Middleware", () => {
 			const patterns1 = getTrustedOriginPatterns(env1);
 			const patterns2 = getTrustedOriginPatterns(env2);
 
-			// Should cache separately
+			// Should return valid arrays
 			expect(Array.isArray(patterns1)).toBe(true);
 			expect(Array.isArray(patterns2)).toBe(true);
 		});
@@ -167,7 +138,7 @@ describe("CORS Middleware", () => {
 			const patterns1 = getTrustedOriginPatterns(env1);
 			const patterns2 = getTrustedOriginPatterns(env2);
 
-			// Should cache separately
+			// Should return valid arrays
 			expect(Array.isArray(patterns1)).toBe(true);
 			expect(Array.isArray(patterns2)).toBe(true);
 		});

@@ -53,7 +53,7 @@ describe("getTrustedOriginPatterns", () => {
 		expect(patterns).toContain("https://*.custom.com");
 	});
 
-	it("caches results for same environment", () => {
+	it("returns consistent results for same environment", () => {
 		const env1 = {
 			...baseEnv,
 			ENVIRONMENT: "dev",
@@ -68,7 +68,8 @@ describe("getTrustedOriginPatterns", () => {
 		} as unknown as Bindings;
 		const patterns1 = getTrustedOriginPatterns(env1);
 		const patterns2 = getTrustedOriginPatterns(env2);
-		expect(patterns1).toBe(patterns2); // Same reference due to caching
+		// Should return arrays with same content
+		expect(patterns1).toEqual(patterns2);
 	});
 });
 
