@@ -188,6 +188,14 @@ export function buildResolvedAuthConfig(
 			requireEmailVerification: true,
 			// No password reset - passwordless system
 		},
+		socialProviders: {
+			google: {
+				clientId: env.GOOGLE_CLIENT_ID as string,
+				clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+				accessType: "offline",
+				prompt: "select_account consent",
+			},
+		},
 		plugins: [
 			openAPI({
 				// Better Auth's OpenAPI plugin generates:

@@ -69,6 +69,16 @@ export type Bindings = Env & {
 	 */
 	TURNSTILE_SECRET_KEY?: string;
 	/**
+	 * Google OAuth Client ID for social login.
+	 * Created in Google Cloud Console, configured via wrangler vars.
+	 */
+	GOOGLE_CLIENT_ID?: string;
+	/**
+	 * Google OAuth Client Secret for social login.
+	 * Created in Google Cloud Console, configured via Cloudflare Dashboard secrets.
+	 */
+	GOOGLE_CLIENT_SECRET?: string;
+	/**
 	 * AML Frontend application URL for organization-related flows.
 	 * Used to construct invitation acceptance URLs.
 	 * Example: `https://aml.janovix.workers.dev`
