@@ -217,10 +217,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			// Public routes that can be accessed without origin header or internal token:
 			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
 			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
+			// - /api/auth/callback/*: OAuth provider callbacks (Google, etc.) come from external servers
 			// - /api/auth/subscription/*: All Stripe subscription routes (redirects, callbacks, etc.)
 			const isPublicRoute =
 				pathname === "/api/auth/jwks" ||
 				pathname === "/api/auth/verify-email" ||
+				pathname.startsWith("/api/auth/callback/") ||
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {
