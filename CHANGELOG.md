@@ -1,3 +1,10 @@
+# [1.4.0-rc.32](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.31...v1.4.0-rc.32) (2026-01-29)
+
+
+### Features
+
+* **auth:** add OAuth provider callback routes to public access list ([f272e07](https://github.com/janovix/auth-svc/commit/f272e0716997abfa2516c30f98d0d4e7c82aac63))
+
 # [1.4.0-rc.31](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.30...v1.4.0-rc.31) (2026-01-28)
 
 
