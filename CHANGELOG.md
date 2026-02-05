@@ -1,3 +1,10 @@
+# [1.4.0-rc.33](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.32...v1.4.0-rc.33) (2026-02-05)
+
+
+### Features
+
+* **auth:** add error handling configuration for API errors and update public route list ([2053704](https://github.com/janovix/auth-svc/commit/205370437ac45fb59db5b3f5c6a2df26da6ba2e5))
+
 # [1.4.0-rc.32](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.31...v1.4.0-rc.32) (2026-01-29)
 
 
