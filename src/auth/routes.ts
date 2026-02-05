@@ -223,6 +223,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				pathname === "/api/auth/jwks" ||
 				pathname === "/api/auth/verify-email" ||
 				pathname.startsWith("/api/auth/callback/") ||
+				pathname.startsWith("/api/auth/error") ||
 				pathname.startsWith("/api/auth/subscription/");
 
 			if (isPublicRoute) {

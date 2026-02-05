@@ -188,6 +188,13 @@ export function buildResolvedAuthConfig(
 			requireEmailVerification: true,
 			// No password reset - passwordless system
 		},
+		onAPIError: {
+			throw: false,
+			onError: (error) => {
+				console.error(`[Auth error:] `, error);
+			},
+			errorURL: `${env.AUTH_FRONTEND_URL}/error`,
+		},
 		socialProviders: {
 			google: {
 				clientId: env.GOOGLE_CLIENT_ID as string,
