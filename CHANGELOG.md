@@ -1,3 +1,10 @@
+# [1.4.0-rc.35](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.34...v1.4.0-rc.35) (2026-02-06)
+
+
+### Features
+
+* **admin:** implement admin organizations routes and replace internal organizations access ([81f3ca0](https://github.com/janovix/auth-svc/commit/81f3ca09a76ada214f90282e63e8ec570f621090))
+
 # [1.4.0-rc.34](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.33...v1.4.0-rc.34) (2026-02-06)
 
 
