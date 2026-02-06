@@ -1,3 +1,10 @@
+# [1.4.0-rc.34](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.33...v1.4.0-rc.34) (2026-02-06)
+
+
+### Features
+
+* **auth:** implement custom rate limit rules for OTP endpoints and configure storage options across environments ([e68b486](https://github.com/janovix/auth-svc/commit/e68b486a2afe9ffa6c448d20025eded68876c4f8))
+
 # [1.4.0-rc.33](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.32...v1.4.0-rc.33) (2026-02-05)
 
 
