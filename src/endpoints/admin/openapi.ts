@@ -8,6 +8,86 @@ import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 
 /**
+ * GET /api/admin/stats
+ * Get platform-wide statistics for admin dashboard
+ */
+export class AdminGetStatsEndpoint extends OpenAPIRoute {
+	public schema = {
+		tags: ["Admin"],
+		summary: "Get platform-wide statistics",
+		operationId: "adminGetStats",
+		description:
+			"Returns platform-wide statistics including total users, total organizations, and users by role breakdown. Requires admin role.",
+		security: [{ BearerAuth: [] }],
+		responses: {
+			"200": {
+				description: "Platform statistics retrieved successfully",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						data: z.object({
+							totalUsers: z.number().describe("Total number of users"),
+							totalOrganizations: z
+								.number()
+								.describe("Total number of organizations"),
+							usersByRole: z
+								.record(z.number())
+								.describe("Breakdown of users by role"),
+						}),
+					}),
+				),
+			},
+			"401": {
+				description: "Unauthorized - missing or invalid token",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						error: z.string(),
+						message: z.string(),
+					}),
+				),
+			},
+			"403": {
+				description: "Forbidden - admin role required",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						error: z.string(),
+						message: z.string(),
+					}),
+				),
+			},
+			"500": {
+				description: "Internal server error",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						error: z.string(),
+						message: z.string(),
+					}),
+				),
+			},
+		},
+	};
+
+	// This is a documentation-only endpoint - actual implementation is in routes/admin.ts
+	public async handle() {
+		return {
+			success: true,
+			data: {
+				totalUsers: 150,
+				totalOrganizations: 25,
+				usersByRole: {
+					user: 120,
+					admin: 10,
+					visitor: 20,
+				},
+			},
+		};
+	}
+}
+
+/**
  * DELETE /api/admin/kv/flush
  * Flush all KV cache entries (admin only)
  */

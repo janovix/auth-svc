@@ -40,6 +40,11 @@ import {
 	UploadAvatarEndpoint,
 	DeleteAvatarEndpoint,
 } from "./endpoints/upload/openapi";
+import {
+	AdminGetStatsEndpoint,
+	AdminKvFlushEndpoint,
+	AdminPromoteUserEndpoint,
+} from "./endpoints/admin/openapi";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { auditRoutes } from "./routes/audit";
@@ -190,6 +195,11 @@ openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
 
 // Register Admin routes (KV management, etc.)
 app.route("/api/admin", adminRoutes);
+
+// Register Admin OpenAPI documentation
+openapi.get("/api/admin/stats", AdminGetStatsEndpoint);
+openapi.delete("/api/admin/kv/flush", AdminKvFlushEndpoint);
+openapi.post("/api/admin/users/:userId/promote", AdminPromoteUserEndpoint);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

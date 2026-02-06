@@ -138,6 +138,79 @@ adminRoutes.delete("/kv/flush", async (c) => {
 });
 
 /**
+ * GET /api/admin/stats
+ * Get platform-wide statistics for admin dashboard
+ *
+ * Returns:
+ * - Total users count
+ * - Total organizations count
+ * - Users by role breakdown
+ */
+adminRoutes.get("/stats", async (c) => {
+	const admin = await getAuthenticatedAdmin(c);
+
+	if (!admin) {
+		return c.json(
+			{
+				success: false,
+				error: "Unauthorized",
+				message: "Admin access required",
+			},
+			403,
+		);
+	}
+
+	try {
+		// Get total users count
+		const totalUsersResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM users`,
+		).first<{ count: number }>();
+
+		const totalUsers = totalUsersResult?.count ?? 0;
+
+		// Get total organizations count
+		const totalOrgsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM organizations`,
+		).first<{ count: number }>();
+
+		const totalOrganizations = totalOrgsResult?.count ?? 0;
+
+		// Get users by role
+		const usersByRoleResult = await c.env.DB.prepare(
+			`SELECT role, COUNT(*) as count FROM users GROUP BY role`,
+		).all<{ role: string; count: number }>();
+
+		const usersByRole = (usersByRoleResult?.results ?? []).reduce(
+			(acc, row) => {
+				acc[row.role] = row.count;
+				return acc;
+			},
+			{} as Record<string, number>,
+		);
+
+		return c.json({
+			success: true,
+			data: {
+				totalUsers,
+				totalOrganizations,
+				usersByRole,
+			},
+		});
+	} catch (error) {
+		console.error("[Admin] Error fetching stats:", error);
+		return c.json(
+			{
+				success: false,
+				error: "Stats Fetch Failed",
+				message:
+					error instanceof Error ? error.message : "Unknown error occurred",
+			},
+			500,
+		);
+	}
+});
+
+/**
  * POST /api/admin/users/:userId/promote
  * Promote a visitor to user role (beta access grant)
  *
