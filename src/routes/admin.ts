@@ -19,9 +19,9 @@ type AdminContext = Context<AdminBindings>;
 export const adminRoutes = new Hono<AdminBindings>();
 
 /**
- * Helper to get authenticated admin user
+ * Helper to get authenticated admin user (exported for use by admin-organizations routes)
  */
-async function getAuthenticatedAdmin(c: AdminContext): Promise<{
+export async function getAuthenticatedAdmin(c: AdminContext): Promise<{
 	id: string;
 	email?: string;
 } | null> {
