@@ -1,3 +1,10 @@
+# [1.4.0-rc.36](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.35...v1.4.0-rc.36) (2026-02-06)
+
+
+### Features
+
+* **admin:** add admin statistics and KV management endpoints ([11bb19e](https://github.com/janovix/auth-svc/commit/11bb19e39e3683f3ce2d244bc6d7a178234020dc))
+
 # [1.4.0-rc.35](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.34...v1.4.0-rc.35) (2026-02-06)
 
 
