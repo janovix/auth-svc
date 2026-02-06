@@ -90,16 +90,79 @@ const ENVIRONMENT_MAP: Record<string, JanovixEnvironment> = {
 	local: "local",
 };
 
-const RATE_LIMITS: Record<
-	JanovixEnvironment,
-	{ window: number; max: number; enabled: boolean }
-> = {
-	local: { window: 10, max: 300, enabled: false },
-	preview: { window: 10, max: 120, enabled: true },
-	dev: { window: 10, max: 90, enabled: true },
-	qa: { window: 10, max: 80, enabled: true },
-	production: { window: 10, max: 60, enabled: true },
-	test: { window: 10, max: 60, enabled: false },
+/**
+ * Rate limit configuration type for Better Auth.
+ * Supports custom rules for specific endpoints (stricter limits for OTP).
+ */
+type RateLimitConfig = {
+	window: number;
+	max: number;
+	enabled: boolean;
+	storage?: "database" | "memory" | "secondary-storage";
+	modelName?: string;
+	customRules?: Record<string, { window: number; max: number } | false>;
+};
+
+/**
+ * Custom rate limit rules for OTP endpoints.
+ * These stricter limits prevent email abuse by limiting OTP requests.
+ */
+const OTP_RATE_LIMIT_RULES: RateLimitConfig["customRules"] = {
+	// Limit OTP send requests: 1 per 60 seconds per IP
+	"/email-otp/send-verification-otp": {
+		window: 60,
+		max: 1,
+	},
+	// Limit OTP verification attempts per IP
+	"/sign-in/email-otp": {
+		window: 60,
+		max: 1,
+	},
+};
+
+const RATE_LIMITS: Record<JanovixEnvironment, RateLimitConfig> = {
+	local: {
+		window: 10,
+		max: 300,
+		enabled: false,
+		storage: "memory",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	preview: {
+		window: 10,
+		max: 120,
+		enabled: true,
+		storage: "secondary-storage",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	dev: {
+		window: 10,
+		max: 90,
+		enabled: true,
+		storage: "secondary-storage",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	qa: {
+		window: 10,
+		max: 80,
+		enabled: true,
+		storage: "secondary-storage",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	production: {
+		window: 10,
+		max: 60,
+		enabled: true,
+		storage: "secondary-storage",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	test: {
+		window: 10,
+		max: 60,
+		enabled: false,
+		storage: "memory",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
 };
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
@@ -787,6 +850,12 @@ function buildAdvancedOptions(
 		defaultCookieAttributes: {
 			path: "/",
 			sameSite: "lax",
+		},
+		// Configure IP address detection for Cloudflare Workers.
+		// This is REQUIRED for rate limiting to work - without a detected IP,
+		// Better Auth silently skips rate limiting entirely.
+		ipAddress: {
+			ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"],
 		},
 	};
 

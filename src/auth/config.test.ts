@@ -528,4 +528,139 @@ describe("buildResolvedAuthConfig", () => {
 		consoleLogSpy.mockRestore();
 		consoleErrorSpy.mockRestore();
 	});
+
+	describe("rate limit configuration", () => {
+		it("configures custom rate limit rules for OTP endpoints in production", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit).toBeDefined();
+			expect(rateLimit.enabled).toBe(true);
+			expect(rateLimit.customRules).toBeDefined();
+
+			expect(rateLimit.customRules["/email-otp/send-verification-otp"]).toEqual(
+				{
+					window: 60,
+					max: 1,
+				},
+			);
+
+			expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
+				window: 60,
+				max: 1,
+			});
+		});
+
+		it("uses secondary-storage for rate limits in production environments", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.enabled).toBe(true);
+		});
+
+		it("uses secondary-storage for rate limits in dev environment", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.enabled).toBe(true);
+		});
+
+		it("uses memory storage for rate limits in local environment", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnvWithoutInternalToken({
+					ENVIRONMENT: "local",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("memory");
+			expect(rateLimit.enabled).toBe(false);
+		});
+
+		it("uses memory storage for rate limits in test environment", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnvWithoutInternalToken({
+					ENVIRONMENT: "test",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("memory");
+			expect(rateLimit.enabled).toBe(false);
+		});
+
+		it("configures consistent OTP rate limit rules across all environments", () => {
+			const environments = [
+				"dev",
+				"qa",
+				"preview",
+				"production",
+				"local",
+				"test",
+			];
+
+			for (const env of environments) {
+				const config = buildResolvedAuthConfig(
+					buildEnv({
+						ENVIRONMENT: env,
+						BETTER_AUTH_URL:
+							env === "local" || env === "test"
+								? undefined
+								: "https://auth-core.janovix.workers.dev",
+					}),
+				);
+
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const rateLimit = (config.options as any).rateLimit;
+				expect(rateLimit.customRules).toBeDefined();
+
+				expect(
+					rateLimit.customRules["/email-otp/send-verification-otp"],
+				).toEqual({
+					window: 60,
+					max: 1,
+				});
+				expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
+					window: 60,
+					max: 1,
+				});
+			}
+		});
+
+		it("configures IP address headers for Cloudflare Workers", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const advanced = (config.options as any).advanced;
+			expect(advanced.ipAddress).toBeDefined();
+			expect(advanced.ipAddress.ipAddressHeaders).toContain("cf-connecting-ip");
+		});
+	});
 });
