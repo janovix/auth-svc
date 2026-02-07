@@ -1,3 +1,10 @@
+# [1.4.0-rc.37](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.36...v1.4.0-rc.37) (2026-02-07)
+
+
+### Features
+
+* **api-keys:** implement API keys management for organization-scoped access ([32a42db](https://github.com/janovix/auth-svc/commit/32a42dbe1b9c0534012ab84607f694b1500be299))
+
 # [1.4.0-rc.36](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.35...v1.4.0-rc.36) (2026-02-06)
 
 
