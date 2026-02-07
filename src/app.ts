@@ -56,6 +56,8 @@ import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
 import { adminOrganizationsRoutes } from "./routes/admin-organizations";
 import { pricingRoutes } from "./routes/pricing";
+import { apiKeysRoutes } from "./routes/api-keys";
+import { internalApiKeysRoutes } from "./routes/internal-api-keys";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -178,6 +180,12 @@ app.route("/api/subscription", subscriptionRoutes);
 
 // Register Pricing routes (database-driven plans, prices, and limits)
 app.route("/api/pricing", pricingRoutes);
+
+// Register API Keys routes (organization-scoped keys for third-party access)
+app.route("/api/api-keys", apiKeysRoutes);
+
+// Register Internal API Keys routes (service binding validation)
+app.route("/internal/api-keys", internalApiKeysRoutes);
 
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);

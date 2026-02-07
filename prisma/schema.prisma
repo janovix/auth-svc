@@ -421,6 +421,26 @@ model EnterpriseLicense {
   @@map("enterprise_licenses")
 }
 
+// API keys for third-party programmatic access (organization-scoped)
+// Keys are hashed (SHA-256) before storage; plain key shown only once at creation.
+model ApiKey {
+  id             String    @id @default(uuid())
+  name           String
+  keyHash        String    @unique @map("key_hash")
+  keyPrefix      String    @map("key_prefix") // first 8 chars for identification (e.g., "jnvx_a3f")
+  organizationId String    @map("organization_id")
+  createdById    String    @map("created_by_id")
+  lastUsedAt     DateTime? @map("last_used_at")
+  expiresAt      DateTime? @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@map("api_keys")
+}
+
 // Per-organization usage tracking (for metered billing)
 // Tracks usage within each organization for the billing period
 model OrganizationUsage {
