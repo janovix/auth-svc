@@ -6,8 +6,11 @@
  * and obtain an ephemeral JWT for proxying to aml-svc.
  */
 import { Hono } from "hono";
+import { SignJWT, importJWK } from "jose";
+import { symmetricDecrypt } from "better-auth/crypto";
 import type { Bindings } from "../types/bindings";
 import { ApiKeyService, ApiKeyRepository } from "../domain/api-keys";
+import { resolveAuthEnvironment } from "../auth/config";
 
 type InternalBindings = { Bindings: Bindings };
 
@@ -22,8 +25,8 @@ const internalApiKeysRoutes = new Hono<InternalBindings>();
  * Flow:
  * 1. Hash the key, look up in DB
  * 2. Check: not revoked, not expired
- * 3. Check: org exists, owner has active subscription with eligible plan
- * 4. Issue an ephemeral JWT (30-60s) with org context
+ * 3. Look up org owner and subscription plan (for JWT claims)
+ * 4. Issue an ephemeral JWT (60s) using Better Auth's encrypted JWKS keys
  * 5. Update lastUsedAt in background (waitUntil)
  */
 internalApiKeysRoutes.post("/validate", async (c) => {
@@ -44,8 +47,7 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 		);
 	}
 
-	// Step 3: Check subscription plan eligibility
-	// Find org owner's subscription plan
+	// Step 3: Look up org owner and subscription plan
 	const owner = await c.env.DB.prepare(
 		`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
 	)
@@ -73,8 +75,7 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 		return c.json({ valid: false, error: "plan_not_eligible" }, 403);
 	}
 
-	// Step 4: Issue an ephemeral JWT
-	// Get the org owner's user details to populate JWT claims
+	// Step 4: Get the org owner's user details for JWT claims
 	const ownerUser = await c.env.DB.prepare(
 		`SELECT id, email, name, role FROM users WHERE id = ? LIMIT 1`,
 	)
@@ -85,9 +86,10 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 		return c.json({ valid: false, error: "owner_not_found" }, 500);
 	}
 
-	// Issue an ephemeral JWT using JWKS keys stored in auth-svc's D1.
-	// We sign directly rather than going through Better Auth's session-based
-	// getToken API, because this is a service-binding call with no user session.
+	// Issue an ephemeral JWT using the same JWKS keys Better Auth uses.
+	// We decrypt the private key with symmetricDecrypt (same as Better Auth's
+	// internal signJWT function) and sign using jose — so the token is verifiable
+	// by aml-svc's JWKS-based auth middleware.
 	let jwt: string;
 	try {
 		jwt = await createEphemeralJwt(c.env, {
@@ -124,9 +126,30 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 });
 
 /**
- * Create an ephemeral JWT using JWKS keys stored in auth-svc's D1.
- * This JWT has a very short expiry (60s) — it only needs to survive
- * the service binding hop from the api worker to aml-svc.
+ * Resolve the Better Auth secret for the current environment.
+ * Mirrors the logic in auth/config.ts resolveSecret().
+ */
+function getSecret(env: Bindings): string {
+	if (env.BETTER_AUTH_SECRET && env.BETTER_AUTH_SECRET.length >= 32) {
+		return env.BETTER_AUTH_SECRET;
+	}
+	const envName = resolveAuthEnvironment(env);
+	if (envName === "local" || envName === "test") {
+		return "local-dev-secret-please-override-0123456789";
+	}
+	throw new Error("BETTER_AUTH_SECRET is not configured");
+}
+
+/**
+ * Create an ephemeral JWT using Better Auth's encrypted JWKS keys.
+ *
+ * This replicates the exact signing flow from Better Auth's signJWT:
+ * 1. Read the most recent JWKS row from D1
+ * 2. Decrypt the private key using symmetricDecrypt + BETTER_AUTH_SECRET
+ * 3. Import the JWK and sign the JWT using jose
+ *
+ * The resulting JWT is verifiable by aml-svc's JWKS-based auth middleware
+ * because the public key is served at /api/auth/jwks.
  */
 async function createEphemeralJwt(
 	env: Bindings,
@@ -138,119 +161,52 @@ async function createEphemeralJwt(
 		organizationId: string;
 	},
 ): Promise<string> {
-	// Get the most recent JWKS private key from the database
+	const secret = getSecret(env);
+
+	// Get the most recent JWKS key from D1
 	const jwksRow = await env.DB.prepare(
-		`SELECT id, privateKey, publicKey, alg, crv FROM jwks
+		`SELECT id, privateKey, alg FROM jwks
 			 WHERE (expiresAt IS NULL OR expiresAt > datetime('now'))
 			 ORDER BY createdAt DESC
 			 LIMIT 1`,
 	).first<{
 		id: string;
 		privateKey: string;
-		publicKey: string;
 		alg: string | null;
-		crv: string | null;
 	}>();
 
 	if (!jwksRow) {
 		throw new Error("No JWKS keys available for JWT signing");
 	}
 
-	// Parse the private key (Better Auth stores JWK format as JSON string)
-	const privateKeyJwk = JSON.parse(jwksRow.privateKey);
+	// Decrypt the private key — Better Auth encrypts it with the secret.
+	// The stored value is a JSON-encoded encrypted string.
+	const encryptedData = JSON.parse(jwksRow.privateKey) as string;
+	const decryptedJwk = await symmetricDecrypt({
+		key: secret,
+		data: encryptedData,
+	});
 
-	// Import the private key for signing
-	const privateKey = await crypto.subtle.importKey(
-		"jwk",
-		privateKeyJwk,
-		{
-			name: "ECDSA",
-			namedCurve: privateKeyJwk.crv || "P-256",
-		},
-		false,
-		["sign"],
-	);
+	// Import the decrypted JWK for signing
+	const alg = jwksRow.alg ?? "EdDSA";
+	const privateKey = await importJWK(JSON.parse(decryptedJwk), alg);
 
-	// Build JWT header
-	const header = {
-		alg: "ES256",
-		typ: "JWT",
-		kid: jwksRow.id,
-	};
-
-	// Build JWT payload with short expiry
+	// Build and sign the JWT with 60s expiry
 	const now = Math.floor(Date.now() / 1000);
-	const jwtPayload = {
+	const issuer = env.BETTER_AUTH_URL || "auth-svc";
+
+	const token = await new SignJWT({
 		...payload,
-		iat: now,
-		exp: now + 60, // 60 second expiry
-		iss: env.BETTER_AUTH_URL || "auth-svc",
-		jti: crypto.randomUUID(),
-	};
+	})
+		.setProtectedHeader({ alg, kid: jwksRow.id })
+		.setIssuedAt(now)
+		.setExpirationTime(now + 60) // 60s — only needs to survive api → aml-svc hop
+		.setIssuer(issuer)
+		.setSubject(payload.sub)
+		.setJti(crypto.randomUUID())
+		.sign(privateKey);
 
-	// Encode header and payload
-	const encodedHeader = base64urlEncode(JSON.stringify(header));
-	const encodedPayload = base64urlEncode(JSON.stringify(jwtPayload));
-	const signingInput = `${encodedHeader}.${encodedPayload}`;
-
-	// Sign
-	const signature = await crypto.subtle.sign(
-		{ name: "ECDSA", hash: { name: "SHA-256" } },
-		privateKey,
-		new TextEncoder().encode(signingInput),
-	);
-
-	// Convert DER signature to raw r||s format for JWT
-	const rawSignature = derToRaw(new Uint8Array(signature));
-	const encodedSignature = base64urlEncodeBuffer(rawSignature);
-
-	return `${signingInput}.${encodedSignature}`;
-}
-
-/** Base64url encode a string */
-function base64urlEncode(str: string): string {
-	const bytes = new TextEncoder().encode(str);
-	return base64urlEncodeBuffer(bytes);
-}
-
-/** Base64url encode a buffer */
-function base64urlEncodeBuffer(buffer: Uint8Array): string {
-	let binary = "";
-	for (let i = 0; i < buffer.length; i++) {
-		binary += String.fromCharCode(buffer[i]);
-	}
-	return btoa(binary)
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "");
-}
-
-/**
- * Convert DER-encoded ECDSA signature to raw r||s format.
- * Web Crypto API returns DER format, but JWT expects raw format.
- */
-function derToRaw(der: Uint8Array): Uint8Array {
-	// DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
-	const rLength = der[3];
-	const rStart = 4;
-	const sLengthIndex = rStart + rLength + 1;
-	const sLength = der[sLengthIndex];
-	const sStart = sLengthIndex + 1;
-
-	// Extract r and s, removing leading zero padding
-	let r = der.slice(rStart, rStart + rLength);
-	let s = der.slice(sStart, sStart + sLength);
-
-	// Remove leading zero byte if present (DER encoding adds it for positive numbers)
-	if (r.length === 33 && r[0] === 0) r = r.slice(1);
-	if (s.length === 33 && s[0] === 0) s = s.slice(1);
-
-	// Pad to 32 bytes each
-	const raw = new Uint8Array(64);
-	raw.set(r, 32 - r.length);
-	raw.set(s, 64 - s.length);
-
-	return raw;
+	return token;
 }
 
 export { internalApiKeysRoutes };
