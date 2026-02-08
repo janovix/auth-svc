@@ -54,7 +54,7 @@ export interface ApiKeyValidationResult {
 }
 
 /** Plans that allow API access */
-export const API_ENABLED_PLANS = ["pro", "ultra"] as const;
+export const API_ENABLED_PLANS = ["business", "pro", "ultra"] as const;
 export type ApiEnabledPlan = (typeof API_ENABLED_PLANS)[number];
 
 export function isApiEnabledPlan(plan: string): plan is ApiEnabledPlan {
