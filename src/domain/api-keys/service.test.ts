@@ -243,8 +243,8 @@ describe("ApiKeyService", () => {
 			expect(ApiKeyService.isPlanEligible("ultra")).toBe(true);
 		});
 
-		it("should reject business plan", () => {
-			expect(ApiKeyService.isPlanEligible("business")).toBe(false);
+		it("should allow business plan", () => {
+			expect(ApiKeyService.isPlanEligible("business")).toBe(true);
 		});
 
 		it("should reject watchlist plan", () => {
