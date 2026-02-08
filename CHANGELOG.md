@@ -1,3 +1,15 @@
+# [1.4.0-rc.38](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.37...v1.4.0-rc.38) (2026-02-08)
+
+
+### Bug Fixes
+
+* **api-keys:** correct eligibility check for business plan in tests ([969c068](https://github.com/janovix/auth-svc/commit/969c06894f75e0c617eda976314ae98a6a77d165))
+
+
+### Features
+
+* **api-keys:** update API_ENABLED_PLANS to include 'business' plan ([6932cee](https://github.com/janovix/auth-svc/commit/6932ceee84ca63275c307dd7496b5e989ea040ed))
+
 # [1.4.0-rc.37](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.36...v1.4.0-rc.37) (2026-02-07)
 
 
