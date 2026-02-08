@@ -1,3 +1,10 @@
+# [1.4.0-rc.39](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.38...v1.4.0-rc.39) (2026-02-08)
+
+
+### Features
+
+* **api-keys:** integrate jose for JWT signing and enhance ephemeral JWT creation ([ef27550](https://github.com/janovix/auth-svc/commit/ef275509e30a332c8c98d3dc49c526e8da3ba4e9))
+
 # [1.4.0-rc.38](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.37...v1.4.0-rc.38) (2026-02-08)
 
 
