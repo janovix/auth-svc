@@ -35,7 +35,7 @@ function createPrismaClient(db: D1Database) {
 
 /**
  * Fetch Stripe price IDs from the database
- * Falls back to env vars if database fetch fails
+ * Throws error if database configuration is incomplete
  */
 async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 	// Return cached prices if still valid
@@ -44,45 +44,42 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 		return cachedPriceIds;
 	}
 
-	try {
-		const pricingRepository = new PricingRepository(env.DB);
-		const pricingService = new PricingService(pricingRepository);
-		const priceMap = await pricingService.getAllSubscriptionPrices();
+	const pricingRepository = new PricingRepository(env.DB);
+	const pricingService = new PricingService(pricingRepository);
+	const priceMap = await pricingService.getAllSubscriptionPrices();
 
-		const priceIds: StripePriceIds = {
-			watchlist:
-				priceMap.get("watchlist") ||
-				env.STRIPE_WATCHLIST_PRICE_ID ||
-				"price_watchlist",
-			business:
-				priceMap.get("business") ||
-				env.STRIPE_BUSINESS_PRICE_ID ||
-				"price_aml_business",
-			pro: priceMap.get("pro") || env.STRIPE_PRO_PRICE_ID || "price_aml_pro",
-			ultra:
-				priceMap.get("ultra") || env.STRIPE_ULTRA_PRICE_ID || "price_aml_ultra",
-		};
+	// Validate all required price IDs are present
+	const missingPlans: string[] = [];
+	const requiredPlans = ["watchlist", "business", "pro", "ultra"];
 
-		console.log("[Auth] Loaded Stripe price IDs from database:", priceIds);
-
-		// Cache the price IDs
-		cachedPriceIds = priceIds;
-		priceIdsCacheTime = now;
-
-		return priceIds;
-	} catch (error) {
-		console.warn(
-			"[Auth] Failed to fetch price IDs from database, using env vars:",
-			error,
-		);
-		// Fall back to env vars
-		return {
-			watchlist: env.STRIPE_WATCHLIST_PRICE_ID || "price_watchlist",
-			business: env.STRIPE_BUSINESS_PRICE_ID || "price_aml_business",
-			pro: env.STRIPE_PRO_PRICE_ID || "price_aml_pro",
-			ultra: env.STRIPE_ULTRA_PRICE_ID || "price_aml_ultra",
-		};
+	for (const plan of requiredPlans) {
+		if (!priceMap.has(plan)) {
+			missingPlans.push(plan);
+		}
 	}
+
+	if (missingPlans.length > 0) {
+		throw new Error(
+			`Missing required Stripe price configuration in database for plans: ${missingPlans.join(", ")}. ` +
+				`Expected price types: subscription, seat, overage_alert, overage_transaction. ` +
+				`Please run seed script or configure via admin panel.`,
+		);
+	}
+
+	const priceIds: StripePriceIds = {
+		watchlist: priceMap.get("watchlist")!,
+		business: priceMap.get("business")!,
+		pro: priceMap.get("pro")!,
+		ultra: priceMap.get("ultra")!,
+	};
+
+	console.log("[Auth] Loaded Stripe price IDs from database:", priceIds);
+
+	// Cache the price IDs
+	cachedPriceIds = priceIds;
+	priceIdsCacheTime = now;
+
+	return priceIds;
 }
 
 export function invalidateBetterAuthCache(env: Bindings) {
@@ -135,11 +132,11 @@ export async function getBetterAuthContext(
 			),
 		]);
 	} catch (error) {
-		console.warn(
-			"[Auth] Price fetch failed or timed out, using defaults:",
+		console.error(
+			"[Auth] Failed to fetch price IDs from database. Stripe billing will not be available:",
 			error,
 		);
-		// Continue without price IDs - will use env var fallbacks
+		// Continue without price IDs - Better Auth Stripe plugin won't load
 	}
 
 	const resolved = buildResolvedAuthConfig(

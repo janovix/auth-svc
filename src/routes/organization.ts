@@ -13,7 +13,7 @@ import {
 	SubscriptionRepository,
 	SubscriptionService,
 } from "../domain/subscription";
-import { PricingRepository } from "../domain/pricing";
+import { PricingRepository, PricingService } from "../domain/pricing";
 
 type OrganizationBindings = {
 	Bindings: Bindings;
@@ -156,7 +156,7 @@ organizationRoutes.post("/update-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			console.log(
 				"[Organization] Stripe not configured for seat billing, skipping update",
 			);
@@ -170,24 +170,60 @@ organizationRoutes.post("/update-seats", async (c) => {
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
 		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
 			pricingRepository,
 		);
 
+		// Get the owner's subscription to determine plan
+		const ownerUserId =
+			await repository.getOrganizationOwnerUserId(organizationId);
+		if (!ownerUserId) {
+			return c.json(
+				{ success: false, error: "Organization owner not found" },
+				404,
+			);
+		}
+
+		const subscription = await repository.getUserSubscription(ownerUserId);
+		if (!subscription) {
+			console.log(
+				"[Organization] No active subscription found, skipping seat update",
+			);
+			return c.json({
+				success: true,
+				message: "No active subscription",
+				seatsUpdated: false,
+			});
+		}
+
+		// Fetch seat price from database for this plan
+		const planId = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planId);
+		if (!seatPrice) {
+			console.error(
+				`[Organization] Seat price not configured in database for plan ${planId}`,
+			);
+			return c.json(
+				{ success: false, error: "Seat pricing not configured for plan" },
+				500,
+			);
+		}
+
 		// Count members and update seat quantity
 		const memberCount =
 			await repository.countOrganizationMembers(organizationId);
 
 		console.log(
-			`[Organization] Updating seats for org ${organizationId}: ${memberCount} members`,
+			`[Organization] Updating seats for org ${organizationId}: ${memberCount} members, seat price: ${seatPrice.stripePriceId}`,
 		);
 
 		await service.updateSubscriptionSeatQuantity(
 			organizationId,
 			memberCount,
-			c.env.STRIPE_SEAT_PRICE_ID,
+			seatPrice.stripePriceId,
 		);
 
 		return c.json({
@@ -228,7 +264,7 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			return c.json({
 				success: true,
 				message: "Seat billing not configured",
@@ -254,11 +290,38 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
 		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
 			pricingRepository,
 		);
+
+		// Get user's subscription to determine plan
+		const subscription = await repository.getUserSubscription(session.user.id);
+		if (!subscription) {
+			console.log(
+				"[Organization] No active subscription found for user, skipping sync",
+			);
+			return c.json({
+				success: true,
+				message: "No active subscription",
+				synced: 0,
+			});
+		}
+
+		// Fetch seat price from database for this plan
+		const planId = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planId);
+		if (!seatPrice) {
+			console.error(
+				`[Organization] Seat price not configured in database for plan ${planId}`,
+			);
+			return c.json(
+				{ success: false, error: "Seat pricing not configured for plan" },
+				500,
+			);
+		}
 
 		let synced = 0;
 		for (const org of orgsResult.results) {
@@ -269,7 +332,7 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 				await service.updateSubscriptionSeatQuantity(
 					org.organizationId,
 					memberCount,
-					c.env.STRIPE_SEAT_PRICE_ID,
+					seatPrice.stripePriceId,
 				);
 				synced++;
 			} catch (error) {

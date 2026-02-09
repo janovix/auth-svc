@@ -530,8 +530,8 @@ export function buildResolvedAuthConfig(
 					},
 			}),
 			// Stripe plugin for user-based billing
-			// Price IDs are fetched from database (plan_prices table) or fall back to env vars
-			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+			// Price IDs are fetched from database (plan_prices table)
+			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET && stripePriceIds
 				? [
 						stripe({
 							stripeClient: new Stripe(env.STRIPE_SECRET_KEY, {
@@ -544,11 +544,7 @@ export function buildResolvedAuthConfig(
 								plans: [
 									{
 										name: "watchlist",
-										// Price ID from database (via stripePriceIds param) or env var fallback
-										priceId:
-											stripePriceIds?.watchlist ||
-											env.STRIPE_WATCHLIST_PRICE_ID ||
-											"price_watchlist",
+										priceId: stripePriceIds.watchlist,
 										limits: PLAN_LIMITS.watchlist,
 										freeTrial: {
 											days: 14,
@@ -556,10 +552,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "business",
-										priceId:
-											stripePriceIds?.business ||
-											env.STRIPE_BUSINESS_PRICE_ID ||
-											"price_aml_business",
+										priceId: stripePriceIds.business,
 										limits: PLAN_LIMITS.business,
 										freeTrial: {
 											days: 14,
@@ -567,10 +560,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "pro",
-										priceId:
-											stripePriceIds?.pro ||
-											env.STRIPE_PRO_PRICE_ID ||
-											"price_aml_pro",
+										priceId: stripePriceIds.pro,
 										limits: PLAN_LIMITS.pro,
 										freeTrial: {
 											days: 14,
@@ -578,10 +568,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "ultra",
-										priceId:
-											stripePriceIds?.ultra ||
-											env.STRIPE_ULTRA_PRICE_ID ||
-											"price_aml_ultra",
+										priceId: stripePriceIds.ultra,
 										limits: PLAN_LIMITS.ultra,
 										freeTrial: {
 											days: 14,

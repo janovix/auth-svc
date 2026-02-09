@@ -46,10 +46,5 @@
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
 		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
-		"STRIPE_BUSINESS_PRICE_ID": "price_1Spb4jA9qUPmowPe47LOiLE3",
-		"STRIPE_PRO_PRICE_ID": "price_1Spb5cA9qUPmowPexCafPr3C",
-		"STRIPE_ALERT_OVERAGE_PRICE_ID": "price_1SpHKdA9qUPmowPenLSlPMjp",
-		"STRIPE_TRANSACTION_OVERAGE_PRICE_ID": "price_1SpWihA9qUPmowPeEPuBSOXK",
-		"STRIPE_SEAT_PRICE_ID": "price_1SpHLEA9qUPmowPe7eb7yxwP",
 	},
 }

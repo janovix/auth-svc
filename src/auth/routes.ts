@@ -200,11 +200,9 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				});
 			} catch (err) {
 				console.log(`[Subscription] Could not fetch prices from DB:`, err);
-				// Fall back to showing env vars
-				console.log(`[Subscription] Env Stripe Price IDs (fallback):`, {
-					STRIPE_BUSINESS_PRICE_ID: c.env.STRIPE_BUSINESS_PRICE_ID || "NOT SET",
-					STRIPE_PRO_PRICE_ID: c.env.STRIPE_PRO_PRICE_ID || "NOT SET",
-				});
+				console.log(
+					`[Subscription] Database must be configured with price IDs`,
+				);
 			}
 			console.log(
 				`[Subscription] ================================================`,
