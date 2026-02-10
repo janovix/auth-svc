@@ -149,6 +149,15 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		) {
 			const turnstileResult = await validateTurnstileForRequest(c);
 			if (!turnstileResult.valid) {
+				// CRITICAL: Cleanup execution context before returning
+				c.executionCtx?.waitUntil?.(
+					new Promise<void>((resolve) => {
+						setTimeout(() => {
+							cleanup();
+							resolve();
+						}, 100); // Quick cleanup for validation failures
+					}),
+				);
 				return c.json(
 					{
 						success: false,
@@ -244,6 +253,18 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 					}
 					console.log(`[Subscription] =====================================`);
 				}
+
+				// CRITICAL: Schedule cleanup for public routes too!
+				// Without this, execution context leaks and causes hanging
+				c.executionCtx?.waitUntil?.(
+					new Promise<void>((resolve) => {
+						setTimeout(() => {
+							cleanup();
+							resolve();
+						}, 5000);
+					}),
+				);
+
 				return response;
 			}
 
@@ -253,6 +274,15 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			if (!hasOrigin) {
 				const providedToken = c.req.header(INTERNAL_AUTH_HEADER);
 				if (!providedToken || providedToken !== accessPolicy.token) {
+					// CRITICAL: Cleanup execution context before returning
+					c.executionCtx?.waitUntil?.(
+						new Promise<void>((resolve) => {
+							setTimeout(() => {
+								cleanup();
+								resolve();
+							}, 100); // Quick cleanup for auth failures
+						}),
+					);
 					return c.json(
 						{
 							message: "Forbidden: auth-core Better Auth surface is private.",
