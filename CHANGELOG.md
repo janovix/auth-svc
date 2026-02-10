@@ -1,3 +1,10 @@
+# [1.4.0-rc.40](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.39...v1.4.0-rc.40) (2026-02-10)
+
+
+### Bug Fixes
+
+* **auth:** add cleanup for execution context on validation and auth failures ([be3d58e](https://github.com/janovix/auth-svc/commit/be3d58ea7f9864c5289c883cfd3122e570896d44))
+
 # [1.4.0-rc.39](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.38...v1.4.0-rc.39) (2026-02-08)
 
 
