@@ -151,7 +151,7 @@ export class SubscriptionService {
 					reportsPerMonth: effectiveLimits.reportsPerMonth,
 					noticesPerMonth: effectiveLimits.noticesPerMonth,
 					alertsPerMonth: effectiveLimits.alertsPerMonth,
-					transactionsPerMonth: effectiveLimits.transactionsPerMonth,
+					operationsPerMonth: effectiveLimits.operationsPerMonth,
 					clientsPerMonth: effectiveLimits.clientsPerMonth,
 				};
 			}
@@ -265,9 +265,9 @@ export class SubscriptionService {
 				used = usage.alertsUsed;
 				included = limits.alertsPerMonth;
 				break;
-			case "transactions":
-				used = usage.transactionsUsed;
-				included = limits.transactionsPerMonth;
+			case "operations":
+				used = usage.operationsUsed;
+				included = limits.operationsPerMonth;
 				break;
 			case "clients":
 				used = usage.clientsUsed;
@@ -296,7 +296,7 @@ export class SubscriptionService {
 	 */
 	async reportUsage(
 		organizationId: string,
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
 		count: number = 1,
 	): Promise<void> {
 		await this.repository.incrementUsage(organizationId, metric, count);
@@ -517,7 +517,7 @@ export class SubscriptionService {
 	async reportOverageToStripeForMetric(
 		organizationId: string,
 		ownerUserId: string,
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
 		subscriptionItemId: string,
 	): Promise<void> {
 		if (!this.stripe) {
@@ -549,9 +549,9 @@ export class SubscriptionService {
 				used = usage.alertsUsed;
 				limit = limits.alertsPerMonth;
 				break;
-			case "transactions":
-				used = usage.transactionsUsed;
-				limit = limits.transactionsPerMonth;
+			case "operations":
+				used = usage.operationsUsed;
+				limit = limits.operationsPerMonth;
 				break;
 			case "clients":
 				used = usage.clientsUsed;
@@ -657,9 +657,9 @@ export class SubscriptionService {
 	}
 
 	/**
-	 * Report transaction overage usage to Stripe
+	 * Report operation overage usage to Stripe
 	 */
-	async reportTransactionOverageToStripe(
+	async reportOperationOverageToStripe(
 		organizationId: string,
 		ownerUserId: string,
 		subscriptionItemId: string,
@@ -667,7 +667,7 @@ export class SubscriptionService {
 		return this.reportOverageToStripeForMetric(
 			organizationId,
 			ownerUserId,
-			"transactions",
+			"operations",
 			subscriptionItemId,
 		);
 	}

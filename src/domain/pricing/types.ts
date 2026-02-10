@@ -30,7 +30,7 @@ export type PriceType =
 	| "overage_report" // Per report overage
 	| "overage_notice" // Per notice overage
 	| "overage_alert" // Per alert overage
-	| "overage_transaction" // Per transaction overage
+	| "overage_operation" // Per operation overage
 	| "overage_client"; // Per client overage
 
 /**
@@ -63,7 +63,7 @@ export interface PlanLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
 	watchlistQueriesPerDay: number;
 	metadata: Record<string, unknown> | null;
@@ -89,7 +89,7 @@ export interface EnterpriseLicense {
 	reportsIncluded: number | null;
 	noticesIncluded: number | null;
 	alertsIncluded: number | null;
-	transactionsIncluded: number | null;
+	operationsIncluded: number | null;
 	clientsIncluded: number | null;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
@@ -120,7 +120,7 @@ export interface PublicPlanInfo {
 		reportsPerMonth: number;
 		noticesPerMonth: number;
 		alertsPerMonth: number;
-		transactionsPerMonth: number;
+		operationsPerMonth: number;
 		clientsPerMonth: number;
 		watchlistQueriesPerDay: number;
 	} | null;
@@ -142,7 +142,7 @@ export interface EffectiveLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
 	source: "plan" | "license";
 	planName: string;
@@ -170,7 +170,7 @@ export interface CreatePlanLimitsInput {
 	reportsPerMonth?: number;
 	noticesPerMonth?: number;
 	alertsPerMonth?: number;
-	transactionsPerMonth?: number;
+	operationsPerMonth?: number;
 	clientsPerMonth?: number;
 	watchlistQueriesPerDay?: number;
 }
@@ -202,6 +202,6 @@ export interface CreateLicenseInput {
 	reportsIncluded?: number;
 	noticesIncluded?: number;
 	alertsIncluded?: number;
-	transactionsIncluded?: number;
+	operationsIncluded?: number;
 	clientsIncluded?: number;
 }

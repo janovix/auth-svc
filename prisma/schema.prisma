@@ -229,7 +229,7 @@ model AuditLog {
   id                  String   @id @default(uuid())
   // Event identification
   eventType           String   @map("event_type") // CREATE, UPDATE, DELETE, LOGIN, etc.
-  entityType          String   @map("entity_type") // user, organization, transaction, etc.
+  entityType          String   @map("entity_type") // user, organization, operation, etc.
   entityId            String?  @map("entity_id") // ID of affected entity
   // Actor information
   actorUserId         String?  @map("actor_user_id")
@@ -357,7 +357,7 @@ model PlanLimit {
   reportsPerMonth  Int      @default(0) @map("reports_per_month")
   noticesPerMonth  Int      @default(3) @map("notices_per_month")
   alertsPerMonth   Int      @default(50) @map("alerts_per_month")
-  transactionsPerMonth Int  @default(250) @map("transactions_per_month")
+  operationsPerMonth Int  @default(250) @map("operations_per_month")
   clientsPerMonth  Int      @default(50) @map("clients_per_month")
   watchlistQueriesPerDay Int @default(0) @map("watchlist_queries_per_day")
   metadata         String? // JSON for additional limits
@@ -408,7 +408,7 @@ model EnterpriseLicense {
   reportsIncluded  Int?      @map("reports_included")
   noticesIncluded  Int?      @map("notices_included")
   alertsIncluded   Int?      @map("alerts_included")
-  transactionsIncluded Int?  @map("transactions_included")
+  operationsIncluded Int?  @map("operations_included")
   clientsIncluded  Int?      @map("clients_included")
   metadata         String? // JSON for extensibility
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -450,7 +450,7 @@ model OrganizationUsage {
   reportsUsed         Int       @default(0) @map("reports_used")
   noticesUsed         Int       @default(0) @map("notices_used")
   alertsUsed          Int       @default(0) @map("alerts_used")
-  transactionsUsed    Int       @default(0) @map("transactions_used")
+  operationsUsed    Int       @default(0) @map("operations_used")
   clientsUsed         Int       @default(0) @map("clients_used")
   usersCount          Int       @default(0) @map("users_count")
   periodStart         DateTime  @map("period_start")

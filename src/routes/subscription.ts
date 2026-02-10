@@ -164,7 +164,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 				reports: usage.reportsUsed,
 				notices: usage.noticesUsed,
 				alerts: usage.alertsUsed,
-				transactions: usage.transactionsUsed,
+				operations: usage.operationsUsed,
 				clients: usage.clientsUsed,
 				users: usage.usersCount,
 			},
@@ -173,7 +173,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 						reports: limits.reportsPerMonth,
 						notices: limits.noticesPerMonth,
 						alerts: limits.alertsPerMonth,
-						transactions: limits.transactionsPerMonth,
+						operations: limits.operationsPerMonth,
 						clients: limits.clientsPerMonth,
 						users: limits.usersPerOrg,
 					}
@@ -609,7 +609,7 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 						reportsIncluded: limits.reportsPerMonth,
 						noticesIncluded: limits.noticesPerMonth,
 						alertsIncluded: limits.alertsPerMonth,
-						transactionsIncluded: limits.transactionsPerMonth,
+						operationsIncluded: limits.operationsPerMonth,
 						clientsIncluded: limits.clientsPerMonth,
 					}
 				: null,
@@ -701,7 +701,7 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 						reportsIncluded: limits.reportsPerMonth,
 						noticesIncluded: limits.noticesPerMonth,
 						alertsIncluded: limits.alertsPerMonth,
-						transactionsIncluded: limits.transactionsPerMonth,
+						operationsIncluded: limits.operationsPerMonth,
 						clientsIncluded: limits.clientsPerMonth,
 					}
 				: null,
@@ -795,7 +795,7 @@ subscriptionRoutes.post("/usage/report", async (c) => {
 
 	const body = await c.req.json<{
 		organizationId: string;
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients";
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients";
 		count?: number;
 	}>();
 

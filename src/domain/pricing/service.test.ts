@@ -68,7 +68,7 @@ describe("PricingService", () => {
 		reportsPerMonth: 0,
 		noticesPerMonth: 3,
 		alertsPerMonth: 50,
-		transactionsPerMonth: 250,
+		operationsPerMonth: 250,
 		clientsPerMonth: 50,
 		watchlistQueriesPerDay: 50,
 		metadata: null,
@@ -84,7 +84,7 @@ describe("PricingService", () => {
 		reportsPerMonth: 10,
 		noticesPerMonth: 15,
 		alertsPerMonth: 250,
-		transactionsPerMonth: 1500,
+		operationsPerMonth: 1500,
 		clientsPerMonth: 300,
 		watchlistQueriesPerDay: 200,
 		metadata: null,
@@ -208,7 +208,7 @@ describe("PricingService", () => {
 				reportsPerMonth: 0,
 				noticesPerMonth: 3,
 				alertsPerMonth: 50,
-				transactionsPerMonth: 250,
+				operationsPerMonth: 250,
 				clientsPerMonth: 50,
 				watchlistQueriesPerDay: 50,
 			});
@@ -239,7 +239,7 @@ describe("PricingService", () => {
 				reportsIncluded: null,
 				noticesIncluded: null,
 				alertsIncluded: null,
-				transactionsIncluded: null,
+				operationsIncluded: null,
 				clientsIncluded: null,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
@@ -279,7 +279,7 @@ describe("PricingService", () => {
 				reportsIncluded: null,
 				noticesIncluded: null,
 				alertsIncluded: null,
-				transactionsIncluded: null,
+				operationsIncluded: null,
 				clientsIncluded: null,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
@@ -309,7 +309,7 @@ describe("PricingService", () => {
 				reportsIncluded: null,
 				noticesIncluded: null,
 				alertsIncluded: null,
-				transactionsIncluded: null,
+				operationsIncluded: null,
 				clientsIncluded: null,
 				metadata: null,
 				createdAt: new Date("2022-01-01"),
@@ -357,7 +357,7 @@ describe("PricingService", () => {
 				reportsIncluded: null, // Use plan default
 				noticesIncluded: 50, // Override
 				alertsIncluded: null,
-				transactionsIncluded: null,
+				operationsIncluded: null,
 				clientsIncluded: null,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
@@ -402,7 +402,7 @@ describe("PricingService", () => {
 				reportsIncluded: 20, // Override
 				noticesIncluded: null, // Use plan default (3)
 				alertsIncluded: null, // Use plan default (50)
-				transactionsIncluded: 1000, // Override
+				operationsIncluded: 1000, // Override
 				clientsIncluded: null, // Use plan default (50)
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
@@ -420,7 +420,7 @@ describe("PricingService", () => {
 			// Overridden values
 			expect(limits?.maxOrganizations).toBe(5);
 			expect(limits?.reportsPerMonth).toBe(20);
-			expect(limits?.transactionsPerMonth).toBe(1000);
+			expect(limits?.operationsPerMonth).toBe(1000);
 			// Plan defaults
 			expect(limits?.usersPerOrg).toBe(5);
 			expect(limits?.noticesPerMonth).toBe(3);

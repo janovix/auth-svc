@@ -63,7 +63,7 @@ export interface PlanLimits {
 	reportsPerMonth: number; // Metered: overage billed via Stripe
 	noticesPerMonth: number; // Metered: overage billed via Stripe
 	alertsPerMonth: number; // Metered: overage billed via Stripe
-	transactionsPerMonth: number; // Metered: overage billed via Stripe
+	operationsPerMonth: number; // Metered: overage billed via Stripe
 	clientsPerMonth: number; // Metered: overage billed via Stripe
 }
 
@@ -77,7 +77,7 @@ export interface OrganizationUsage {
 	reportsUsed: number;
 	noticesUsed: number;
 	alertsUsed: number;
-	transactionsUsed: number;
+	operationsUsed: number;
 	clientsUsed: number;
 	usersCount: number;
 	periodStart: Date;
@@ -172,7 +172,7 @@ export type UsageMetric =
 	| "reports"
 	| "notices"
 	| "alerts"
-	| "transactions"
+	| "operations"
 	| "clients"
 	| "users";
 

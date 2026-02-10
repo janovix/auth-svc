@@ -29,7 +29,7 @@ export type AuditEntityType =
 	| "invitation"
 	| "session"
 	| "settings"
-	| "transaction"
+	| "operation"
 	| "client"
 	| "alert"
 	| "report"

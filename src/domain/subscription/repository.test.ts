@@ -149,13 +149,13 @@ describe("SubscriptionRepository", () => {
 			);
 		});
 
-		it("should increment transactions usage", async () => {
+		it("should increment operations usage", async () => {
 			mockDb._mockRun.mockResolvedValue({ success: true });
 
-			await repository.incrementUsage("org-123", "transactions", 10);
+			await repository.incrementUsage("org-123", "operations", 10);
 
 			expect(mockDb.prepare).toHaveBeenCalledWith(
-				expect.stringContaining("transactions_used = transactions_used + ?"),
+				expect.stringContaining("operations_used = operations_used + ?"),
 			);
 		});
 
@@ -179,7 +179,7 @@ describe("SubscriptionRepository", () => {
 				reports_used: 5,
 				notices_used: 10,
 				alerts_used: 75,
-				transactions_used: 300,
+				operations_used: 300,
 				clients_used: 60,
 				users_count: 3,
 				period_start: "2024-01-01T00:00:00Z",
@@ -197,7 +197,7 @@ describe("SubscriptionRepository", () => {
 			expect(result?.reportsUsed).toBe(5);
 			expect(result?.noticesUsed).toBe(10);
 			expect(result?.alertsUsed).toBe(75);
-			expect(result?.transactionsUsed).toBe(300);
+			expect(result?.operationsUsed).toBe(300);
 			expect(result?.clientsUsed).toBe(60);
 			expect(result?.usersCount).toBe(3);
 		});

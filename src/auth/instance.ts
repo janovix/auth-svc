@@ -61,7 +61,7 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 	if (missingPlans.length > 0) {
 		throw new Error(
 			`Missing required Stripe price configuration in database for plans: ${missingPlans.join(", ")}. ` +
-				`Expected price types: subscription, seat, overage_alert, overage_transaction. ` +
+				`Expected price types: subscription, seat, overage_alert, overage_operation. ` +
 				`Please run seed script or configure via admin panel.`,
 		);
 	}

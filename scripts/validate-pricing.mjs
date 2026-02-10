@@ -25,7 +25,7 @@ const EXPECTED_LIMITS = {
 		reportsPerMonth: 1,
 		noticesPerMonth: 2,
 		alertsPerMonth: 20,
-		transactionsPerMonth: 50,
+		operationsPerMonth: 50,
 		clientsPerMonth: 25,
 	},
 	pro: {
@@ -34,7 +34,7 @@ const EXPECTED_LIMITS = {
 		reportsPerMonth: 15,
 		noticesPerMonth: 20,
 		alertsPerMonth: 100,
-		transactionsPerMonth: 500,
+		operationsPerMonth: 500,
 		clientsPerMonth: 250,
 	},
 	ultra: {
@@ -43,7 +43,7 @@ const EXPECTED_LIMITS = {
 		reportsPerMonth: 100,
 		noticesPerMonth: 100,
 		alertsPerMonth: 500,
-		transactionsPerMonth: 2000,
+		operationsPerMonth: 2000,
 		clientsPerMonth: 1000,
 	},
 };
@@ -56,7 +56,7 @@ const EXPECTED_PRICES = {
 		overage_report: 49900, // $499 MXN
 		overage_notice: 39900, // $399 MXN
 		overage_alert: 7900, // $79 MXN
-		overage_transaction: 1500, // $15 MXN
+		overage_operation: 1500, // $15 MXN
 		overage_client: 2900, // $29 MXN
 	},
 	pro: {
@@ -66,7 +66,7 @@ const EXPECTED_PRICES = {
 		overage_report: 49900, // $499 MXN
 		overage_notice: 39900, // $399 MXN
 		overage_alert: 7900, // $79 MXN
-		overage_transaction: 1500, // $15 MXN
+		overage_operation: 1500, // $15 MXN
 		overage_client: 2900, // $29 MXN
 	},
 	ultra: {
@@ -76,7 +76,7 @@ const EXPECTED_PRICES = {
 		overage_report: 49900, // $499 MXN
 		overage_notice: 39900, // $399 MXN
 		overage_alert: 7900, // $79 MXN
-		overage_transaction: 1500, // $15 MXN
+		overage_operation: 1500, // $15 MXN
 		overage_client: 2900, // $29 MXN
 	},
 };
@@ -127,7 +127,7 @@ function validateLimits(dbLimits, issues) {
 			["reports_per_month", expected.reportsPerMonth],
 			["notices_per_month", expected.noticesPerMonth],
 			["alerts_per_month", expected.alertsPerMonth],
-			["transactions_per_month", expected.transactionsPerMonth],
+			["operations_per_month", expected.operationsPerMonth],
 			["clients_per_month", expected.clientsPerMonth],
 		];
 

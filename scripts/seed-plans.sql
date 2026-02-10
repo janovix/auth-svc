@@ -48,7 +48,7 @@ ON CONFLICT(id) DO UPDATE SET
 -- ========================================
 -- PLAN LIMITS
 -- ========================================
-INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, transactions_per_month, clients_per_month, created_at, updated_at)
+INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, created_at, updated_at)
 VALUES (
     'limit_business',
     'plan_business',
@@ -57,7 +57,7 @@ VALUES (
     0,      -- reports_per_month
     3,      -- notices_per_month
     50,     -- alerts_per_month
-    250,    -- transactions_per_month
+    250,    -- operations_per_month
     50,     -- clients_per_month
     datetime('now'),
     datetime('now')
@@ -68,11 +68,11 @@ ON CONFLICT(id) DO UPDATE SET
     reports_per_month = excluded.reports_per_month,
     notices_per_month = excluded.notices_per_month,
     alerts_per_month = excluded.alerts_per_month,
-    transactions_per_month = excluded.transactions_per_month,
+    operations_per_month = excluded.operations_per_month,
     clients_per_month = excluded.clients_per_month,
     updated_at = datetime('now');
 
-INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, transactions_per_month, clients_per_month, created_at, updated_at)
+INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, created_at, updated_at)
 VALUES (
     'limit_pro',
     'plan_pro',
@@ -81,7 +81,7 @@ VALUES (
     10,     -- reports_per_month
     15,     -- notices_per_month
     250,    -- alerts_per_month
-    1500,   -- transactions_per_month
+    1500,   -- operations_per_month
     300,    -- clients_per_month
     datetime('now'),
     datetime('now')
@@ -92,7 +92,7 @@ ON CONFLICT(id) DO UPDATE SET
     reports_per_month = excluded.reports_per_month,
     notices_per_month = excluded.notices_per_month,
     alerts_per_month = excluded.alerts_per_month,
-    transactions_per_month = excluded.transactions_per_month,
+    operations_per_month = excluded.operations_per_month,
     clients_per_month = excluded.clients_per_month,
     updated_at = datetime('now');
 

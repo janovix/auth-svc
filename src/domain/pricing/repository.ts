@@ -515,7 +515,7 @@ export class PricingRepository {
 				reports_per_month: number;
 				notices_per_month: number;
 				alerts_per_month: number;
-				transactions_per_month: number;
+				operations_per_month: number;
 				clients_per_month: number;
 				watchlist_queries_per_day: number;
 				metadata: string | null;
@@ -546,7 +546,7 @@ export class PricingRepository {
 				reports_per_month: number;
 				notices_per_month: number;
 				alerts_per_month: number;
-				transactions_per_month: number;
+				operations_per_month: number;
 				clients_per_month: number;
 				watchlist_queries_per_day: number;
 				metadata: string | null;
@@ -567,7 +567,7 @@ export class PricingRepository {
 
 		await this.db
 			.prepare(
-				`INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, transactions_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+				`INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(plan_id) DO UPDATE SET
 				   max_organizations = excluded.max_organizations,
@@ -575,7 +575,7 @@ export class PricingRepository {
 				   reports_per_month = excluded.reports_per_month,
 				   notices_per_month = excluded.notices_per_month,
 				   alerts_per_month = excluded.alerts_per_month,
-				   transactions_per_month = excluded.transactions_per_month,
+				   operations_per_month = excluded.operations_per_month,
 				   clients_per_month = excluded.clients_per_month,
 				   watchlist_queries_per_day = excluded.watchlist_queries_per_day,
 				   updated_at = excluded.updated_at`,
@@ -588,7 +588,7 @@ export class PricingRepository {
 				input.reportsPerMonth ?? 0,
 				input.noticesPerMonth ?? 3,
 				input.alertsPerMonth ?? 50,
-				input.transactionsPerMonth ?? 250,
+				input.operationsPerMonth ?? 250,
 				input.clientsPerMonth ?? 50,
 				input.watchlistQueriesPerDay ?? 0,
 				now,
@@ -626,7 +626,7 @@ export class PricingRepository {
 				reports_included: number | null;
 				notices_included: number | null;
 				alerts_included: number | null;
-				transactions_included: number | null;
+				operations_included: number | null;
 				clients_included: number | null;
 				metadata: string | null;
 				created_at: string;
@@ -658,7 +658,7 @@ export class PricingRepository {
 				reports_included: number | null;
 				notices_included: number | null;
 				alerts_included: number | null;
-				transactions_included: number | null;
+				operations_included: number | null;
 				clients_included: number | null;
 				metadata: string | null;
 				created_at: string;
@@ -695,7 +695,7 @@ export class PricingRepository {
 				reports_included: number | null;
 				notices_included: number | null;
 				alerts_included: number | null;
-				transactions_included: number | null;
+				operations_included: number | null;
 				clients_included: number | null;
 				metadata: string | null;
 				created_at: string;
@@ -715,7 +715,7 @@ export class PricingRepository {
 
 		await this.db
 			.prepare(
-				`INSERT INTO enterprise_licenses (id, key, organization_name, plan_id, status, expires_at, max_organizations, max_users, reports_included, notices_included, alerts_included, transactions_included, clients_included, created_at, updated_at)
+				`INSERT INTO enterprise_licenses (id, key, organization_name, plan_id, status, expires_at, max_organizations, max_users, reports_included, notices_included, alerts_included, operations_included, clients_included, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
@@ -729,7 +729,7 @@ export class PricingRepository {
 				input.reportsIncluded ?? null,
 				input.noticesIncluded ?? null,
 				input.alertsIncluded ?? null,
-				input.transactionsIncluded ?? null,
+				input.operationsIncluded ?? null,
 				input.clientsIncluded ?? null,
 				now,
 				now,
@@ -839,7 +839,7 @@ export class PricingRepository {
 		reports_per_month: number;
 		notices_per_month: number;
 		alerts_per_month: number;
-		transactions_per_month: number;
+		operations_per_month: number;
 		clients_per_month: number;
 		watchlist_queries_per_day: number;
 		metadata: string | null;
@@ -854,7 +854,7 @@ export class PricingRepository {
 			reportsPerMonth: result.reports_per_month,
 			noticesPerMonth: result.notices_per_month,
 			alertsPerMonth: result.alerts_per_month,
-			transactionsPerMonth: result.transactions_per_month,
+			operationsPerMonth: result.operations_per_month,
 			clientsPerMonth: result.clients_per_month,
 			watchlistQueriesPerDay: result.watchlist_queries_per_day,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
@@ -877,7 +877,7 @@ export class PricingRepository {
 		reports_included: number | null;
 		notices_included: number | null;
 		alerts_included: number | null;
-		transactions_included: number | null;
+		operations_included: number | null;
 		clients_included: number | null;
 		metadata: string | null;
 		created_at: string;
@@ -897,7 +897,7 @@ export class PricingRepository {
 			reportsIncluded: result.reports_included,
 			noticesIncluded: result.notices_included,
 			alertsIncluded: result.alerts_included,
-			transactionsIncluded: result.transactions_included,
+			operationsIncluded: result.operations_included,
 			clientsIncluded: result.clients_included,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
 			createdAt: new Date(result.created_at),

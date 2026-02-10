@@ -27,7 +27,7 @@ export interface LegacyPlanLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
 	watchlistQueriesPerDay: number;
 }
@@ -137,7 +137,7 @@ export class PricingService {
 							reportsPerMonth: limits.reportsPerMonth,
 							noticesPerMonth: limits.noticesPerMonth,
 							alertsPerMonth: limits.alertsPerMonth,
-							transactionsPerMonth: limits.transactionsPerMonth,
+							operationsPerMonth: limits.operationsPerMonth,
 							clientsPerMonth: limits.clientsPerMonth,
 							watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 						}
@@ -178,7 +178,7 @@ export class PricingService {
 						reportsPerMonth: limits.reportsPerMonth,
 						noticesPerMonth: limits.noticesPerMonth,
 						alertsPerMonth: limits.alertsPerMonth,
-						transactionsPerMonth: limits.transactionsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
 						clientsPerMonth: limits.clientsPerMonth,
 						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
@@ -213,7 +213,7 @@ export class PricingService {
 			reportsPerMonth: limits.reportsPerMonth,
 			noticesPerMonth: limits.noticesPerMonth,
 			alertsPerMonth: limits.alertsPerMonth,
-			transactionsPerMonth: limits.transactionsPerMonth,
+			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
 			watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 		};
@@ -418,8 +418,8 @@ export class PricingService {
 					noticesPerMonth:
 						license.noticesIncluded ?? planLimits.noticesPerMonth,
 					alertsPerMonth: license.alertsIncluded ?? planLimits.alertsPerMonth,
-					transactionsPerMonth:
-						license.transactionsIncluded ?? planLimits.transactionsPerMonth,
+					operationsPerMonth:
+						license.operationsIncluded ?? planLimits.operationsPerMonth,
 					clientsPerMonth:
 						license.clientsIncluded ?? planLimits.clientsPerMonth,
 					source: "license",
@@ -441,7 +441,7 @@ export class PricingService {
 			reportsPerMonth: limits.reportsPerMonth,
 			noticesPerMonth: limits.noticesPerMonth,
 			alertsPerMonth: limits.alertsPerMonth,
-			transactionsPerMonth: limits.transactionsPerMonth,
+			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
 			source: "plan",
 			planName: plan.name,
@@ -468,8 +468,8 @@ export class PricingService {
 			reportsPerMonth: license.reportsIncluded ?? planLimits.reportsPerMonth,
 			noticesPerMonth: license.noticesIncluded ?? planLimits.noticesPerMonth,
 			alertsPerMonth: license.alertsIncluded ?? planLimits.alertsPerMonth,
-			transactionsPerMonth:
-				license.transactionsIncluded ?? planLimits.transactionsPerMonth,
+			operationsPerMonth:
+				license.operationsIncluded ?? planLimits.operationsPerMonth,
 			clientsPerMonth: license.clientsIncluded ?? planLimits.clientsPerMonth,
 			source: "license",
 			planName: plan.name,

@@ -51,7 +51,7 @@ const mockUsage: OrganizationUsage = {
 	reportsUsed: 5,
 	noticesUsed: 10,
 	alertsUsed: 75, // Over the 50 limit for business
-	transactionsUsed: 300, // Over the 250 limit for business
+	operationsUsed: 300, // Over the 250 limit for business
 	clientsUsed: 60, // Over the 50 limit for business
 	usersCount: 3,
 	periodStart: new Date("2024-01-01"),
@@ -86,7 +86,7 @@ const businessLimits: PlanLimits = {
 	reportsPerMonth: 1,
 	noticesPerMonth: 2,
 	alertsPerMonth: 25, // 75 used - 25 limit = 50 overage for test
-	transactionsPerMonth: 50,
+	operationsPerMonth: 50,
 	clientsPerMonth: 25,
 };
 
@@ -115,7 +115,7 @@ const proLimits: PlanLimits = {
 	reportsPerMonth: 15,
 	noticesPerMonth: 20,
 	alertsPerMonth: 100,
-	transactionsPerMonth: 500,
+	operationsPerMonth: 500,
 	clientsPerMonth: 250,
 };
 

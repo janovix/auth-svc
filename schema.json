@@ -2597,7 +2597,7 @@
 														"alerts": {
 															"type": "number"
 														},
-														"transactions": {
+														"operations": {
 															"type": "number"
 														},
 														"users": {
@@ -2607,7 +2607,7 @@
 													"required": [
 														"notices",
 														"alerts",
-														"transactions",
+														"operations",
 														"users"
 													]
 												},
@@ -2750,7 +2750,7 @@
 															"alerts": {
 																"type": ["number", "null"]
 															},
-															"transactions": {
+															"operations": {
 																"type": ["number", "null"]
 															},
 															"users": {
@@ -2760,7 +2760,7 @@
 														"required": [
 															"notices",
 															"alerts",
-															"transactions",
+															"operations",
 															"users"
 														]
 													}
@@ -3462,14 +3462,14 @@
 												"alerts": {
 													"type": "number"
 												},
-												"transactions": {
+												"operations": {
 													"type": "number"
 												},
 												"users": {
 													"type": "number"
 												}
 											},
-											"required": ["notices", "alerts", "transactions", "users"]
+											"required": ["notices", "alerts", "operations", "users"]
 										}
 									},
 									"required": ["success", "data"]
@@ -3540,7 +3540,7 @@
 													"maxUsers": {
 														"type": "number"
 													},
-													"maxTransactions": {
+													"maxOperations": {
 														"type": ["number", "null"]
 													},
 													"maxAlerts": {
@@ -3594,7 +3594,7 @@
 													"organizationId",
 													"noticesPerMonth",
 													"maxUsers",
-													"maxTransactions",
+													"maxOperations",
 													"maxAlerts",
 													"features",
 													"issuedAt",
@@ -3692,7 +3692,7 @@
 												"type": "integer",
 												"exclusiveMinimum": 0
 											},
-											"maxTransactions": {
+											"maxOperations": {
 												"type": "integer",
 												"exclusiveMinimum": 0
 											},
@@ -3920,7 +3920,7 @@
 												"maxUsers": {
 													"type": "number"
 												},
-												"maxTransactions": {
+												"maxOperations": {
 													"type": ["number", "null"]
 												},
 												"maxAlerts": {
@@ -3983,7 +3983,7 @@
 												"organizationId",
 												"noticesPerMonth",
 												"maxUsers",
-												"maxTransactions",
+												"maxOperations",
 												"maxAlerts",
 												"features",
 												"issuedAt",
@@ -4385,7 +4385,7 @@
 															"type": "integer",
 															"exclusiveMinimum": 0
 														},
-														"maxTransactions": {
+														"maxOperations": {
 															"type": "integer",
 															"exclusiveMinimum": 0
 														},
@@ -4572,7 +4572,7 @@
 															"type": "integer",
 															"exclusiveMinimum": 0
 														},
-														"maxTransactions": {
+														"maxOperations": {
 															"type": "integer",
 															"exclusiveMinimum": 0
 														},
@@ -4683,7 +4683,7 @@
 												"maxUsers": {
 													"type": "number"
 												},
-												"maxTransactions": {
+												"maxOperations": {
 													"type": ["number", "null"]
 												},
 												"maxAlerts": {
@@ -4746,7 +4746,7 @@
 												"organizationId",
 												"noticesPerMonth",
 												"maxUsers",
-												"maxTransactions",
+												"maxOperations",
 												"maxAlerts",
 												"features",
 												"issuedAt",
