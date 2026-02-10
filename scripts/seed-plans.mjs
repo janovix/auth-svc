@@ -6,8 +6,9 @@
  * This should be run after creating the products/prices in Stripe Dashboard.
  *
  * Usage:
- *   node scripts/seed-plans.mjs                    # Local dev
- *   REMOTE=true node scripts/seed-plans.mjs       # Remote dev
+ *   node scripts/seed-plans.mjs                           # Local dev (defaults to 'dev' environment)
+ *   ENV=local node scripts/seed-plans.mjs                 # Local dev with separate Stripe account
+ *   REMOTE=true node scripts/seed-plans.mjs               # Remote dev
  *   ENV=preview REMOTE=true node scripts/seed-plans.mjs   # Preview
  *   ENV=prod REMOTE=true node scripts/seed-plans.mjs      # Production
  */
@@ -27,6 +28,43 @@ const __dirname = dirname(__filename);
 // Get these from your Stripe Dashboard after creating products and prices.
 
 const STRIPE_IDS = {
+	// Local development environment (separate Stripe account)
+	local: {
+		watchlist: {
+			subscription: "price_1SxrWOPFcJmmJgfAhM7BbYZ6",
+			seat: "price_1SxsF8PFcJmmJgfANp38kpW4",
+		},
+		business: {
+			subscription: "price_1SxrVOPFcJmmJgfAPoCqKteA",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+		pro: {
+			subscription: "price_1SxrVjPFcJmmJgfARQdlCT1X",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+		ultra: {
+			subscription: "price_1SxrWCPFcJmmJgfAIsvKSSdt",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+	},
 	// Development environment
 	dev: {
 		watchlist: {
