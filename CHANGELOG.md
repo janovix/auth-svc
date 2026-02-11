@@ -1,3 +1,10 @@
+# [1.4.0-rc.41](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.40...v1.4.0-rc.41) (2026-02-11)
+
+
+### Features
+
+* **auth:** implement user promotion from visitor to user based on pending invitations ([26efe7c](https://github.com/janovix/auth-svc/commit/26efe7c199d0e09211c8c2f6732bc47dabf97888))
+
 # [1.4.0-rc.40](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.39...v1.4.0-rc.40) (2026-02-10)
 
 
