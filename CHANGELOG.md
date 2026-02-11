@@ -1,3 +1,10 @@
+# [1.4.0-rc.42](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.41...v1.4.0-rc.42) (2026-02-11)
+
+
+### Bug Fixes
+
+* **subscription:** query user role directly from database to avoid stale session data ([75bf58a](https://github.com/janovix/auth-svc/commit/75bf58a9b1ed4b243ba7f8a1c90655efc801ee44))
+
 # [1.4.0-rc.41](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.40...v1.4.0-rc.41) (2026-02-11)
 
 
