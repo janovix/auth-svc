@@ -376,6 +376,14 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 		// Check if profile is complete (has name)
 		const hasName = !!user.name && user.name.trim().length > 0;
 
+		// Query the database directly for the current user role
+		// (Session may have stale role if user.create.after hook just updated it)
+		const dbUser = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ?`)
+			.bind(user.id)
+			.first<{ role: string }>();
+
+		const userRole = dbUser?.role ?? "user";
+
 		// Check if user has any organization membership (owner, admin, or member)
 		const orgMembership = await c.env.DB.prepare(
 			`SELECT COUNT(*) as count FROM members WHERE userId = ?`,
@@ -524,8 +532,7 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			expiresAt: inv.expiresAt,
 		}));
 
-		// Get user role (visitor, user, admin)
-		const userRole = user.role ?? "user";
+		// userRole is already queried from DB above (to avoid stale session role)
 		const isVisitor = userRole === "visitor";
 
 		return c.json({
