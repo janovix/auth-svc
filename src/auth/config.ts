@@ -111,12 +111,12 @@ const OTP_RATE_LIMIT_RULES: RateLimitConfig["customRules"] = {
 	// Limit OTP send requests: 1 per 60 seconds per IP
 	"/email-otp/send-verification-otp": {
 		window: 60,
-		max: 1,
+		max: 3,
 	},
 	// Limit OTP verification attempts per IP
 	"/sign-in/email-otp": {
 		window: 60,
-		max: 1,
+		max: 3,
 	},
 };
 
@@ -665,6 +665,38 @@ export function buildResolvedAuthConfig(
 				},
 			},
 			user: {
+				create: {
+					after: async (user: { id: string; email: string; role?: string }) => {
+						// Check if the newly registered user has pending org invitations
+						// If so, promote them from "visitor" to "user" so they can onboard
+						try {
+							const pendingInvite = await env.DB.prepare(
+								`SELECT id FROM invitations
+							 WHERE email = ? AND status = 'pending'
+							 AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))
+							 LIMIT 1`,
+							)
+								.bind(user.email)
+								.first<{ id: string }>();
+
+							if (pendingInvite) {
+								await env.DB.prepare(
+									`UPDATE users SET role = 'user' WHERE id = ? AND role = 'visitor'`,
+								)
+									.bind(user.id)
+									.run();
+								console.log(
+									`[User Create] Auto-promoted user ${user.id} (${user.email}) from visitor to user due to pending invitation ${pendingInvite.id}`,
+								);
+							}
+						} catch (error) {
+							console.error(
+								`[User Create] Error checking pending invitations for ${user.id}:`,
+								error,
+							);
+						}
+					},
+				},
 				update: {
 					after: async (user: {
 						id: string;
