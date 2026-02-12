@@ -1,3 +1,10 @@
+# [1.4.0-rc.45](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.44...v1.4.0-rc.45) (2026-02-12)
+
+
+### Features
+
+* **subscription-admin:** add subscription management routes for admin ([be0789e](https://github.com/janovix/auth-svc/commit/be0789e883e702b8bf76a5162f1ce5864a0525cf))
+
 # [1.4.0-rc.44](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.43...v1.4.0-rc.44) (2026-02-12)
 
 
