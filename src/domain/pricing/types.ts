@@ -80,7 +80,7 @@ export interface EnterpriseLicense {
 	organizationName: string;
 	userId: string | null;
 	issuedBy: string | null;
-	status: "active" | "revoked" | "expired" | "suspended";
+	status: "active" | "revoked" | "expired" | "suspended" | "superseded";
 	expiresAt: Date | null;
 	activatedAt: Date | null;
 	notes: string | null;

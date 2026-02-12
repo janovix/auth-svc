@@ -32,6 +32,8 @@ describe("PricingService", () => {
 		getLicenseById: ReturnType<typeof vi.fn>;
 		getLicenseByUserId: ReturnType<typeof vi.fn>;
 		activateLicense: ReturnType<typeof vi.fn>;
+		supersedeLicense: ReturnType<typeof vi.fn>;
+		revokeLicense: ReturnType<typeof vi.fn>;
 	};
 
 	const mockBusinessPlan: SubscriptionPlan = {
@@ -138,6 +140,8 @@ describe("PricingService", () => {
 			getLicenseById: vi.fn(),
 			getLicenseByUserId: vi.fn(),
 			activateLicense: vi.fn(),
+			supersedeLicense: vi.fn(),
+			revokeLicense: vi.fn(),
 		};
 		service = new PricingService(
 			mockRepository as unknown as PricingRepository,
@@ -329,6 +333,38 @@ describe("PricingService", () => {
 			expect(result.valid).toBe(false);
 			expect(result.error).toBe("License has expired");
 		});
+
+		it("should return invalid for superseded license", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-SUPERSEDED",
+				organizationName: "Acme Corp",
+				userId: "user_123",
+				issuedBy: null,
+				status: "superseded",
+				expiresAt: null,
+				activatedAt: new Date("2024-01-15"),
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-01"),
+			};
+
+			mockRepository.getLicenseByKey.mockResolvedValue(mockLicense);
+
+			const result = await service.validateLicenseKey("ENT-SUPERSEDED");
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toBe("License is superseded");
+		});
 	});
 
 	describe("getEffectiveLimitsForUser", () => {
@@ -445,6 +481,95 @@ describe("PricingService", () => {
 			const limits = await service.getEffectiveLimitsForLicense("nonexistent");
 
 			expect(limits).toBeNull();
+		});
+	});
+
+	describe("activateLicense", () => {
+		const mockActiveLicense: EnterpriseLicense = {
+			id: "lic_new",
+			key: "ENT-NEW-LICENSE",
+			organizationName: "New Corp",
+			userId: null,
+			issuedBy: null,
+			status: "active",
+			expiresAt: null,
+			activatedAt: null,
+			notes: null,
+			maxOrganizations: 5,
+			maxUsers: 10,
+			reportsPerMonth: 100,
+			noticesPerMonth: 50,
+			alertsPerMonth: 200,
+			operationsPerMonth: 500,
+			clientsPerMonth: 250,
+			watchlistQueriesPerDay: 100,
+			metadata: null,
+			createdAt: new Date("2024-01-01"),
+			updatedAt: new Date("2024-01-01"),
+		};
+
+		it("should activate a valid license for a new user", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(mockActiveLicense);
+			mockRepository.activateLicense.mockResolvedValue(undefined);
+			mockRepository.getLicenseById.mockResolvedValue({
+				...mockActiveLicense,
+				userId: "user_new",
+				activatedAt: new Date(),
+			});
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(true);
+			expect(result.license).toBeDefined();
+			expect(mockRepository.activateLicense).toHaveBeenCalledWith(
+				"lic_new",
+				"user_new",
+			);
+		});
+
+		it("should fail if license is already assigned to another user", async () => {
+			const assignedLicense = {
+				...mockActiveLicense,
+				userId: "user_other",
+			};
+			mockRepository.getLicenseByKey.mockResolvedValue(assignedLicense);
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is already in use");
+			expect(mockRepository.activateLicense).not.toHaveBeenCalled();
+		});
+
+		it("should fail if license key is invalid", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(null);
+
+			const result = await service.activateLicense("INVALID-KEY", "user_new");
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License key not found");
+		});
+
+		it("should fail if license is superseded", async () => {
+			const supersededLicense = {
+				...mockActiveLicense,
+				status: "superseded" as const,
+			};
+			mockRepository.getLicenseByKey.mockResolvedValue(supersededLicense);
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is superseded");
 		});
 	});
 });

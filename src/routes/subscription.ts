@@ -627,7 +627,10 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 
 /**
  * POST /api/subscription/license/activate
- * Activate a license key for the current user
+ * Activate a license key for the current user.
+ *
+ * If the user has an active Stripe subscription it is cancelled immediately.
+ * If the user has a previous active license it is superseded.
  */
 subscriptionRoutes.post("/license/activate", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -660,30 +663,96 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 
 	const license = activation.license;
 
-	// Create or update user subscription based on license
+	// ---------- Fetch full existing subscription record ----------
 	const existingSubscription = await c.env.DB.prepare(
-		`SELECT id FROM subscription WHERE referenceId = ? LIMIT 1`,
+		`SELECT id, stripeSubscriptionId, stripeCustomerId, status, plan, licenseId
+		 FROM subscription WHERE referenceId = ? LIMIT 1`,
 	)
 		.bind(user.id)
-		.first<{ id: string }>();
+		.first<{
+			id: string;
+			stripeSubscriptionId: string | null;
+			stripeCustomerId: string | null;
+			status: string | null;
+			plan: string;
+			licenseId: string | null;
+		}>();
 
-	// License is self-contained, use "enterprise" as the plan name
-	const planName = "enterprise";
+	let previousPlanCancelled = false;
+	let previousPlan: string | null = null;
 
 	if (existingSubscription) {
+		// ---------- Cancel active Stripe subscription ----------
+		if (
+			existingSubscription.stripeSubscriptionId &&
+			existingSubscription.status &&
+			["active", "trialing"].includes(existingSubscription.status)
+		) {
+			const stripe = getStripe(c);
+			if (stripe) {
+				try {
+					await stripe.subscriptions.cancel(
+						existingSubscription.stripeSubscriptionId,
+					);
+					console.log(
+						`[License] Cancelled Stripe subscription ${existingSubscription.stripeSubscriptionId} for user ${user.id}`,
+					);
+					previousPlanCancelled = true;
+					previousPlan = existingSubscription.plan;
+				} catch (stripeErr) {
+					// Graceful degradation: log but continue activating the license
+					console.error(
+						`[License] Failed to cancel Stripe subscription ${existingSubscription.stripeSubscriptionId}:`,
+						stripeErr,
+					);
+					// Still mark as cancelled from our side
+					previousPlanCancelled = true;
+					previousPlan = existingSubscription.plan;
+				}
+			}
+		}
+
+		// ---------- Supersede previous license ----------
+		if (
+			existingSubscription.licenseId &&
+			existingSubscription.licenseId !== license.id
+		) {
+			try {
+				await pricingRepository.supersedeLicense(
+					existingSubscription.licenseId,
+				);
+				console.log(
+					`[License] Superseded previous license ${existingSubscription.licenseId} for user ${user.id}`,
+				);
+			} catch (err) {
+				console.error(
+					`[License] Failed to supersede license ${existingSubscription.licenseId}:`,
+					err,
+				);
+			}
+		}
+
+		// ---------- Update subscription record cleanly ----------
 		await c.env.DB.prepare(
 			`UPDATE subscription
-			 SET plan = ?, status = 'active', licenseId = ?, updatedAt = datetime('now')
+			 SET plan = 'enterprise',
+			     status = 'active',
+			     licenseId = ?,
+			     stripeSubscriptionId = NULL,
+			     cancelAtPeriodEnd = 0,
+			     canceledAt = CASE WHEN ? THEN datetime('now') ELSE canceledAt END,
+			     updatedAt = datetime('now')
 			 WHERE id = ?`,
 		)
-			.bind(planName, license.id, existingSubscription.id)
+			.bind(license.id, previousPlanCancelled ? 1 : 0, existingSubscription.id)
 			.run();
 	} else {
+		// ---------- No existing record – create one ----------
 		await c.env.DB.prepare(
 			`INSERT INTO subscription (id, plan, referenceId, status, licenseId, createdAt, updatedAt)
-			 VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+			 VALUES (?, 'enterprise', ?, 'active', ?, datetime('now'), datetime('now'))`,
 		)
-			.bind(crypto.randomUUID(), planName, user.id, license.id)
+			.bind(crypto.randomUUID(), user.id, license.id)
 			.run();
 	}
 
@@ -698,6 +767,8 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 			message: "License activated successfully",
 			plan: "Enterprise License",
 			organizationName: license.organizationName,
+			previousPlanCancelled,
+			previousPlan,
 			limits: limits
 				? {
 						maxOrganizations: limits.maxOrganizations,

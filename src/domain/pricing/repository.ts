@@ -777,6 +777,20 @@ export class PricingRepository {
 			.run();
 	}
 
+	/**
+	 * Supersede a license (replaced by a newer license, not admin-revoked)
+	 */
+	async supersedeLicense(licenseId: string): Promise<void> {
+		await this.db
+			.prepare(
+				`UPDATE enterprise_licenses 
+				 SET status = 'superseded', updated_at = datetime('now')
+				 WHERE id = ?`,
+			)
+			.bind(licenseId)
+			.run();
+	}
+
 	// =========================================================================
 	// MAPPING HELPERS
 	// =========================================================================
@@ -899,7 +913,12 @@ export class PricingRepository {
 			organizationName: result.organization_name,
 			userId: result.user_id,
 			issuedBy: result.issued_by,
-			status: result.status as "active" | "revoked" | "expired" | "suspended",
+			status: result.status as
+				| "active"
+				| "revoked"
+				| "expired"
+				| "suspended"
+				| "superseded",
 			expiresAt: result.expires_at ? new Date(result.expires_at) : null,
 			activatedAt: result.activated_at ? new Date(result.activated_at) : null,
 			notes: result.notes,

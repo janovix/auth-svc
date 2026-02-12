@@ -289,6 +289,34 @@ describe("PricingRepository", () => {
 		});
 	});
 
+	describe("supersedeLicense", () => {
+		it("should update license status to superseded", async () => {
+			mockDb._mock.run.mockResolvedValue({ success: true });
+
+			await repository.supersedeLicense("lic_old");
+
+			expect(mockDb._mock.prepare).toHaveBeenCalledWith(
+				expect.stringContaining("status = 'superseded'"),
+			);
+			expect(mockDb._mock.bind).toHaveBeenCalledWith("lic_old");
+			expect(mockDb._mock.run).toHaveBeenCalled();
+		});
+	});
+
+	describe("revokeLicense", () => {
+		it("should update license status to revoked", async () => {
+			mockDb._mock.run.mockResolvedValue({ success: true });
+
+			await repository.revokeLicense("lic_bad");
+
+			expect(mockDb._mock.prepare).toHaveBeenCalledWith(
+				expect.stringContaining("status = 'revoked'"),
+			);
+			expect(mockDb._mock.bind).toHaveBeenCalledWith("lic_bad");
+			expect(mockDb._mock.run).toHaveBeenCalled();
+		});
+	});
+
 	describe("metadata parsing", () => {
 		it("should parse JSON metadata correctly", async () => {
 			const mockPlan = {
