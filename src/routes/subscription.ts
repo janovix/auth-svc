@@ -445,6 +445,7 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 						status: dbSubscription.status,
 						stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
 						stripeCustomerId: dbSubscription.stripeCustomerId,
+						licenseId: dbSubscription.licenseId,
 						periodStart: dbSubscription.periodStart?.toISOString(),
 						periodEnd: dbSubscription.periodEnd?.toISOString(),
 						cancelAtPeriodEnd: dbSubscription.cancelAtPeriodEnd,
@@ -452,9 +453,14 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				: "NO SUBSCRIPTION RECORD IN DB",
 		);
 
-		// Verify against Stripe directly if we have a subscription
+		// Verify against Stripe directly if we have a Stripe-based subscription
+		// Skip verification for license-based subscriptions (no Stripe subscription to verify)
 		let stripeVerification: { status: string; plan?: string } | null = null;
-		if (stripe && dbSubscription?.stripeSubscriptionId) {
+		if (
+			stripe &&
+			dbSubscription?.stripeSubscriptionId &&
+			!dbSubscription.licenseId
+		) {
 			try {
 				const stripeSub = await stripe.subscriptions.retrieve(
 					dbSubscription.stripeSubscriptionId,
@@ -546,6 +552,8 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				hasSubscription: isSubscriptionValid,
 				subscriptionStatus: subscriptionStatus.status,
 				plan: subscriptionStatus.plan,
+				// License info
+				isLicenseBased: subscriptionStatus.isLicenseBased,
 				// Keep pendingInvitation for backward compatibility (first invitation)
 				pendingInvitation: mappedInvitations[0] || null,
 				// New field: all pending invitations
@@ -810,6 +818,25 @@ subscriptionRoutes.post("/portal", async (c) => {
 
 		if (!returnUrl) {
 			return c.json({ success: false, error: "Missing returnUrl" }, 400);
+		}
+
+		// Check if user has a license-based subscription (no Stripe portal for enterprise licenses)
+		const licenseCheck = await c.env.DB.prepare(
+			`SELECT licenseId FROM subscription 
+			 WHERE referenceId = ? AND licenseId IS NOT NULL AND status = 'active'
+			 LIMIT 1`,
+		)
+			.bind(user.id)
+			.first<{ licenseId: string }>();
+
+		if (licenseCheck?.licenseId) {
+			return c.json(
+				{
+					success: false,
+					error: "Enterprise license subscriptions are managed outside Stripe",
+				},
+				400,
+			);
 		}
 
 		const stripe = getStripe(c);

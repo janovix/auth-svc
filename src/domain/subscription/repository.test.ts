@@ -40,6 +40,88 @@ describe("SubscriptionRepository", () => {
 		repository = new SubscriptionRepository(mockDb as unknown as D1Database);
 	});
 
+	describe("getUserSubscription", () => {
+		it("should return subscription with licenseId mapped", async () => {
+			mockDb._mockFirst.mockResolvedValue({
+				id: "sub-1",
+				plan: "enterprise",
+				referenceId: "user-123",
+				stripeCustomerId: null,
+				stripeSubscriptionId: null,
+				licenseId: "license-abc",
+				status: "active",
+				periodStart: null,
+				periodEnd: null,
+				cancelAtPeriodEnd: 0,
+				seats: null,
+				trialStart: null,
+				trialEnd: null,
+				createdAt: "2024-06-01T00:00:00Z",
+				updatedAt: "2024-06-01T00:00:00Z",
+			});
+
+			const result = await repository.getUserSubscription("user-123");
+
+			expect(result).not.toBeNull();
+			expect(result?.licenseId).toBe("license-abc");
+			expect(result?.plan).toBe("enterprise");
+			expect(result?.stripeSubscriptionId).toBeNull();
+		});
+
+		it("should return null licenseId for Stripe subscriptions", async () => {
+			mockDb._mockFirst.mockResolvedValue({
+				id: "sub-2",
+				plan: "business",
+				referenceId: "user-456",
+				stripeCustomerId: "cus_123",
+				stripeSubscriptionId: "sub_stripe_123",
+				licenseId: null,
+				status: "active",
+				periodStart: "2024-01-01T00:00:00Z",
+				periodEnd: "2024-01-31T00:00:00Z",
+				cancelAtPeriodEnd: 0,
+				seats: null,
+				trialStart: null,
+				trialEnd: null,
+				createdAt: "2024-01-01T00:00:00Z",
+				updatedAt: "2024-01-15T00:00:00Z",
+			});
+
+			const result = await repository.getUserSubscription("user-456");
+
+			expect(result).not.toBeNull();
+			expect(result?.licenseId).toBeNull();
+			expect(result?.stripeSubscriptionId).toBe("sub_stripe_123");
+		});
+
+		it("should return null when no subscription exists", async () => {
+			mockDb._mockFirst.mockResolvedValue(null);
+
+			const result = await repository.getUserSubscription("user-none");
+
+			expect(result).toBeNull();
+		});
+
+		it("should use ORDER BY that prioritizes active status over stripeSubscriptionId", async () => {
+			mockDb._mockFirst.mockResolvedValue(null);
+
+			await repository.getUserSubscription("user-123");
+
+			// Verify the query prioritizes active/trialing status first
+			expect(mockDb.prepare).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END",
+				),
+			);
+			// Verify the query considers both stripeSubscriptionId and licenseId
+			expect(mockDb.prepare).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"CASE WHEN stripeSubscriptionId IS NOT NULL OR licenseId IS NOT NULL THEN 0 ELSE 1 END",
+				),
+			);
+		});
+	});
+
 	describe("countOrganizationMembers", () => {
 		it("should return member count for organization", async () => {
 			mockDb._mockFirst.mockResolvedValue({ count: 7 });

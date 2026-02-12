@@ -32,8 +32,8 @@ export class SubscriptionRepository {
 				`SELECT * FROM subscription 
 				 WHERE referenceId = ? 
 				 ORDER BY 
-				   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
 				   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+				   CASE WHEN stripeSubscriptionId IS NOT NULL OR licenseId IS NOT NULL THEN 0 ELSE 1 END,
 				   createdAt DESC 
 				 LIMIT 1`,
 			)
@@ -44,6 +44,7 @@ export class SubscriptionRepository {
 				referenceId: string;
 				stripeCustomerId: string | null;
 				stripeSubscriptionId: string | null;
+				licenseId: string | null;
 				status: string | null;
 				periodStart: string | null;
 				periodEnd: string | null;
@@ -63,6 +64,7 @@ export class SubscriptionRepository {
 			referenceId: result.referenceId,
 			stripeCustomerId: result.stripeCustomerId,
 			stripeSubscriptionId: result.stripeSubscriptionId,
+			licenseId: result.licenseId,
 			status: result.status as SubscriptionStatus | null,
 			periodStart: result.periodStart ? new Date(result.periodStart) : null,
 			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,
@@ -90,6 +92,7 @@ export class SubscriptionRepository {
 				referenceId: string;
 				stripeCustomerId: string | null;
 				stripeSubscriptionId: string | null;
+				licenseId: string | null;
 				status: string | null;
 				periodStart: string | null;
 				periodEnd: string | null;
@@ -109,6 +112,7 @@ export class SubscriptionRepository {
 			referenceId: result.referenceId,
 			stripeCustomerId: result.stripeCustomerId,
 			stripeSubscriptionId: result.stripeSubscriptionId,
+			licenseId: result.licenseId,
 			status: result.status as SubscriptionStatus | null,
 			periodStart: result.periodStart ? new Date(result.periodStart) : null,
 			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,

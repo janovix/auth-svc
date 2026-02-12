@@ -68,6 +68,7 @@ const mockSubscription: UserSubscription = {
 	referenceId: "user-456",
 	stripeCustomerId: "cus_123",
 	stripeSubscriptionId: "sub_stripe_123",
+	licenseId: null,
 	status: "active",
 	periodStart: new Date("2024-01-01"),
 	periodEnd: new Date("2024-01-31"),
@@ -126,6 +127,7 @@ const mockProSubscription: UserSubscription = {
 	referenceId: "user-789",
 	stripeCustomerId: "cus_456",
 	stripeSubscriptionId: "sub_stripe_456",
+	licenseId: null,
 	status: "active",
 	periodStart: new Date("2024-01-01"),
 	periodEnd: new Date("2024-01-31"),
@@ -135,6 +137,36 @@ const mockProSubscription: UserSubscription = {
 	trialEnd: null,
 	createdAt: new Date("2024-01-01"),
 	updatedAt: new Date("2024-01-15"),
+};
+
+// Enterprise license subscription for license-based tests
+const mockLicenseSubscription: UserSubscription = {
+	id: "sub-3",
+	plan: "enterprise",
+	referenceId: "user-license",
+	stripeCustomerId: null,
+	stripeSubscriptionId: null,
+	licenseId: "license-001",
+	status: "active",
+	periodStart: null,
+	periodEnd: null,
+	cancelAtPeriodEnd: false,
+	seats: null,
+	trialStart: null,
+	trialEnd: null,
+	createdAt: new Date("2024-06-01"),
+	updatedAt: new Date("2024-06-01"),
+};
+
+// Enterprise plan limits from license (used in inline test mocks)
+const _enterpriseLimits: PlanLimits = {
+	maxOrganizations: 0, // unlimited
+	usersPerOrg: 50,
+	reportsPerMonth: 500,
+	noticesPerMonth: 500,
+	alertsPerMonth: 1000,
+	operationsPerMonth: 5000,
+	clientsPerMonth: 2000,
 };
 
 describe("SubscriptionService", () => {
@@ -551,6 +583,160 @@ describe("SubscriptionService", () => {
 				"[Subscription] reportOverageToStripe is deprecated, use reportAlertOverageToStripe instead",
 			);
 			consoleSpy.mockRestore();
+		});
+	});
+
+	describe("getUserSubscriptionStatus", () => {
+		it("should return no-subscription status when no record exists", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(null);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(0);
+
+			const status = await service.getUserSubscriptionStatus("user-none");
+
+			expect(status.hasSubscription).toBe(false);
+			expect(status.isLicenseBased).toBe(false);
+			expect(status.licenseExpiresAt).toBeNull();
+			expect(status.organizationsLimit).toBe(0);
+		});
+
+		it("should return Stripe subscription status for non-license subscription", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(1);
+
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const status =
+				await serviceWithPricing.getUserSubscriptionStatus("user-456");
+
+			expect(status.hasSubscription).toBe(true);
+			expect(status.plan).toBe("business");
+			expect(status.isLicenseBased).toBe(false);
+			expect(status.licenseExpiresAt).toBeNull();
+			expect(status.organizationsOwned).toBe(1);
+		});
+
+		it("should return license-based status for enterprise license subscription", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(1);
+
+			const mockPricingRepo = {
+				...createMockPricingRepositoryForBusiness(),
+				getLicenseByUserId: vi.fn().mockResolvedValue({
+					id: "license-001",
+					maxOrganizations: 0,
+					maxUsers: 50,
+					reportsPerMonth: 500,
+					noticesPerMonth: 500,
+					alertsPerMonth: 1000,
+					operationsPerMonth: 5000,
+					clientsPerMonth: 2000,
+					watchlistQueriesPerDay: 1000,
+					expiresAt: new Date("2025-12-31"),
+					status: "active",
+				}),
+			};
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const status =
+				await serviceWithPricing.getUserSubscriptionStatus("user-license");
+
+			expect(status.hasSubscription).toBe(true);
+			expect(status.plan).toBe("enterprise");
+			expect(status.isLicenseBased).toBe(true);
+			expect(status.licenseExpiresAt).toBe("2025-12-31T00:00:00.000Z");
+			expect(status.status).toBe("active");
+		});
+
+		it("should return null licenseExpiresAt for perpetual license", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(0);
+
+			const mockPricingRepo = {
+				...createMockPricingRepositoryForBusiness(),
+				getLicenseByUserId: vi.fn().mockResolvedValue({
+					id: "license-001",
+					maxOrganizations: 0,
+					maxUsers: 50,
+					reportsPerMonth: 500,
+					noticesPerMonth: 500,
+					alertsPerMonth: 1000,
+					operationsPerMonth: 5000,
+					clientsPerMonth: 2000,
+					watchlistQueriesPerDay: 1000,
+					expiresAt: null,
+					status: "active",
+				}),
+			};
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const status =
+				await serviceWithPricing.getUserSubscriptionStatus("user-license");
+
+			expect(status.isLicenseBased).toBe(true);
+			expect(status.licenseExpiresAt).toBeNull();
+		});
+	});
+
+	describe("getUserFeatures", () => {
+		it("should return enterprise features for license-based subscription", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+
+			const features = await service.getUserFeatures("user-license");
+
+			expect(features).toContain("data_capture");
+			expect(features).toContain("advanced_roles");
+			expect(features).toContain("priority_support");
+			expect(features.length).toBeGreaterThan(0);
+		});
+
+		it("should return enterprise features even for plan=enterprise without licenseId", async () => {
+			const enterpriseSub: UserSubscription = {
+				...mockSubscription,
+				plan: "enterprise",
+				licenseId: null,
+			};
+			mockRepository.getUserSubscription.mockResolvedValue(enterpriseSub);
+
+			const features = await service.getUserFeatures("user-enterprise");
+
+			expect(features).toContain("advanced_roles");
+			expect(features).toContain("priority_support");
+		});
+
+		it("should return business features for business plan", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+
+			const features = await service.getUserFeatures("user-456");
+
+			expect(features).toContain("data_capture");
+			expect(features).not.toContain("advanced_roles");
+		});
+
+		it("should return empty array when no subscription exists", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(null);
+
+			const features = await service.getUserFeatures("user-none");
+
+			expect(features).toEqual([]);
 		});
 	});
 });

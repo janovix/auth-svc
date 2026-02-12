@@ -65,6 +65,8 @@ export class SubscriptionService {
 				currentPeriodStart: null,
 				currentPeriodEnd: null,
 				cancelAtPeriodEnd: false,
+				isLicenseBased: false,
+				licenseExpiresAt: null,
 				organizationsOwned: orgsOwned,
 				organizationsLimit: 0,
 			};
@@ -74,12 +76,22 @@ export class SubscriptionService {
 		// Get limits from database via pricing service, or null if not available
 		const limits = await this.getUserPlanLimits(userId);
 		const isTrialing = subscription.status === "trialing";
+		const isLicenseBased = !!subscription.licenseId;
 
 		let trialDaysRemaining: number | null = null;
 		if (isTrialing && subscription.trialEnd) {
 			const now = new Date();
 			const diff = subscription.trialEnd.getTime() - now.getTime();
 			trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+		}
+
+		// Fetch license expiry if this is a license-based subscription
+		let licenseExpiresAt: string | null = null;
+		if (isLicenseBased && this.pricingService) {
+			const license = await this.pricingService.getLicenseByUserId(userId);
+			if (license?.expiresAt) {
+				licenseExpiresAt = license.expiresAt.toISOString();
+			}
 		}
 
 		return {
@@ -92,6 +104,8 @@ export class SubscriptionService {
 			currentPeriodStart: subscription.periodStart?.toISOString() || null,
 			currentPeriodEnd: subscription.periodEnd?.toISOString() || null,
 			cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+			isLicenseBased,
+			licenseExpiresAt,
 			organizationsOwned: orgsOwned,
 			organizationsLimit: limits?.maxOrganizations ?? 0,
 		};
@@ -177,6 +191,11 @@ export class SubscriptionService {
 	async getUserFeatures(userId: string): Promise<Feature[]> {
 		const subscription = await this.repository.getUserSubscription(userId);
 		if (!subscription) return [];
+
+		// Enterprise license users get all enterprise features
+		if (subscription.licenseId || subscription.plan === "enterprise") {
+			return PLAN_FEATURES.enterprise || [];
+		}
 
 		const plan = subscription.plan;
 		// Features are still static for now - could be moved to DB later
