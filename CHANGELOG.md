@@ -1,3 +1,10 @@
+# [1.4.0-rc.47](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.46...v1.4.0-rc.47) (2026-02-12)
+
+
+### Features
+
+* **auth:** enhance organization limit checks with enterprise license support ([977e650](https://github.com/janovix/auth-svc/commit/977e6503bdb94e3ad41fd0ef8a2106cd34d52b7b))
+
 # [1.4.0-rc.46](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.45...v1.4.0-rc.46) (2026-02-12)
 
 
