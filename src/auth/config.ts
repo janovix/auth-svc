@@ -315,7 +315,7 @@ export function buildResolvedAuthConfig(
 					// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders
 					// Then by active/trialing status, then by most recent
 					const subscription = await env.DB.prepare(
-						`SELECT plan, status, stripeSubscriptionId FROM subscription 
+						`SELECT plan, status, stripeSubscriptionId, licenseId FROM subscription 
 					 WHERE referenceId = ? 
 					 ORDER BY 
 					   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
@@ -328,6 +328,7 @@ export function buildResolvedAuthConfig(
 							plan: string;
 							status: string;
 							stripeSubscriptionId: string | null;
+							licenseId: string | null;
 						}>();
 
 					// Debug: log what we found
@@ -353,13 +354,32 @@ export function buildResolvedAuthConfig(
 						return false;
 					}
 
-					// Get org limit based on plan
-					const limits = PLAN_LIMITS[subscription.plan as PlanName];
-					if (!limits) {
+					// Resolve organization limit based on plan type
+					let maxOrganizations: number;
+
+					if (subscription.plan === "enterprise" && subscription.licenseId) {
+						// Enterprise license: fetch limits from the license record
+						const license = await env.DB.prepare(
+							`SELECT max_organizations FROM enterprise_licenses WHERE id = ? AND status = 'active'`,
+						)
+							.bind(subscription.licenseId)
+							.first<{ max_organizations: number }>();
+
+						// 0 means unlimited
+						maxOrganizations = license?.max_organizations ?? 0;
 						console.log(
-							`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+							`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
 						);
-						return false;
+					} else {
+						// Stripe plan: use hardcoded PLAN_LIMITS
+						const limits = PLAN_LIMITS[subscription.plan as PlanName];
+						if (!limits) {
+							console.log(
+								`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+							);
+							return false;
+						}
+						maxOrganizations = limits.maxOrganizations;
 					}
 
 					// Count organizations owned by user
@@ -371,15 +391,16 @@ export function buildResolvedAuthConfig(
 
 					const orgsOwned = orgsResult?.count ?? 0;
 
-					if (orgsOwned >= limits.maxOrganizations) {
+					// 0 means unlimited -- skip limit check
+					if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
 						console.log(
-							`[Org Guard] User ${user.id} has ${orgsOwned}/${limits.maxOrganizations} orgs, denying creation`,
+							`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
 						);
 						return false;
 					}
 
 					console.log(
-						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${limits.maxOrganizations} used)`,
+						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${maxOrganizations === 0 ? "unlimited" : maxOrganizations} used)`,
 					);
 					return true;
 				},
