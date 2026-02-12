@@ -188,12 +188,38 @@ adminRoutes.get("/stats", async (c) => {
 			{} as Record<string, number>,
 		);
 
+		// Subscription counts
+		const activeSubsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM subscription WHERE status = 'active'`,
+		).first<{ count: number }>();
+		const activeSubscriptions = activeSubsResult?.count ?? 0;
+
+		const trialingSubsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM subscription WHERE status = 'trialing'`,
+		).first<{ count: number }>();
+		const trialingSubscriptions = trialingSubsResult?.count ?? 0;
+
+		// License counts
+		const activeLicensesResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM enterprise_licenses WHERE status = 'active'`,
+		).first<{ count: number }>();
+		const activeLicenses = activeLicensesResult?.count ?? 0;
+
+		const totalLicensesResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM enterprise_licenses`,
+		).first<{ count: number }>();
+		const totalLicenses = totalLicensesResult?.count ?? 0;
+
 		return c.json({
 			success: true,
 			data: {
 				totalUsers,
 				totalOrganizations,
 				usersByRole,
+				activeSubscriptions,
+				trialingSubscriptions,
+				activeLicenses,
+				totalLicenses,
 			},
 		});
 	} catch (error) {

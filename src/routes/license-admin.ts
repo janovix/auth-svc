@@ -148,20 +148,28 @@ licenseAdminRoutes.get("/", async (c) => {
 	const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
 	const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-	let sql = `SELECT * FROM enterprise_licenses WHERE 1=1`;
+	let sql = `
+		SELECT el.*, u.name as user_name, u.email as user_email
+		FROM enterprise_licenses el
+		LEFT JOIN users u ON el.user_id = u.id
+		WHERE 1=1
+	`;
 	const params: (string | number)[] = [];
 
 	if (status) {
-		sql += ` AND status = ?`;
+		sql += ` AND el.status = ?`;
 		params.push(status);
 	}
 	if (search) {
-		sql += ` AND (key LIKE ? OR organization_name LIKE ?)`;
-		params.push(`%${search}%`, `%${search}%`);
+		sql += ` AND (el.key LIKE ? OR el.organization_name LIKE ? OR u.email LIKE ? OR u.name LIKE ?)`;
+		params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
 	}
 
 	// Count query
-	const countSql = sql.replace("SELECT *", "SELECT COUNT(*) as count");
+	const countSql = sql.replace(
+		/SELECT el\.\*, u\.name.*?FROM/,
+		"SELECT COUNT(*) as count FROM",
+	);
 	const countStmt = c.env.DB.prepare(countSql);
 	const countResult = await (
 		params.length > 0 ? countStmt.bind(...params) : countStmt
@@ -169,7 +177,7 @@ licenseAdminRoutes.get("/", async (c) => {
 	const total = countResult?.count ?? 0;
 
 	// Data query
-	sql += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+	sql += ` ORDER BY el.created_at DESC LIMIT ? OFFSET ?`;
 	params.push(limit, offset);
 
 	const stmt = c.env.DB.prepare(sql);
@@ -194,6 +202,8 @@ licenseAdminRoutes.get("/", async (c) => {
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
+		user_name: string | null;
+		user_email: string | null;
 	}>();
 
 	const licenses = results.results.map((r) => ({
@@ -217,6 +227,8 @@ licenseAdminRoutes.get("/", async (c) => {
 		metadata: r.metadata ? JSON.parse(r.metadata) : null,
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
+		userName: r.user_name,
+		userEmail: r.user_email,
 	}));
 
 	return c.json({
@@ -237,12 +249,68 @@ licenseAdminRoutes.get("/:id", async (c) => {
 	}
 
 	const id = c.req.param("id");
-	const repository = new PricingRepository(c.env.DB);
-	const license = await repository.getLicenseById(id);
 
-	if (!license) {
+	// Enrich with user info via JOIN
+	const row = await c.env.DB.prepare(
+		`SELECT el.*, u.name as user_name, u.email as user_email
+		 FROM enterprise_licenses el
+		 LEFT JOIN users u ON el.user_id = u.id
+		 WHERE el.id = ?`,
+	)
+		.bind(id)
+		.first<{
+			id: string;
+			key: string;
+			organization_name: string;
+			user_id: string | null;
+			issued_by: string | null;
+			status: string;
+			expires_at: string | null;
+			activated_at: string | null;
+			notes: string | null;
+			max_organizations: number;
+			max_users: number;
+			reports_per_month: number;
+			notices_per_month: number;
+			alerts_per_month: number;
+			operations_per_month: number;
+			clients_per_month: number;
+			watchlist_queries_per_day: number;
+			metadata: string | null;
+			created_at: string;
+			updated_at: string;
+			user_name: string | null;
+			user_email: string | null;
+		}>();
+
+	if (!row) {
 		return c.json({ success: false, error: "License not found" }, 404);
 	}
+
+	const license = {
+		id: row.id,
+		key: row.key,
+		organizationName: row.organization_name,
+		userId: row.user_id,
+		issuedBy: row.issued_by,
+		status: row.status,
+		expiresAt: row.expires_at,
+		activatedAt: row.activated_at,
+		notes: row.notes,
+		maxOrganizations: row.max_organizations,
+		maxUsers: row.max_users,
+		reportsPerMonth: row.reports_per_month,
+		noticesPerMonth: row.notices_per_month,
+		alertsPerMonth: row.alerts_per_month,
+		operationsPerMonth: row.operations_per_month,
+		clientsPerMonth: row.clients_per_month,
+		watchlistQueriesPerDay: row.watchlist_queries_per_day,
+		metadata: row.metadata ? JSON.parse(row.metadata) : null,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		userName: row.user_name,
+		userEmail: row.user_email,
+	};
 
 	return c.json({ success: true, data: license });
 });

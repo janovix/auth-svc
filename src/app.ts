@@ -61,6 +61,7 @@ import { internalApiKeysRoutes } from "./routes/internal-api-keys";
 import { usageRightsRoutes } from "./routes/usage-rights";
 import { internalUsageRightsRoutes } from "./routes/internal-usage-rights";
 import { licenseAdminRoutes } from "./routes/license-admin";
+import { subscriptionAdminRoutes } from "./routes/subscription-admin";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -215,6 +216,9 @@ app.route("/api/admin", adminRoutes);
 
 // Register License Admin routes (CRUD for enterprise licenses)
 app.route("/api/admin/licenses", licenseAdminRoutes);
+
+// Register Subscription Admin routes (list, stats, usage for admin)
+app.route("/api/admin/subscriptions", subscriptionAdminRoutes);
 
 // Register Admin OpenAPI documentation
 openapi.get("/api/admin/stats", AdminGetStatsEndpoint);
