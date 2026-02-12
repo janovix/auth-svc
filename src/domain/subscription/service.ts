@@ -119,7 +119,11 @@ export class SubscriptionService {
 			};
 		}
 
-		if (status.organizationsOwned >= status.organizationsLimit) {
+		// 0 means unlimited -- skip limit check
+		if (
+			status.organizationsLimit > 0 &&
+			status.organizationsOwned >= status.organizationsLimit
+		) {
 			return {
 				allowed: false,
 				reason: `You've reached the limit of ${status.organizationsLimit} organization(s) for your ${status.plan} plan`,

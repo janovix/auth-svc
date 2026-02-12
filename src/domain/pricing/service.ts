@@ -395,6 +395,14 @@ export class PricingService {
 			return { success: false, error: "License is already in use" };
 		}
 
+		// Check if already activated by this user
+		if (license.userId === userId && license.activatedAt) {
+			return {
+				success: false,
+				error: "This license is already activated on your account",
+			};
+		}
+
 		// Activate the license
 		await this.repository.activateLicense(license.id, userId);
 

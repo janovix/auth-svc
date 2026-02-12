@@ -500,10 +500,12 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				subscriptionStatus.status === "trialing");
 
 		// Can create org only if subscription is valid AND within org limit
+		// 0 means unlimited -- no limit check needed
 		const canCreateOrg =
 			isSubscriptionValid &&
-			subscriptionStatus.organizationsOwned <
-				subscriptionStatus.organizationsLimit;
+			(subscriptionStatus.organizationsLimit === 0 ||
+				subscriptionStatus.organizationsOwned <
+					subscriptionStatus.organizationsLimit);
 
 		// Debug: Log computed subscription status
 		console.log("[Onboarding Status] Computed subscription status:", {
