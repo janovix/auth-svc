@@ -1,3 +1,10 @@
+# [1.4.0-rc.48](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.47...v1.4.0-rc.48) (2026-02-12)
+
+
+### Features
+
+* **subscription:** implement license-based subscription handling and enhance user subscription queries ([63d60c3](https://github.com/janovix/auth-svc/commit/63d60c3466fc0830c6cfbc135e67b377f70d2b9c))
+
 # [1.4.0-rc.47](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.46...v1.4.0-rc.47) (2026-02-12)
 
 
