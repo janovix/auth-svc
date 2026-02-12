@@ -1,3 +1,10 @@
+# [1.4.0-rc.43](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.42...v1.4.0-rc.43) (2026-02-12)
+
+
+### Features
+
+* **usage-rights:** implement usage rights and licensing system ([0a404f7](https://github.com/janovix/auth-svc/commit/0a404f762300413912665f8ad235c34596c098bd))
+
 # [1.4.0-rc.42](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.41...v1.4.0-rc.42) (2026-02-11)
 
 
