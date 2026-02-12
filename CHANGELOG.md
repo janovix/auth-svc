@@ -1,3 +1,10 @@
+# [1.4.0-rc.46](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.45...v1.4.0-rc.46) (2026-02-12)
+
+
+### Features
+
+* **pricing, subscription:** enhance license activation and subscription organization limit checks ([08dd7d3](https://github.com/janovix/auth-svc/commit/08dd7d3fc97f38a2e7f0f78c513483bb2c9732a0))
+
 # [1.4.0-rc.45](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.44...v1.4.0-rc.45) (2026-02-12)
 
 
