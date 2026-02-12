@@ -1,3 +1,10 @@
+# [1.4.0-rc.44](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.43...v1.4.0-rc.44) (2026-02-12)
+
+
+### Features
+
+* **pricing:** add license management features for superseding and revoking licenses ([0c53f69](https://github.com/janovix/auth-svc/commit/0c53f69864b827b55b96f3aae2bc6ad68284f3a5))
+
 # [1.4.0-rc.43](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.42...v1.4.0-rc.43) (2026-02-12)
 
 
