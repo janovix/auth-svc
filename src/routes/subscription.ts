@@ -598,8 +598,7 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 
 	const license = validation.license;
 
-	// Get plan name
-	const plan = await pricingService.getPlanById(license.planId);
+	// License is self-contained -- limits come directly from the license
 	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
 
 	return c.json({
@@ -607,17 +606,18 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 		data: {
 			key: license.key,
 			organizationName: license.organizationName,
-			plan: plan?.displayName || plan?.name || license.planId,
+			plan: "Enterprise License",
 			expiresAt: license.expiresAt?.toISOString() ?? null,
 			limits: limits
 				? {
 						maxOrganizations: limits.maxOrganizations,
 						maxUsers: limits.usersPerOrg,
-						reportsIncluded: limits.reportsPerMonth,
-						noticesIncluded: limits.noticesPerMonth,
-						alertsIncluded: limits.alertsPerMonth,
-						operationsIncluded: limits.operationsPerMonth,
-						clientsIncluded: limits.clientsPerMonth,
+						reportsPerMonth: limits.reportsPerMonth,
+						noticesPerMonth: limits.noticesPerMonth,
+						alertsPerMonth: limits.alertsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
+						clientsPerMonth: limits.clientsPerMonth,
+						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
 				: null,
 			isActive: license.status === "active",
@@ -660,9 +660,6 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 
 	const license = activation.license;
 
-	// Get plan info
-	const plan = await pricingService.getPlanById(license.planId);
-
 	// Create or update user subscription based on license
 	const existingSubscription = await c.env.DB.prepare(
 		`SELECT id FROM subscription WHERE referenceId = ? LIMIT 1`,
@@ -670,8 +667,8 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 		.bind(user.id)
 		.first<{ id: string }>();
 
-	// Use plan name for the subscription
-	const planName = plan?.name || license.planId;
+	// License is self-contained, use "enterprise" as the plan name
+	const planName = "enterprise";
 
 	if (existingSubscription) {
 		await c.env.DB.prepare(
@@ -699,17 +696,18 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 		success: true,
 		data: {
 			message: "License activated successfully",
-			plan: plan?.displayName || planName,
+			plan: "Enterprise License",
 			organizationName: license.organizationName,
 			limits: limits
 				? {
 						maxOrganizations: limits.maxOrganizations,
 						maxUsers: limits.usersPerOrg,
-						reportsIncluded: limits.reportsPerMonth,
-						noticesIncluded: limits.noticesPerMonth,
-						alertsIncluded: limits.alertsPerMonth,
-						operationsIncluded: limits.operationsPerMonth,
-						clientsIncluded: limits.clientsPerMonth,
+						reportsPerMonth: limits.reportsPerMonth,
+						noticesPerMonth: limits.noticesPerMonth,
+						alertsPerMonth: limits.alertsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
+						clientsPerMonth: limits.clientsPerMonth,
+						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
 				: null,
 		},

@@ -58,6 +58,9 @@ import { adminOrganizationsRoutes } from "./routes/admin-organizations";
 import { pricingRoutes } from "./routes/pricing";
 import { apiKeysRoutes } from "./routes/api-keys";
 import { internalApiKeysRoutes } from "./routes/internal-api-keys";
+import { usageRightsRoutes } from "./routes/usage-rights";
+import { internalUsageRightsRoutes } from "./routes/internal-usage-rights";
+import { licenseAdminRoutes } from "./routes/license-admin";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -187,6 +190,12 @@ app.route("/api/api-keys", apiKeysRoutes);
 // Register Internal API Keys routes (service binding validation)
 app.route("/internal/api-keys", internalApiKeysRoutes);
 
+// Register Usage Rights routes (entitlement checks, metering, gates)
+app.route("/api/usage-rights", usageRightsRoutes);
+
+// Register Internal Usage Rights routes (service binding, no auth)
+app.route("/internal/usage-rights", internalUsageRightsRoutes);
+
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);
 
@@ -203,6 +212,9 @@ openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
 
 // Register Admin routes (KV management, etc.)
 app.route("/api/admin", adminRoutes);
+
+// Register License Admin routes (CRUD for enterprise licenses)
+app.route("/api/admin/licenses", licenseAdminRoutes);
 
 // Register Admin OpenAPI documentation
 openapi.get("/api/admin/stats", AdminGetStatsEndpoint);

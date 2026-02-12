@@ -229,18 +229,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-XXXX-XXXX-XXXX",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				operationsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-01"),
@@ -269,18 +271,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-REVOKED",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "revoked",
 				expiresAt: null,
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				operationsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-01"),
@@ -299,18 +303,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-EXPIRED",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "active",
 				expiresAt: new Date("2023-01-01"), // Past date
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				operationsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2022-01-01"),
 				updatedAt: new Date("2022-01-01"),
@@ -347,18 +353,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-CUSTOM",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: "user_123",
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: new Date("2024-01-15"),
+				notes: null,
 				maxOrganizations: 10, // Override
 				maxUsers: 100, // Override
-				reportsIncluded: null, // Use plan default
-				noticesIncluded: 50, // Override
-				alertsIncluded: null,
-				operationsIncluded: null,
-				clientsIncluded: null,
+				reportsPerMonth: 0, // Use plan default
+				noticesPerMonth: 50, // Override
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-15"),
@@ -375,14 +383,14 @@ describe("PricingService", () => {
 
 			expect(limits).toBeDefined();
 			expect(limits?.source).toBe("license");
-			expect(limits?.planName).toBe("pro");
-			// Check overrides
+			expect(limits?.planName).toBe("enterprise");
+			// License is self-contained -- all limits come from the license directly
 			expect(limits?.maxOrganizations).toBe(10);
 			expect(limits?.usersPerOrg).toBe(100);
 			expect(limits?.noticesPerMonth).toBe(50);
-			// Check plan defaults
-			expect(limits?.reportsPerMonth).toBe(10); // From pro plan
-			expect(limits?.alertsPerMonth).toBe(250); // From pro plan
+			// 0 = unlimited (no plan fallback)
+			expect(limits?.reportsPerMonth).toBe(0);
+			expect(limits?.alertsPerMonth).toBe(0);
 		});
 	});
 
@@ -392,18 +400,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-PARTIAL",
 				organizationName: "Acme Corp",
-				planId: "plan_business",
 				userId: "user_123",
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: new Date("2024-01-15"),
+				notes: null,
 				maxOrganizations: 5, // Override
-				maxUsers: null, // Use plan default (5)
-				reportsIncluded: 20, // Override
-				noticesIncluded: null, // Use plan default (3)
-				alertsIncluded: null, // Use plan default (50)
-				operationsIncluded: 1000, // Override
-				clientsIncluded: null, // Use plan default (50)
+				maxUsers: 0, // Use plan default (5)
+				reportsPerMonth: 20, // Override
+				noticesPerMonth: 0, // Use plan default (3)
+				alertsPerMonth: 0, // Use plan default (50)
+				operationsPerMonth: 1000, // Override
+				clientsPerMonth: 0, // Use plan default (50)
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-15"),
@@ -417,15 +427,16 @@ describe("PricingService", () => {
 
 			expect(limits).toBeDefined();
 			expect(limits?.source).toBe("license");
-			// Overridden values
+			expect(limits?.planName).toBe("enterprise");
+			// License is self-contained -- all limits come from the license directly
 			expect(limits?.maxOrganizations).toBe(5);
 			expect(limits?.reportsPerMonth).toBe(20);
 			expect(limits?.operationsPerMonth).toBe(1000);
-			// Plan defaults
-			expect(limits?.usersPerOrg).toBe(5);
-			expect(limits?.noticesPerMonth).toBe(3);
-			expect(limits?.alertsPerMonth).toBe(50);
-			expect(limits?.clientsPerMonth).toBe(50);
+			// 0 = unlimited (no plan fallback since license is self-contained)
+			expect(limits?.usersPerOrg).toBe(0);
+			expect(limits?.noticesPerMonth).toBe(0);
+			expect(limits?.alertsPerMonth).toBe(0);
+			expect(limits?.clientsPerMonth).toBe(0);
 		});
 
 		it("should return null when license not found", async () => {

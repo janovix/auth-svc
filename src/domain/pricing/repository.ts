@@ -616,18 +616,20 @@ export class PricingRepository {
 				id: string;
 				key: string;
 				organization_name: string;
-				plan_id: string;
 				user_id: string | null;
+				issued_by: string | null;
 				status: string;
 				expires_at: string | null;
 				activated_at: string | null;
-				max_organizations: number | null;
-				max_users: number | null;
-				reports_included: number | null;
-				notices_included: number | null;
-				alerts_included: number | null;
-				operations_included: number | null;
-				clients_included: number | null;
+				notes: string | null;
+				max_organizations: number;
+				max_users: number;
+				reports_per_month: number;
+				notices_per_month: number;
+				alerts_per_month: number;
+				operations_per_month: number;
+				clients_per_month: number;
+				watchlist_queries_per_day: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -648,18 +650,20 @@ export class PricingRepository {
 				id: string;
 				key: string;
 				organization_name: string;
-				plan_id: string;
 				user_id: string | null;
+				issued_by: string | null;
 				status: string;
 				expires_at: string | null;
 				activated_at: string | null;
-				max_organizations: number | null;
-				max_users: number | null;
-				reports_included: number | null;
-				notices_included: number | null;
-				alerts_included: number | null;
-				operations_included: number | null;
-				clients_included: number | null;
+				notes: string | null;
+				max_organizations: number;
+				max_users: number;
+				reports_per_month: number;
+				notices_per_month: number;
+				alerts_per_month: number;
+				operations_per_month: number;
+				clients_per_month: number;
+				watchlist_queries_per_day: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -685,18 +689,20 @@ export class PricingRepository {
 				id: string;
 				key: string;
 				organization_name: string;
-				plan_id: string;
 				user_id: string | null;
+				issued_by: string | null;
 				status: string;
 				expires_at: string | null;
 				activated_at: string | null;
-				max_organizations: number | null;
-				max_users: number | null;
-				reports_included: number | null;
-				notices_included: number | null;
-				alerts_included: number | null;
-				operations_included: number | null;
-				clients_included: number | null;
+				notes: string | null;
+				max_organizations: number;
+				max_users: number;
+				reports_per_month: number;
+				notices_per_month: number;
+				alerts_per_month: number;
+				operations_per_month: number;
+				clients_per_month: number;
+				watchlist_queries_per_day: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -715,22 +721,24 @@ export class PricingRepository {
 
 		await this.db
 			.prepare(
-				`INSERT INTO enterprise_licenses (id, key, organization_name, plan_id, status, expires_at, max_organizations, max_users, reports_included, notices_included, alerts_included, operations_included, clients_included, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO enterprise_licenses (id, key, organization_name, issued_by, notes, status, expires_at, max_organizations, max_users, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
 				input.key.toUpperCase(),
 				input.organizationName,
-				input.planId,
+				input.issuedBy ?? null,
+				input.notes ?? null,
 				input.expiresAt?.toISOString() ?? null,
-				input.maxOrganizations ?? null,
-				input.maxUsers ?? null,
-				input.reportsIncluded ?? null,
-				input.noticesIncluded ?? null,
-				input.alertsIncluded ?? null,
-				input.operationsIncluded ?? null,
-				input.clientsIncluded ?? null,
+				input.maxOrganizations ?? 0,
+				input.maxUsers ?? 0,
+				input.reportsPerMonth ?? 0,
+				input.noticesPerMonth ?? 0,
+				input.alertsPerMonth ?? 0,
+				input.operationsPerMonth ?? 0,
+				input.clientsPerMonth ?? 0,
+				input.watchlistQueriesPerDay ?? 0,
 				now,
 				now,
 			)
@@ -867,18 +875,20 @@ export class PricingRepository {
 		id: string;
 		key: string;
 		organization_name: string;
-		plan_id: string;
 		user_id: string | null;
+		issued_by: string | null;
 		status: string;
 		expires_at: string | null;
 		activated_at: string | null;
-		max_organizations: number | null;
-		max_users: number | null;
-		reports_included: number | null;
-		notices_included: number | null;
-		alerts_included: number | null;
-		operations_included: number | null;
-		clients_included: number | null;
+		notes: string | null;
+		max_organizations: number;
+		max_users: number;
+		reports_per_month: number;
+		notices_per_month: number;
+		alerts_per_month: number;
+		operations_per_month: number;
+		clients_per_month: number;
+		watchlist_queries_per_day: number;
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
@@ -887,18 +897,20 @@ export class PricingRepository {
 			id: result.id,
 			key: result.key,
 			organizationName: result.organization_name,
-			planId: result.plan_id,
 			userId: result.user_id,
-			status: result.status as "active" | "revoked" | "expired",
+			issuedBy: result.issued_by,
+			status: result.status as "active" | "revoked" | "expired" | "suspended",
 			expiresAt: result.expires_at ? new Date(result.expires_at) : null,
 			activatedAt: result.activated_at ? new Date(result.activated_at) : null,
+			notes: result.notes,
 			maxOrganizations: result.max_organizations,
 			maxUsers: result.max_users,
-			reportsIncluded: result.reports_included,
-			noticesIncluded: result.notices_included,
-			alertsIncluded: result.alerts_included,
-			operationsIncluded: result.operations_included,
-			clientsIncluded: result.clients_included,
+			reportsPerMonth: result.reports_per_month,
+			noticesPerMonth: result.notices_per_month,
+			alertsPerMonth: result.alerts_per_month,
+			operationsPerMonth: result.operations_per_month,
+			clientsPerMonth: result.clients_per_month,
+			watchlistQueriesPerDay: result.watchlist_queries_per_day,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
 			createdAt: new Date(result.created_at),
 			updatedAt: new Date(result.updated_at),

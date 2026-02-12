@@ -18,6 +18,7 @@ import {
 	SubscriptionService,
 } from "../domain/subscription";
 import { PricingRepository, PricingService } from "../domain/pricing";
+import { UsageRightsRepository } from "../domain/usage-rights/repository";
 
 type WebhookBindings = {
 	Bindings: Bindings;
@@ -320,12 +321,25 @@ async function handleEvent(
 			const periodStart = new Date(invoiceData.period_start * 1000);
 			const periodEnd = new Date(invoiceData.period_end * 1000);
 
+			// Also clean up old daily usage records (older than the new period start)
+			const usageRightsRepo = new UsageRightsRepository(c.env.DB);
+			const cleanupDate = periodStart.toISOString().split("T")[0];
+
 			for (const org of orgsResult.results) {
 				await service.resetUsageForPeriod(
 					org.organizationId,
 					periodStart,
 					periodEnd,
 				);
+				// Clean old daily usage records to prevent unbounded table growth
+				await usageRightsRepo
+					.cleanOldDailyUsage(org.organizationId, cleanupDate)
+					.catch((err) =>
+						console.error(
+							`[Webhook] Failed to clean daily usage for org ${org.organizationId}:`,
+							err,
+						),
+					);
 				console.log(`[Webhook] Reset usage for org ${org.organizationId}`);
 			}
 			break;

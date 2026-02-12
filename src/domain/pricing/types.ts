@@ -78,19 +78,21 @@ export interface EnterpriseLicense {
 	id: string;
 	key: string;
 	organizationName: string;
-	planId: string;
 	userId: string | null;
-	status: "active" | "revoked" | "expired";
+	issuedBy: string | null;
+	status: "active" | "revoked" | "expired" | "suspended";
 	expiresAt: Date | null;
 	activatedAt: Date | null;
-	// Optional limit overrides (null = use plan defaults)
-	maxOrganizations: number | null;
-	maxUsers: number | null;
-	reportsIncluded: number | null;
-	noticesIncluded: number | null;
-	alertsIncluded: number | null;
-	operationsIncluded: number | null;
-	clientsIncluded: number | null;
+	notes: string | null;
+	// All limits explicit, no plan inheritance. 0 = unlimited.
+	maxOrganizations: number;
+	maxUsers: number;
+	reportsPerMonth: number;
+	noticesPerMonth: number;
+	alertsPerMonth: number;
+	operationsPerMonth: number;
+	clientsPerMonth: number;
+	watchlistQueriesPerDay: number;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -144,6 +146,7 @@ export interface EffectiveLimits {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
+	watchlistQueriesPerDay: number;
 	source: "plan" | "license";
 	planName: string;
 }
@@ -195,13 +198,16 @@ export interface CreatePlanPriceInput {
 export interface CreateLicenseInput {
 	key: string;
 	organizationName: string;
-	planId: string;
+	issuedBy?: string;
+	notes?: string;
 	expiresAt?: Date;
+	// All limits default to 0 (unlimited) if not provided
 	maxOrganizations?: number;
 	maxUsers?: number;
-	reportsIncluded?: number;
-	noticesIncluded?: number;
-	alertsIncluded?: number;
-	operationsIncluded?: number;
-	clientsIncluded?: number;
+	reportsPerMonth?: number;
+	noticesPerMonth?: number;
+	alertsPerMonth?: number;
+	operationsPerMonth?: number;
+	clientsPerMonth?: number;
+	watchlistQueriesPerDay?: number;
 }
