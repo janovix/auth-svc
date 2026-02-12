@@ -81,7 +81,12 @@ function createSubscriptionService(
 
 /**
  * GET /api/subscription/status
- * Get current user's subscription status
+ * Get current user's subscription status.
+ *
+ * Query params:
+ *   resolveFromOrg=true  – resolve from the active organization's owner
+ *     instead of the requesting user. This ensures invited members see
+ *     the org-level entitlement (owner's subscription/license).
  */
 subscriptionRoutes.get("/status", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -90,8 +95,23 @@ subscriptionRoutes.get("/status", async (c) => {
 	}
 
 	const service = createSubscriptionService(c);
+	const resolveFromOrg = c.req.query("resolveFromOrg") === "true";
 
-	const status = await service.getUserSubscriptionStatus(user.id);
+	let effectiveUserId = user.id;
+
+	if (resolveFromOrg && user.organizationId) {
+		const ownerResult = await c.env.DB.prepare(
+			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+		)
+			.bind(user.organizationId)
+			.first<{ userId: string }>();
+
+		if (ownerResult) {
+			effectiveUserId = ownerResult.userId;
+		}
+	}
+
+	const status = await service.getUserSubscriptionStatus(effectiveUserId);
 
 	return c.json({
 		success: true,
