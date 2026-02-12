@@ -1,3 +1,10 @@
+# [1.4.0-rc.49](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.48...v1.4.0-rc.49) (2026-02-12)
+
+
+### Features
+
+* **subscription:** enhance subscription status retrieval with organization owner resolution ([7444e02](https://github.com/janovix/auth-svc/commit/7444e028482967b8f1c60e3ffd5c30e49c9c729c))
+
 # [1.4.0-rc.48](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.47...v1.4.0-rc.48) (2026-02-12)
 
 
