@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
+import * as Sentry from "@sentry/cloudflare";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
 import type { Bindings } from "../types/bindings";
@@ -77,21 +78,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-		const startTime = Date.now();
 		const pathname = c.req.path;
-
-		// Log request start for debugging hang issues
-		console.log(`[Auth] Request started: ${c.req.method} ${pathname}`);
 
 		// Get execution context from Hono context (Cloudflare Workers)
 		// Hono exposes executionCtx in Cloudflare Workers environment
 		const executionContext = (
 			c as unknown as { executionCtx?: ExecutionContext }
 		).executionCtx;
-
-		console.log(
-			`[Auth] Execution context available: ${!!executionContext}, hasWaitUntil: ${executionContext ? typeof executionContext.waitUntil : "N/A"}`,
-		);
 
 		const { auth, accessPolicy, cleanup } = await getBetterAuthContext(
 			c.env,
@@ -104,10 +97,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Instead, we rely on:
 		// 1. The MAX_CONTEXT_AGE_MS (30s) staleness detection to clean up eventually
 		// 2. Cleanup after the entire handler chain completes (see below)
-
-		console.log(
-			`[Auth] Context built in ${Date.now() - startTime}ms for ${pathname}`,
-		);
 
 		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
 		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
@@ -128,12 +117,9 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				if (body.email) {
 					otpEmail = body.email;
 					startOtpTracking(otpEmail);
-					console.log(
-						`[OTP Tracking] Started tracking OTP request for ${otpEmail}`,
-					);
 				}
 			} catch {
-				console.log(`[OTP Tracking] Could not parse body for email tracking`);
+				// Silently ignore body parsing failures
 			}
 		}
 
@@ -170,55 +156,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		// === SUBSCRIPTION ENDPOINT LOGGING ===
-		// Log all subscription-related requests for debugging
-		if (pathname.startsWith("/api/auth/subscription/")) {
-			console.log(
-				`[Subscription] ========== ${c.req.method} ${pathname} ==========`,
-			);
-			console.log(`[Subscription] Headers:`, {
-				origin: c.req.header("origin"),
-				contentType: c.req.header("content-type"),
-				authorization: c.req.header("authorization") ? "present" : "absent",
-			});
-
-			// Log request body for POST/PUT requests
-			if (c.req.method === "POST" || c.req.method === "PUT") {
-				try {
-					const bodyClone = await c.req.raw.clone().json();
-					console.log(
-						`[Subscription] Request Body:`,
-						JSON.stringify(bodyClone, null, 2),
-					);
-				} catch {
-					console.log(`[Subscription] Request Body: (could not parse)`);
-				}
-			}
-
-			// Log Stripe price IDs from database
-			try {
-				const { PricingRepository, PricingService } = await import(
-					"../domain/pricing"
-				);
-				const pricingRepository = new PricingRepository(c.env.DB);
-				const pricingService = new PricingService(pricingRepository);
-				const priceMap = await pricingService.getAllSubscriptionPrices();
-				console.log(`[Subscription] Database Stripe Price IDs:`, {
-					business: priceMap.get("business") || "NOT FOUND",
-					pro: priceMap.get("pro") || "NOT FOUND",
-					ultra: priceMap.get("ultra") || "NOT FOUND",
-				});
-			} catch (err) {
-				console.log(`[Subscription] Could not fetch prices from DB:`, err);
-				console.log(
-					`[Subscription] Database must be configured with price IDs`,
-				);
-			}
-			console.log(
-				`[Subscription] ================================================`,
-			);
-		}
-
 		// Handle internal access policy if enabled
 		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
 		if (accessPolicy.enforceInternal) {
@@ -236,24 +173,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 			if (isPublicRoute) {
 				const response = await handleAuthRequest(c, auth);
-				// Log subscription endpoint responses
-				if (pathname.startsWith("/api/auth/subscription/")) {
-					console.log(`[Subscription] Response Status: ${response.status}`);
-					if (response.status >= 400) {
-						try {
-							const errorBody = await response.clone().json();
-							console.log(
-								`[Subscription] Error Response:`,
-								JSON.stringify(errorBody, null, 2),
-							);
-						} catch {
-							console.log(
-								`[Subscription] Error Response: (could not parse body)`,
-							);
-						}
-					}
-					console.log(`[Subscription] =====================================`);
-				}
 
 				// CRITICAL: Schedule cleanup for public routes too!
 				// Without this, execution context leaks and causes hanging
@@ -294,37 +213,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 			}
 		}
 
-		const preHandlerTime = Date.now();
 		const response = await handleAuthRequest(c, auth);
-		console.log(
-			`[Auth] Handler completed in ${Date.now() - preHandlerTime}ms for ${pathname} (total: ${Date.now() - startTime}ms)`,
-		);
-
-		// Log subscription endpoint responses (non-public route case)
-		if (pathname.startsWith("/api/auth/subscription/")) {
-			console.log(`[Subscription] Response Status: ${response.status}`);
-			if (response.status >= 400) {
-				try {
-					const errorBody = await response.clone().json();
-					console.log(
-						`[Subscription] Error Response:`,
-						JSON.stringify(errorBody, null, 2),
-					);
-				} catch {
-					console.log(`[Subscription] Error Response: (could not parse body)`);
-				}
-			}
-			console.log(`[Subscription] =====================================`);
-		}
 
 		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
 		if (isOtpRequest && otpEmail && response.status === 200) {
 			const wasSent = checkOtpSent();
 			if (!wasSent) {
-				console.log(
-					`[OTP Tracking] OTP for ${otpEmail} was RATE LIMITED (existing OTP still valid)`,
-				);
-
 				// Modify response to indicate rate limiting
 				try {
 					const originalBody = (await response.clone().json()) as Record<
@@ -355,8 +249,6 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				} catch {
 					// If we can't parse, just return original
 				}
-			} else {
-				console.log(`[OTP Tracking] OTP for ${otpEmail} was SENT successfully`);
 			}
 		}
 
@@ -392,14 +284,10 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 async function validateTurnstileForRequest(
 	c: Context<{ Bindings: Bindings }>,
 ): Promise<{ valid: boolean; message: string }> {
-	const pathname = c.req.path;
 	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
 
 	// Skip validation if Turnstile is not configured (development mode)
 	if (!turnstileSecret) {
-		console.warn(
-			`[Turnstile] TURNSTILE_SECRET_KEY not configured, skipping validation for ${pathname}`,
-		);
 		return { valid: true, message: "Turnstile not configured" };
 	}
 
@@ -408,13 +296,10 @@ async function validateTurnstileForRequest(
 	const turnstileToken = c.req.header("x-captcha-response");
 
 	if (!turnstileToken) {
-		console.warn(`[Turnstile] Missing token for ${pathname}`);
 		return { valid: false, message: "Turnstile token is required" };
 	}
 
 	const clientIp = getClientIp(c.req.raw);
-	const startTime = Date.now();
-	console.log(`[Turnstile] Starting verification for ${pathname}`);
 
 	const result = await verifyTurnstileToken({
 		secretKey: turnstileSecret,
@@ -422,22 +307,12 @@ async function validateTurnstileForRequest(
 		remoteIp: clientIp,
 	});
 
-	const duration = Date.now() - startTime;
-
 	if (!result.success) {
-		console.warn(
-			`[Turnstile] Verification failed for ${pathname} in ${duration}ms:`,
-			result["error-codes"],
-		);
 		return {
 			valid: false,
 			message: "Bot verification failed. Please try again.",
 		};
 	}
-
-	console.log(
-		`[Turnstile] Verification succeeded for ${pathname} in ${duration}ms`,
-	);
 
 	return { valid: true, message: "Turnstile verified" };
 }
@@ -455,8 +330,6 @@ async function handleAuthRequest(
 ) {
 	const pathname = c.req.path;
 	const startTime = Date.now();
-
-	console.log(`[Auth] Passing request to Better Auth handler for ${pathname}`);
 
 	// Pass the original request directly to Better Auth
 	// We no longer pre-process the body to avoid any stream issues
@@ -501,10 +374,12 @@ async function handleAuthRequest(
 	const timeoutPromise = new Promise<Response>((_, reject) => {
 		setTimeout(() => {
 			const elapsed = Date.now() - startTime;
-			console.error(
-				`[Auth] Handler timeout after ${elapsed}ms for ${pathname}`,
-			);
-			reject(new Error(`Request timeout after ${elapsed}ms`));
+			const error = new Error(`Request timeout after ${elapsed}ms`);
+			Sentry.captureException(error, {
+				tags: { context: "auth-handler-timeout", pathname },
+				extra: { elapsed, pathname },
+			});
+			reject(error);
 		}, BETTER_AUTH_HANDLER_TIMEOUT_MS);
 	});
 
@@ -518,9 +393,10 @@ async function handleAuthRequest(
 
 		// Clear JWKS and invalidate cache for next request
 		// Don't retry immediately as body may have been consumed
-		console.log(
-			`[Auth] JWKS decrypt error detected, cleared JWKS for next request`,
-		);
+		Sentry.captureMessage("JWKS decrypt error detected, cleared JWKS", {
+			level: "warning",
+			tags: { context: "jwks-decrypt-error", pathname },
+		});
 		await clearJwksAndResetAuth(c);
 		return c.json(
 			{
@@ -537,16 +413,21 @@ async function handleAuthRequest(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		const isTimeout = errorMessage.includes("timeout");
-		console.error(
-			`[Auth] Handler ${isTimeout ? "timeout" : "error"} for ${pathname}:`,
-			errorMessage,
-		);
+
+		Sentry.captureException(error, {
+			tags: {
+				context: isTimeout ? "auth-handler-timeout" : "auth-handler-error",
+				pathname,
+			},
+			extra: { pathname, errorMessage, isTimeout },
+		});
 
 		// Check if it's a JWKS decrypt error
 		if (isJwksDecryptError(error)) {
-			console.log(
-				`[Auth] JWKS decrypt error detected in catch, cleared JWKS for next request`,
-			);
+			Sentry.captureMessage("JWKS decrypt error detected in catch", {
+				level: "warning",
+				tags: { context: "jwks-decrypt-error-catch", pathname },
+			});
 			await clearJwksAndResetAuth(c, error);
 		}
 

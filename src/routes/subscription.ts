@@ -13,6 +13,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/cloudflare";
 import type { Bindings } from "../types/bindings";
 import {
 	SubscriptionRepository,
@@ -266,9 +267,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				}
 			} catch {
 				// Customer doesn't exist in Stripe, will create a new one
-				console.log(
-					`[Stripe] Customer ${existingSubscription.stripeCustomerId} not found in Stripe, creating new`,
-				);
 			}
 		}
 
@@ -295,9 +293,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 		if (existingCustomers.data.length > 0) {
 			// Use existing customer, update metadata if needed
 			customer = existingCustomers.data[0];
-			console.log(
-				`[Stripe] Found existing customer ${customer.id} for email ${userResult.email}`,
-			);
 
 			// Update the customer with current user info
 			await stripe.customers.update(customer.id, {
@@ -318,9 +313,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				},
 			});
 			customer = newCustomer;
-			console.log(
-				`[Stripe] Created new customer ${customer.id} for email ${userResult.email}`,
-			);
 		}
 
 		// Store the customer ID in a subscription record
@@ -349,16 +341,14 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				.run();
 		}
 
-		console.log(
-			`[Stripe] Created customer ${customer.id} for user ${userResult.id}`,
-		);
-
 		return c.json({
 			success: true,
 			data: { customerId: customer.id, existed: false },
 		});
 	} catch (error) {
-		console.error("[Stripe] Error ensuring customer:", error);
+		Sentry.captureException(error, {
+			tags: { context: "stripe-ensure-customer" },
+		});
 		return c.json(
 			{
 				success: false,
@@ -455,27 +445,8 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 		// Also get raw DB record for debugging
 		const dbSubscription = await repository.getUserSubscription(user.id);
 
-		// Debug: Log LOCAL DB subscription data
-		console.log(
-			"[Onboarding Status] LOCAL DB subscription record:",
-			dbSubscription
-				? {
-						id: dbSubscription.id,
-						plan: dbSubscription.plan,
-						status: dbSubscription.status,
-						stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
-						stripeCustomerId: dbSubscription.stripeCustomerId,
-						licenseId: dbSubscription.licenseId,
-						periodStart: dbSubscription.periodStart?.toISOString(),
-						periodEnd: dbSubscription.periodEnd?.toISOString(),
-						cancelAtPeriodEnd: dbSubscription.cancelAtPeriodEnd,
-					}
-				: "NO SUBSCRIPTION RECORD IN DB",
-		);
-
 		// Verify against Stripe directly if we have a Stripe-based subscription
 		// Skip verification for license-based subscriptions (no Stripe subscription to verify)
-		let stripeVerification: { status: string; plan?: string } | null = null;
 		if (
 			stripe &&
 			dbSubscription?.stripeSubscriptionId &&
@@ -485,36 +456,27 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				const stripeSub = await stripe.subscriptions.retrieve(
 					dbSubscription.stripeSubscriptionId,
 				);
-				stripeVerification = {
-					status: stripeSub.status,
-					plan:
-						typeof stripeSub.items.data[0]?.price?.lookup_key === "string"
-							? stripeSub.items.data[0].price.lookup_key
-							: stripeSub.items.data[0]?.price?.id,
-				};
-				console.log("[Onboarding Status] STRIPE DIRECT verification:", {
-					stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
-					stripeStatus: stripeSub.status,
-					stripePlan: stripeVerification.plan,
-					localStatus: dbSubscription.status,
-					localPlan: dbSubscription.plan,
-					IN_SYNC: stripeSub.status === dbSubscription.status,
-				});
 
-				// If out of sync, log a warning
+				// If out of sync, report to Sentry
 				if (stripeSub.status !== dbSubscription.status) {
-					console.warn(
-						"[Onboarding Status] ⚠️ STATUS MISMATCH! Stripe says:",
-						stripeSub.status,
-						"but DB says:",
-						dbSubscription.status,
+					Sentry.captureMessage(
+						"Subscription status mismatch between Stripe and DB",
+						{
+							level: "warning",
+							tags: { context: "subscription-status-mismatch" },
+							extra: {
+								stripeStatus: stripeSub.status,
+								dbStatus: dbSubscription.status,
+								subscriptionId: dbSubscription.stripeSubscriptionId,
+							},
+						},
 					);
 				}
 			} catch (stripeError) {
-				console.error(
-					"[Onboarding Status] Failed to verify with Stripe:",
-					stripeError,
-				);
+				Sentry.captureException(stripeError, {
+					tags: { context: "stripe-verification-failed" },
+					extra: { subscriptionId: dbSubscription.stripeSubscriptionId },
+				});
 			}
 		}
 
@@ -532,21 +494,6 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			(subscriptionStatus.organizationsLimit === 0 ||
 				subscriptionStatus.organizationsOwned <
 					subscriptionStatus.organizationsLimit);
-
-		// Debug: Log computed subscription status
-		console.log("[Onboarding Status] Computed subscription status:", {
-			userId: user.id,
-			hasSubscription: subscriptionStatus.hasSubscription,
-			status: subscriptionStatus.status,
-			isSubscriptionValid,
-			plan: subscriptionStatus.plan,
-			organizationsOwned: subscriptionStatus.organizationsOwned,
-			organizationsLimit: subscriptionStatus.organizationsLimit,
-			hasOrganization,
-			profileComplete: hasName,
-			canCreateOrganization: canCreateOrg,
-			stripeVerification,
-		});
 
 		// Map invitations to response format
 		const mappedInvitations = pendingInvitations.map((inv) => ({
@@ -585,7 +532,9 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			},
 		});
 	} catch (error) {
-		console.error("[Onboarding Status] Error:", error);
+		Sentry.captureException(error, {
+			tags: { context: "onboarding-status-error" },
+		});
 		return c.json(
 			{ success: false, error: "Failed to get onboarding status" },
 			500,
@@ -724,17 +673,16 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 					await stripe.subscriptions.cancel(
 						existingSubscription.stripeSubscriptionId,
 					);
-					console.log(
-						`[License] Cancelled Stripe subscription ${existingSubscription.stripeSubscriptionId} for user ${user.id}`,
-					);
 					previousPlanCancelled = true;
 					previousPlan = existingSubscription.plan;
 				} catch (stripeErr) {
-					// Graceful degradation: log but continue activating the license
-					console.error(
-						`[License] Failed to cancel Stripe subscription ${existingSubscription.stripeSubscriptionId}:`,
-						stripeErr,
-					);
+					// Graceful degradation: report but continue activating the license
+					Sentry.captureException(stripeErr, {
+						tags: { context: "license-cancel-stripe-failed" },
+						extra: {
+							subscriptionId: existingSubscription.stripeSubscriptionId,
+						},
+					});
 					// Still mark as cancelled from our side
 					previousPlanCancelled = true;
 					previousPlan = existingSubscription.plan;
@@ -751,14 +699,11 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 				await pricingRepository.supersedeLicense(
 					existingSubscription.licenseId,
 				);
-				console.log(
-					`[License] Superseded previous license ${existingSubscription.licenseId} for user ${user.id}`,
-				);
 			} catch (err) {
-				console.error(
-					`[License] Failed to supersede license ${existingSubscription.licenseId}:`,
-					err,
-				);
+				Sentry.captureException(err, {
+					tags: { context: "license-supersede-failed" },
+					extra: { licenseId: existingSubscription.licenseId },
+				});
 			}
 		}
 
@@ -785,8 +730,6 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 			.bind(crypto.randomUUID(), user.id, license.id)
 			.run();
 	}
-
-	console.log(`[License] Activated license ${license.id} for user ${user.id}`);
 
 	// Get effective limits for the response
 	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
@@ -889,7 +832,9 @@ subscriptionRoutes.post("/portal", async (c) => {
 			data: { url: portalSession.url },
 		});
 	} catch (error) {
-		console.error("[Portal Session] Error:", error);
+		Sentry.captureException(error, {
+			tags: { context: "portal-session-error" },
+		});
 		return c.json(
 			{
 				success: false,
