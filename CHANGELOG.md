@@ -1,3 +1,10 @@
+# [1.4.0-rc.52](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.51...v1.4.0-rc.52) (2026-02-13)
+
+
+### Features
+
+* **logging:** integrate Sentry for error tracking and remove excessive logging ([160bb60](https://github.com/janovix/auth-svc/commit/160bb60cbcc5c0dd983dc55994a316e65071f3ea))
+
 # [1.4.0-rc.51](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.50...v1.4.0-rc.51) (2026-02-13)
 
 
