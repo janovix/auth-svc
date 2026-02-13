@@ -87,7 +87,9 @@ export function invalidateBetterAuthCache(env: Bindings) {
 	// Get the cache for this DB instance
 	const dbCache = authCacheByDb.get(env.DB);
 	if (dbCache) {
-		dbCache.delete(resolved.cacheKey);
+		// Delete both cache variants (with and without Stripe)
+		dbCache.delete(`${resolved.cacheKey}-with-stripe`);
+		dbCache.delete(`${resolved.cacheKey}-no-stripe`);
 	}
 	// Also invalidate price cache
 	cachedPriceIds = null;
@@ -167,7 +169,13 @@ export async function getBetterAuthContext(
 		authCacheByDb.set(env.DB, dbCache);
 	}
 
-	const cached = dbCache.get(resolved.cacheKey);
+	// Cache key must differentiate between instances with/without Stripe
+	// to prevent using a non-Stripe instance for subscription endpoints
+	const cacheKey = stripePriceIds
+		? `${resolved.cacheKey}-with-stripe`
+		: `${resolved.cacheKey}-no-stripe`;
+
+	const cached = dbCache.get(cacheKey);
 	if (cached) {
 		return {
 			auth: cached.auth,
@@ -185,7 +193,7 @@ export async function getBetterAuthContext(
 		secondaryStorage,
 	});
 
-	dbCache.set(resolved.cacheKey, { auth });
+	dbCache.set(cacheKey, { auth });
 
 	return {
 		auth,
