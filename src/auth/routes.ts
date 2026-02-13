@@ -65,6 +65,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 						"GET, POST, PUT, DELETE, PATCH, OPTIONS",
 					"Access-Control-Allow-Headers":
 						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with, x-captcha-response",
+					"Access-Control-Expose-Headers": "X-Retry-After",
 					"Access-Control-Max-Age": "86400",
 				},
 			});
@@ -593,6 +594,7 @@ function addCorsHeadersIfNeeded(
 	const headers = new Headers(response.headers);
 	headers.set("Access-Control-Allow-Origin", requestOrigin);
 	headers.set("Access-Control-Allow-Credentials", "true");
+	headers.set("Access-Control-Expose-Headers", "X-Retry-After");
 
 	return new Response(response.body, {
 		status: response.status,
