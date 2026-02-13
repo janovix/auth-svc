@@ -630,12 +630,16 @@ export function buildResolvedAuthConfig(
 			cookieCache: {
 				enabled: true,
 				strategy: "jwe",
-				// maxAge of 60 seconds ensures:
-				// - Frequent DB validation for banned user detection
-				// - Cookie cache is refreshed every minute during active use
-				// - Middleware forwards these refreshed cookies to the browser
-				maxAge: 60, // 1 minute - balance between performance and security
-				refreshCache: true, // Allow Better Auth to refresh the cookie cache on each validation
+				// maxAge of 5 minutes ensures:
+				// - Cookie cache expires regularly, forcing DB validation and session refresh
+				// - updateAge (30 min) session refresh logic runs properly
+				// - Set-Cookie headers are sent with extended maxAge
+				// - Banned users are detected within 5 minutes
+				maxAge: 5 * 60, // 5 minutes - balance between DB hits and session freshness
+				// refreshCache intentionally NOT set (defaults to false)
+				// With refreshCache: false, when the cookie cache expires, Better Auth
+				// hits the database, which properly triggers updateAge session refresh
+				// and sends updated Set-Cookie headers with extended maxAge.
 			},
 		},
 		rateLimit: RATE_LIMITS[resolvedEnv],
