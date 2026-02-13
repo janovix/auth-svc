@@ -1,3 +1,10 @@
+# [1.4.0-rc.50](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.49...v1.4.0-rc.50) (2026-02-13)
+
+
+### Features
+
+* **cors:** expose X-Retry-After header in CORS middleware ([374db60](https://github.com/janovix/auth-svc/commit/374db606ed523441ae468f818071c8621ce64bc9))
+
 # [1.4.0-rc.49](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.48...v1.4.0-rc.49) (2026-02-12)
 
 
