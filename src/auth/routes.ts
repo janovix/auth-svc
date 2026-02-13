@@ -89,6 +89,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		const { auth, accessPolicy, cleanup } = await getBetterAuthContext(
 			c.env,
 			executionContext,
+			pathname, // Pass pathname to enable conditional Stripe loading
 		);
 
 		// NOTE: We intentionally do NOT cleanup the context on a timer here.

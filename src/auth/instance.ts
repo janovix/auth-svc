@@ -106,11 +106,13 @@ export function invalidateBetterAuthCache(env: Bindings) {
  *
  * @param env - Cloudflare Worker bindings
  * @param executionContext - Optional execution context for waitUntil support
+ * @param pathname - Optional request pathname to determine if Stripe plugin is needed
  * @returns Auth context with cleanup function for execution context
  */
 export async function getBetterAuthContext(
 	env: Bindings,
 	executionContext?: ExecutionContext,
+	pathname?: string,
 ): Promise<{
 	auth: ReturnType<typeof betterAuth>;
 	accessPolicy: { enforceInternal: boolean; token?: string };
@@ -122,21 +124,34 @@ export async function getBetterAuthContext(
 	// The cleanup function should be called when the request completes.
 	const cleanup = setCurrentExecutionContext(executionContext);
 
-	// Fetch prices from database (with caching) - use timeout to prevent hanging
+	// Only fetch Stripe prices for subscription endpoints that need them
+	// Public endpoints (JWKS, sign-in, verify-email, etc.) don't need Stripe
+	const needsStripe = pathname?.startsWith("/api/auth/subscription/");
+
 	let stripePriceIds: StripePriceIds | undefined;
-	try {
-		stripePriceIds = await Promise.race([
-			fetchStripePriceIds(env),
-			new Promise<StripePriceIds>((_, reject) =>
-				setTimeout(() => reject(new Error("Price fetch timeout")), 5000),
-			),
-		]);
-	} catch (error) {
-		console.error(
-			"[Auth] Failed to fetch price IDs from database. Stripe billing will not be available:",
-			error,
+
+	if (needsStripe) {
+		// Fetch prices from database (with caching) - use timeout to prevent hanging
+		try {
+			stripePriceIds = await Promise.race([
+				fetchStripePriceIds(env),
+				new Promise<StripePriceIds>((_, reject) =>
+					setTimeout(() => reject(new Error("Price fetch timeout")), 5000),
+				),
+			]);
+		} catch (error) {
+			console.error(
+				"[Auth] Failed to fetch price IDs from database. Stripe billing will not be available:",
+				error,
+			);
+			// Continue without price IDs - Better Auth Stripe plugin won't load
+		}
+	} else {
+		// Skip price fetch for non-subscription endpoints (JWKS, auth, etc.)
+		// Better Auth will initialize without Stripe plugin, which is fine
+		console.log(
+			`[Auth] Skipping Stripe price fetch for ${pathname || "unknown endpoint"}`,
 		);
-		// Continue without price IDs - Better Auth Stripe plugin won't load
 	}
 
 	const resolved = buildResolvedAuthConfig(
