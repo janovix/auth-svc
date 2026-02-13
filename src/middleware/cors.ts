@@ -28,6 +28,7 @@ export function createCorsMiddleware() {
 			"x-requested-with",
 		],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		exposeHeaders: ["X-Retry-After"],
 		credentials: true,
 	});
 }
