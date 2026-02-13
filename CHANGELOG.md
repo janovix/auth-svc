@@ -5,6 +5,15 @@
 
 * **auth:** refine cookieCache settings and enhance CORS header handling ([ba0229e](https://github.com/janovix/auth-svc/commit/ba0229e9e43fcaef00415a61f0c36282c3a8eb74))
 * **auth:** update cookieCache maxAge for improved session handling ([07726e4](https://github.com/janovix/auth-svc/commit/07726e4169193c66da4e3a105b5db1321cc12096))
+* **auth:** update cookieCache maxAge to enhance session management ([884e0bb](https://github.com/janovix/auth-svc/commit/884e0bbb5f00c34070a0424b670fa3c090913768))
+
+# [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-13)
+
+
+### Bug Fixes
+
+* **auth:** refine cookieCache settings and enhance CORS header handling ([ba0229e](https://github.com/janovix/auth-svc/commit/ba0229e9e43fcaef00415a61f0c36282c3a8eb74))
+* **auth:** update cookieCache maxAge for improved session handling ([07726e4](https://github.com/janovix/auth-svc/commit/07726e4169193c66da4e3a105b5db1321cc12096))
 
 # [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-13)
 
