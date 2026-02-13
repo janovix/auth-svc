@@ -472,7 +472,28 @@ function addCorsHeadersIfNeeded(
 	}
 
 	// Clone response and add CORS headers for trusted origins
-	const headers = new Headers(response.headers);
+	// CRITICAL: Preserve all Set-Cookie headers explicitly
+	// The Headers API may drop multiple Set-Cookie values when cloning
+	const headers = new Headers();
+
+	// Copy all headers from the original response
+	response.headers.forEach((value, key) => {
+		// Skip Set-Cookie - we'll handle it separately
+		if (key.toLowerCase() !== "set-cookie") {
+			headers.set(key, value);
+		}
+	});
+
+	// Explicitly preserve all Set-Cookie headers
+	// getSetCookie() returns all Set-Cookie values as an array
+	const setCookies = response.headers.getSetCookie?.();
+	if (setCookies && setCookies.length > 0) {
+		for (const cookie of setCookies) {
+			headers.append("Set-Cookie", cookie);
+		}
+	}
+
+	// Add CORS headers
 	headers.set("Access-Control-Allow-Origin", requestOrigin);
 	headers.set("Access-Control-Allow-Credentials", "true");
 	headers.set("Access-Control-Expose-Headers", "X-Retry-After");
