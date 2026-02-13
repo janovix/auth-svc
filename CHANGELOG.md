@@ -1,3 +1,10 @@
+# [1.4.0-rc.51](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.50...v1.4.0-rc.51) (2026-02-13)
+
+
+### Features
+
+* **cors:** consistently expose X-Retry-After header in CORS responses ([e4ce4c2](https://github.com/janovix/auth-svc/commit/e4ce4c2f37e52f94f4510b76505d017123c71e6c))
+
 # [1.4.0-rc.50](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.49...v1.4.0-rc.50) (2026-02-13)
 
 
