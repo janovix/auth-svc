@@ -1,3 +1,10 @@
+# [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-13)
+
+
+### Bug Fixes
+
+* **auth:** update cookieCache maxAge for improved session handling ([07726e4](https://github.com/janovix/auth-svc/commit/07726e4169193c66da4e3a105b5db1321cc12096))
+
 # [1.4.0-rc.52](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.51...v1.4.0-rc.52) (2026-02-13)
 
 
