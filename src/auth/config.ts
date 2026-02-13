@@ -630,9 +630,11 @@ export function buildResolvedAuthConfig(
 			cookieCache: {
 				enabled: true,
 				strategy: "jwe",
-				// Short maxAge ensures banned users are checked against DB frequently
-				// This enables immediate session revocation when users are banned
-				maxAge: 60, // 1 minute - sessions revalidate against DB every minute
+				// maxAge balances performance vs security:
+				// - Longer cache reduces DB queries for inactive tabs/windows
+				// - Shorter cache enables faster session revocation for banned users
+				// - JWE strategy keeps the cache secure (encrypted)
+				maxAge: 300, // 5 minutes - reduces false failures on tab resume while still checking periodically
 				refreshCache: false, // Disable auto-refresh to force DB validation on expiry
 			},
 		},
