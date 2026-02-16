@@ -22,6 +22,7 @@ interface ContextEntry {
 	ctx: ExecutionContext;
 	timestamp: number;
 	requestId: string;
+	backgroundPromises: Promise<unknown>[];
 }
 
 /**
@@ -65,21 +66,17 @@ export function setCurrentExecutionContext(
 		ctx,
 		timestamp: Date.now(),
 		requestId,
+		backgroundPromises: [],
 	};
 
 	contextStack.push(entry);
-	console.log(
-		`[ExecutionContext] Context set: ${requestId}, stackSize: ${contextStack.length}`,
-	);
+	// Debug logging intentionally removed for production performance
 
 	// Cleanup function to remove this specific context
 	return () => {
 		const index = contextStack.findIndex((e) => e.requestId === requestId);
 		if (index !== -1) {
 			contextStack.splice(index, 1);
-			console.log(
-				`[ExecutionContext] Context cleaned up: ${requestId}, stackSize: ${contextStack.length}`,
-			);
 		}
 	};
 }
@@ -110,6 +107,63 @@ export function getCurrentExecutionContext(): ExecutionContext | undefined {
 	}
 
 	return undefined;
+}
+
+/**
+ * Gets the current request's ID for use in tracking and correlation.
+ * Returns undefined if no valid context is available.
+ */
+export function getCurrentRequestId(): string | undefined {
+	const now = Date.now();
+
+	// Skip stale contexts without modifying the stack
+	for (let i = contextStack.length - 1; i >= 0; i--) {
+		const entry = contextStack[i];
+		if (now - entry.timestamp <= MAX_CONTEXT_AGE_MS) {
+			return entry.requestId;
+		}
+	}
+
+	return undefined;
+}
+
+/**
+ * Tracks a background promise for a request so cleanup can await it.
+ * Used by executeInBackground to track promises that will be waited on.
+ */
+export function trackBackgroundPromise(promise: Promise<unknown>): void {
+	const requestId = getCurrentRequestId();
+	if (!requestId) {
+		return;
+	}
+
+	const entry = contextStack.find((e) => e.requestId === requestId);
+	if (entry) {
+		entry.backgroundPromises.push(promise);
+	}
+}
+
+/**
+ * Waits for all background promises in the current request to settle,
+ * with a maximum timeout as fallback.
+ * Returns a promise that resolves when all tasks are done or timeout occurs.
+ */
+export function waitForBackgroundPromises(maxWaitMs = 12000): Promise<void> {
+	const requestId = getCurrentRequestId();
+	if (!requestId) {
+		return Promise.resolve();
+	}
+
+	const entry = contextStack.find((e) => e.requestId === requestId);
+	if (!entry || entry.backgroundPromises.length === 0) {
+		return Promise.resolve();
+	}
+
+	// Race between all promises settling and timeout
+	return Promise.race([
+		Promise.allSettled(entry.backgroundPromises).then(() => {}),
+		new Promise<void>((resolve) => setTimeout(resolve, maxWaitMs)),
+	]);
 }
 
 /**
@@ -175,10 +229,6 @@ export function executeInBackground(
 ): void {
 	const ctx = getCurrentExecutionContext();
 
-	console.log(
-		`[Background] executeInBackground called for: ${errorContext}, hasContext: ${!!ctx}, stackSize: ${contextStack.length}`,
-	);
-
 	// Wrap promise with error handling and timeout to prevent hanging
 	const safePromise = Promise.race([
 		promise,
@@ -192,13 +242,12 @@ export function executeInBackground(
 		console.error(`[Background] ${errorContext} failed:`, error);
 	});
 
+	// Track this promise for later cleanup
+	trackBackgroundPromise(safePromise);
+
 	if (ctx && typeof ctx.waitUntil === "function") {
 		try {
-			console.log(`[Background] Calling waitUntil for: ${errorContext}`);
 			ctx.waitUntil(safePromise);
-			console.log(
-				`[Background] waitUntil called successfully for: ${errorContext}`,
-			);
 		} catch (err) {
 			// waitUntil can throw if called after response is sent
 			console.warn(
@@ -208,7 +257,7 @@ export function executeInBackground(
 		}
 	} else {
 		console.warn(
-			`[Background] NO EXECUTION CONTEXT for ${errorContext} - email will not be sent! ctx=${ctx}, hasWaitUntil=${ctx ? typeof ctx.waitUntil : "N/A"}`,
+			`[Background] NO EXECUTION CONTEXT for ${errorContext} - email will not be sent!`,
 		);
 	}
 	// If no context or waitUntil failed, the promise runs detached

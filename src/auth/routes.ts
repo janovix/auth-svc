@@ -3,42 +3,47 @@ import type { Context } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
+import {
+	getCurrentRequestId,
+	waitForBackgroundPromises,
+} from "./execution-context";
 import type { Bindings } from "../types/bindings";
-import { verifyTurnstileToken, getClientIp } from "../utils/turnstile";
 import { originMatchesAnyPattern } from "../http/origins";
 import { getTrustedOriginPatterns } from "../middleware/cors";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
 /**
- * Track OTP send requests to detect rate limiting.
- * Key: requestId, Value: { email, timestamp, sent: boolean }
- * We use a simple approach: set a flag before request, callback sets sent=true
+ * Track OTP send requests to detect rate limiting, keyed by request ID.
+ * This prevents race conditions where concurrent requests interfere with each other.
+ * Map<requestId, { email: string; sent: boolean }>
  */
-let otpSendTracker: { email: string; sent: boolean } | null = null;
+const otpSendTrackers = new Map<string, { email: string; sent: boolean }>();
 
 /**
  * Called by sendVerificationOTP callback to mark that OTP was actually sent
  */
-export function markOtpSent(email: string) {
-	if (otpSendTracker && otpSendTracker.email === email) {
-		otpSendTracker.sent = true;
+export function markOtpSent(email: string, requestId: string) {
+	const tracker = otpSendTrackers.get(requestId);
+	if (tracker && tracker.email === email) {
+		tracker.sent = true;
 	}
 }
 
 /**
  * Start tracking an OTP send request
  */
-function startOtpTracking(email: string) {
-	otpSendTracker = { email, sent: false };
+function startOtpTracking(email: string, requestId: string) {
+	otpSendTrackers.set(requestId, { email, sent: false });
 }
 
 /**
  * Check if OTP was actually sent and clean up
  */
-function checkOtpSent(): boolean {
-	const wasSent = otpSendTracker?.sent ?? false;
-	otpSendTracker = null;
+function checkOtpSent(requestId: string): boolean {
+	const tracker = otpSendTrackers.get(requestId);
+	const wasSent = tracker?.sent ?? false;
+	otpSendTrackers.delete(requestId);
 	return wasSent;
 }
 
@@ -105,6 +110,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		// Track OTP send requests to detect rate limiting
 		let isOtpRequest = false;
 		let otpEmail: string | null = null;
+		let otpRequestId: string | undefined = undefined;
 		if (
 			pathname === "/api/auth/email-otp/send-verification-otp" &&
 			c.req.method === "POST"
@@ -117,43 +123,14 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				const body = (await clonedRequest.json()) as { email?: string };
 				if (body.email) {
 					otpEmail = body.email;
-					startOtpTracking(otpEmail);
+					// Get current request ID for tracking (only available after context is set)
+					otpRequestId = getCurrentRequestId();
+					if (otpRequestId) {
+						startOtpTracking(otpEmail, otpRequestId);
+					}
 				}
 			} catch {
 				// Silently ignore body parsing failures
-			}
-		}
-
-		// Validate Turnstile for endpoints that send emails (expensive operations)
-		// We handle this ourselves instead of using Better Auth's captcha plugin
-		// because our implementation has proper timeout handling to prevent hanging
-		const turnstileProtectedEndpoints = [
-			"/api/auth/sign-up/email",
-			"/api/auth/email-otp/send-verification-otp",
-		];
-		if (
-			turnstileProtectedEndpoints.includes(pathname) &&
-			c.req.method === "POST"
-		) {
-			const turnstileResult = await validateTurnstileForRequest(c);
-			if (!turnstileResult.valid) {
-				// CRITICAL: Cleanup execution context before returning
-				c.executionCtx?.waitUntil?.(
-					new Promise<void>((resolve) => {
-						setTimeout(() => {
-							cleanup();
-							resolve();
-						}, 100); // Quick cleanup for validation failures
-					}),
-				);
-				return c.json(
-					{
-						success: false,
-						message: turnstileResult.message,
-						errors: [{ code: 4003, message: turnstileResult.message }],
-					},
-					400,
-				);
 			}
 		}
 
@@ -177,14 +154,9 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 				// CRITICAL: Schedule cleanup for public routes too!
 				// Without this, execution context leaks and causes hanging
-				// IMPORTANT: Delay must be longer than Mandrill timeout (10s)
+				// Wait for background tasks to complete, then cleanup
 				c.executionCtx?.waitUntil?.(
-					new Promise<void>((resolve) => {
-						setTimeout(() => {
-							cleanup();
-							resolve();
-						}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
-					}),
+					waitForBackgroundPromises(12000).then(() => cleanup()),
 				);
 
 				return response;
@@ -198,12 +170,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 				if (!providedToken || providedToken !== accessPolicy.token) {
 					// CRITICAL: Cleanup execution context before returning
 					c.executionCtx?.waitUntil?.(
-						new Promise<void>((resolve) => {
-							setTimeout(() => {
-								cleanup();
-								resolve();
-							}, 100); // Quick cleanup for auth failures
-						}),
+						waitForBackgroundPromises(12000).then(() => cleanup()),
 					);
 					return c.json(
 						{
@@ -218,8 +185,8 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 		const response = await handleAuthRequest(c, auth);
 
 		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
-		if (isOtpRequest && otpEmail && response.status === 200) {
-			const wasSent = checkOtpSent();
+		if (isOtpRequest && otpEmail && otpRequestId && response.status === 200) {
+			const wasSent = checkOtpSent(otpRequestId);
 			if (!wasSent) {
 				// Modify response to indicate rate limiting
 				try {
@@ -228,15 +195,9 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 						unknown
 					>;
 					// Schedule cleanup after a delay to allow background tasks to complete
-					// IMPORTANT: Delay must be longer than Mandrill timeout (10s) to prevent
-					// cleanup before email finishes sending
+					// Wait for background promises to settle, then cleanup
 					c.executionCtx?.waitUntil?.(
-						new Promise<void>((resolve) => {
-							setTimeout(() => {
-								cleanup();
-								resolve();
-							}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
-						}),
+						waitForBackgroundPromises(12000).then(() => cleanup()),
 					);
 					return new Response(
 						JSON.stringify({
@@ -258,69 +219,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 		// Schedule cleanup after a delay to allow background tasks (like email sending) to complete
 		// This must happen AFTER the handler has run so background tasks can use waitUntil
-		// IMPORTANT: Delay must be longer than Mandrill timeout (10s) to prevent
-		// cleanup before email finishes sending
+		// Wait for background promises to settle, then cleanup
 		c.executionCtx?.waitUntil?.(
-			new Promise<void>((resolve) => {
-				setTimeout(() => {
-					cleanup();
-					resolve();
-				}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
-			}),
+			waitForBackgroundPromises(12000).then(() => cleanup()),
 		);
 
 		return response;
 	});
-}
-
-/**
- * Validates Turnstile token for email-sending requests.
- *
- * If TURNSTILE_SECRET_KEY is not configured, validation is skipped (development mode).
- * This allows local development without Turnstile while enforcing it in production.
- *
- * Uses our custom verifyTurnstileToken utility which has a 5-second timeout
- * to prevent request hanging in Cloudflare Workers.
- *
- * NOTE: Token is read from x-captcha-response header ONLY to avoid body stream issues.
- * The Better Auth client should send the token in this header.
- *
- * @param c - Hono context
- */
-async function validateTurnstileForRequest(
-	c: Context<{ Bindings: Bindings }>,
-): Promise<{ valid: boolean; message: string }> {
-	const turnstileSecret = c.env.TURNSTILE_SECRET_KEY;
-
-	// Skip validation if Turnstile is not configured (development mode)
-	if (!turnstileSecret) {
-		return { valid: true, message: "Turnstile not configured" };
-	}
-
-	// Get Turnstile token from x-captcha-response header (Better Auth client convention)
-	// We only check header to avoid consuming/cloning the request body
-	const turnstileToken = c.req.header("x-captcha-response");
-
-	if (!turnstileToken) {
-		return { valid: false, message: "Turnstile token is required" };
-	}
-
-	const clientIp = getClientIp(c.req.raw);
-
-	const result = await verifyTurnstileToken({
-		secretKey: turnstileSecret,
-		token: turnstileToken,
-		remoteIp: clientIp,
-	});
-
-	if (!result.success) {
-		return {
-			valid: false,
-			message: "Bot verification failed. Please try again.",
-		};
-	}
-
-	return { valid: true, message: "Turnstile verified" };
 }
 
 /**
