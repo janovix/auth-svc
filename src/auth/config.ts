@@ -521,11 +521,21 @@ export function buildResolvedAuthConfig(
 								userName,
 								otp,
 								type,
-							).then(() => {
-								console.log(
-									`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
-								);
-							});
+							)
+								.then(() => {
+									const elapsed = Date.now() - callbackStart;
+									console.log(
+										`[Email OTP] Email sent successfully for ${email} in ${elapsed}ms`,
+									);
+								})
+								.catch((error) => {
+									// Catch and log errors to prevent unhandled rejections
+									const elapsed = Date.now() - callbackStart;
+									console.error(
+										`[Email OTP] Failed to send email for ${email} after ${elapsed}ms:`,
+										error instanceof Error ? error.message : String(error),
+									);
+								});
 
 							// Use dynamic execution context to handle background task
 							console.log(

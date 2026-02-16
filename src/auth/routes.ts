@@ -177,12 +177,13 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 				// CRITICAL: Schedule cleanup for public routes too!
 				// Without this, execution context leaks and causes hanging
+				// IMPORTANT: Delay must be longer than Mandrill timeout (10s)
 				c.executionCtx?.waitUntil?.(
 					new Promise<void>((resolve) => {
 						setTimeout(() => {
 							cleanup();
 							resolve();
-						}, 5000);
+						}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
 					}),
 				);
 
@@ -227,12 +228,14 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 						unknown
 					>;
 					// Schedule cleanup after a delay to allow background tasks to complete
+					// IMPORTANT: Delay must be longer than Mandrill timeout (10s) to prevent
+					// cleanup before email finishes sending
 					c.executionCtx?.waitUntil?.(
 						new Promise<void>((resolve) => {
 							setTimeout(() => {
 								cleanup();
 								resolve();
-							}, 5000); // 5 seconds should be enough for email to be sent
+							}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
 						}),
 					);
 					return new Response(
@@ -255,12 +258,14 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 		// Schedule cleanup after a delay to allow background tasks (like email sending) to complete
 		// This must happen AFTER the handler has run so background tasks can use waitUntil
+		// IMPORTANT: Delay must be longer than Mandrill timeout (10s) to prevent
+		// cleanup before email finishes sending
 		c.executionCtx?.waitUntil?.(
 			new Promise<void>((resolve) => {
 				setTimeout(() => {
 					cleanup();
 					resolve();
-				}, 5000); // 5 seconds should be enough for background tasks
+				}, 12000); // 12 seconds - longer than Mandrill's 10s timeout
 			}),
 		);
 
