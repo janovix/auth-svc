@@ -14,6 +14,7 @@
  * capture a reference to the context at creation time rather than reading from
  * a global variable at execution time.
  */
+import * as Sentry from "@sentry/cloudflare";
 
 /**
  * Context entry with metadata for debugging and staleness detection.
@@ -194,6 +195,10 @@ export function captureBackgroundExecutor(): (
 			),
 		]).catch((error) => {
 			console.error(`[Background] ${errorContext} failed:`, error);
+			Sentry.captureException(error, {
+				tags: { context: "background-task-failed" },
+				extra: { errorContext },
+			});
 		});
 
 		if (capturedCtx && typeof capturedCtx.waitUntil === "function") {
@@ -240,6 +245,10 @@ export function executeInBackground(
 		),
 	]).catch((error) => {
 		console.error(`[Background] ${errorContext} failed:`, error);
+		Sentry.captureException(error, {
+			tags: { context: "background-task-failed" },
+			extra: { errorContext },
+		});
 	});
 
 	// Track this promise for later cleanup

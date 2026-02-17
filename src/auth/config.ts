@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "better-auth";
+import * as Sentry from "@sentry/cloudflare";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
@@ -539,6 +540,10 @@ export function buildResolvedAuthConfig(
 										`[Email OTP] Failed to send email for ${email} after ${elapsed}ms:`,
 										error instanceof Error ? error.message : String(error),
 									);
+									Sentry.captureException(error, {
+										tags: { context: "otp-email-send-failed" },
+										extra: { email, elapsed, type },
+									});
 								});
 
 							// Use dynamic execution context to handle background task
@@ -558,6 +563,10 @@ export function buildResolvedAuthConfig(
 								error instanceof Error ? error.message : String(error),
 								error instanceof Error ? error.stack : undefined,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "otp-callback-error" },
+								extra: { email, type },
+							});
 							console.log(
 								`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (with error)`,
 							);
@@ -707,6 +716,10 @@ export function buildResolvedAuthConfig(
 								`[Session] Error auto-selecting organization for user ${session.userId}:`,
 								error,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "session-hook-auto-select-org" },
+								extra: { userId: session.userId },
+							});
 						}
 
 						// No organization found or error occurred - return session unchanged
@@ -744,6 +757,10 @@ export function buildResolvedAuthConfig(
 								`[User Create] Error checking pending invitations for ${user.id}:`,
 								error,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "user-create-hook-pending-invite" },
+								extra: { userId: user.id, email: user.email },
+							});
 						}
 					},
 				},
@@ -885,6 +902,10 @@ export function buildResolvedAuthConfig(
 								`[Stripe Sync] Error syncing user to Stripe:`,
 								error,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "stripe-sync-user-update" },
+								extra: { userId: user.id },
+							});
 						});
 
 						executeInBackground(promise, `Stripe sync for user ${user.id}`);

@@ -263,6 +263,10 @@ async function handleAuthRequest(
 
 		// If Better Auth throws an error, convert it to a proper error response
 		// Better Auth should return responses, but if it throws, handle it gracefully
+		Sentry.captureException(error, {
+			tags: { context: "better-auth-handler", pathname },
+			extra: { pathname },
+		});
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		return new Response(
 			JSON.stringify({

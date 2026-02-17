@@ -3,6 +3,7 @@
  * Documentation: https://mailchimp.com/developer/transactional/api/
  */
 
+import * as Sentry from "@sentry/cloudflare";
 import { TEMPLATE_IMAGES } from "./constants";
 export type OrganizationInvitationEmail = {
 	email: string;
@@ -185,6 +186,10 @@ export async function sendOtpEmail(
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
 		});
+		Sentry.captureException(error, {
+			tags: { context: "mandrill-otp-send-failed" },
+			extra: { toEmail, type, templateName, isTimeout },
+		});
 		// Don't rethrow - allow the promise to resolve to prevent exposing failures
 	}
 }
@@ -239,6 +244,15 @@ export async function sendOrganizationInvitationEmail(
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
 		});
+		Sentry.captureException(error, {
+			tags: { context: "mandrill-org-invitation-send-failed" },
+			extra: {
+				toEmail: invitation.email,
+				organizationName: invitation.organizationName,
+				templateName,
+				isTimeout,
+			},
+		});
 		// Don't rethrow - allow the promise to resolve to prevent exposing failures
 	}
 }
@@ -286,6 +300,10 @@ export async function sendPromotionEmail(
 			isTimeout,
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
+		});
+		Sentry.captureException(error, {
+			tags: { context: "mandrill-promotion-send-failed" },
+			extra: { toEmail: promotion.email, templateName, isTimeout },
 		});
 		// Don't rethrow - allow the promise to resolve to prevent exposing failures
 	}

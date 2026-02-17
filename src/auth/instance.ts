@@ -1,5 +1,6 @@
 import { PrismaD1 } from "@prisma/adapter-d1";
 import { PrismaClient } from "@prisma/client";
+import * as Sentry from "@sentry/cloudflare";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
@@ -146,6 +147,10 @@ export async function getBetterAuthContext(
 				"[Auth] Failed to fetch price IDs from database. Stripe billing will not be available:",
 				error,
 			);
+			Sentry.captureException(error, {
+				tags: { context: "stripe-price-fetch-timeout" },
+				extra: { pathname },
+			});
 			// Continue without price IDs - Better Auth Stripe plugin won't load
 		}
 	} else {

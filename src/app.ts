@@ -3,6 +3,7 @@
  * This file contains all routes and middleware without the Sentry wrapper.
  * Used by both production (index.ts) and tests (testWorker.ts).
  */
+import * as Sentry from "@sentry/cloudflare";
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
 import { ContentfulStatusCode } from "hono/utils/http-status";
@@ -92,6 +93,10 @@ app.onError((err, c) => {
 	}
 
 	console.error("Global error handler caught:", err); // Log the error if it's not known
+
+	Sentry.captureException(err, {
+		tags: { context: "global-error-handler" },
+	});
 
 	// For other errors, return a generic 500 response
 	return c.json(
