@@ -32,6 +32,24 @@
 
 * **auth:** enhance Stripe integration by conditionally fetching prices ([77a2e2c](https://github.com/janovix/auth-svc/commit/77a2e2c1641049eb1cd019b10910e9fb39649cb5))
 * **auth:** integrate captcha plugin for enhanced bot protection ([cbf3853](https://github.com/janovix/auth-svc/commit/cbf3853ac9e0e5123cd05fb6152419dbbac5077f))
+* **auth:** integrate Sentry for enhanced error tracking ([39dc5e7](https://github.com/janovix/auth-svc/commit/39dc5e7683be17d43de736b2b54a8aad85eeeb12))
+
+# [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-17)
+
+
+### Bug Fixes
+
+* **auth:** enhance cache management for Stripe integration ([249122d](https://github.com/janovix/auth-svc/commit/249122d21caf3a2d0d413a521892399d7c3cafa6))
+* **auth:** improve email OTP handling and cleanup timing ([ae5cec4](https://github.com/janovix/auth-svc/commit/ae5cec4a862f323a7e9423b96217c32724742c9f))
+* **auth:** refine cookieCache settings and enhance CORS header handling ([ba0229e](https://github.com/janovix/auth-svc/commit/ba0229e9e43fcaef00415a61f0c36282c3a8eb74))
+* **auth:** update cookieCache maxAge for improved session handling ([07726e4](https://github.com/janovix/auth-svc/commit/07726e4169193c66da4e3a105b5db1321cc12096))
+* **auth:** update cookieCache maxAge to enhance session management ([884e0bb](https://github.com/janovix/auth-svc/commit/884e0bbb5f00c34070a0424b670fa3c090913768))
+
+
+### Features
+
+* **auth:** enhance Stripe integration by conditionally fetching prices ([77a2e2c](https://github.com/janovix/auth-svc/commit/77a2e2c1641049eb1cd019b10910e9fb39649cb5))
+* **auth:** integrate captcha plugin for enhanced bot protection ([cbf3853](https://github.com/janovix/auth-svc/commit/cbf3853ac9e0e5123cd05fb6152419dbbac5077f))
 
 # [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-16)
 
