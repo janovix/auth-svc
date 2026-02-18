@@ -63,6 +63,13 @@ import { usageRightsRoutes } from "./routes/usage-rights";
 import { internalUsageRightsRoutes } from "./routes/internal-usage-rights";
 import { licenseAdminRoutes } from "./routes/license-admin";
 import { subscriptionAdminRoutes } from "./routes/subscription-admin";
+import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
+import {
+	GetAmlComplianceSettingsEndpoint,
+	PutAmlComplianceSettingsEndpoint,
+	PatchAmlComplianceSettingsEndpoint,
+	PatchAmlSelfServiceSettingsEndpoint,
+} from "./endpoints/aml-settings/openapi";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -148,6 +155,9 @@ openapi.get("/api/auth/jwks", AuthJwksEndpoint);
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);
 
+// Register AML Compliance Settings proxy (proxied to aml-svc via service binding)
+app.route("/api/settings/aml-compliance", amlSettingsProxyRoutes);
+
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
 
@@ -170,6 +180,24 @@ openapi.get(
 	GetOrganizationMembershipEndpoint,
 );
 openapi.get("/api/settings/resolved", GetResolvedSettingsEndpoint);
+
+// Register AML Compliance Settings OpenAPI documentation
+openapi.get(
+	"/api/settings/aml-compliance/:orgId",
+	GetAmlComplianceSettingsEndpoint,
+);
+openapi.put(
+	"/api/settings/aml-compliance/:orgId",
+	PutAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId",
+	PatchAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId/self-service",
+	PatchAmlSelfServiceSettingsEndpoint,
+);
 
 // Register Audit routes (actual implementation)
 app.route("/api/audit", auditRoutes);
