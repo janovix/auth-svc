@@ -1,3 +1,10 @@
+# [1.4.0-rc.55](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.54...v1.4.0-rc.55) (2026-02-18)
+
+
+### Features
+
+* **aml-settings:** add AML Compliance Settings proxy routes and OpenAPI documentation ([d246f4d](https://github.com/janovix/auth-svc/commit/d246f4d3ff9c8c8a0918feb5c5fa5e9e4b4aaa29))
+
 # [1.4.0-rc.54](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.53...v1.4.0-rc.54) (2026-02-18)
 
 

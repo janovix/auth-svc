@@ -1,6 +1,6 @@
 {
 	"name": "auth-svc",
-	"version": "1.4.0-rc.54",
+	"version": "1.4.0-rc.55",
 	"description": "Complete backend API template using Hono + Chanfana + D1 + Vitest.",
 	"cloudflare": {
 		"label": "Backend OpenAPI Template",
