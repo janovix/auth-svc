@@ -1,3 +1,10 @@
+# [1.4.0-rc.58](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.57...v1.4.0-rc.58) (2026-02-18)
+
+
+### Features
+
+* **api-keys:** add enterprise plan to API access validation ([f4d1153](https://github.com/janovix/auth-svc/commit/f4d1153c784aec0afe0d22912ed02506736f6390))
+
 # [1.4.0-rc.57](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.56...v1.4.0-rc.57) (2026-02-18)
 
 
