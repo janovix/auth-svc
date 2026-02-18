@@ -1,3 +1,10 @@
+# [1.4.0-rc.57](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.56...v1.4.0-rc.57) (2026-02-18)
+
+
+### Features
+
+* **subscription:** add stripeSubscriptionId to user subscription status ([0d83177](https://github.com/janovix/auth-svc/commit/0d8317786ac3471d5021b4d4e4a14f4ce01e21a0))
+
 # [1.4.0-rc.56](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.55...v1.4.0-rc.56) (2026-02-18)
 
 
