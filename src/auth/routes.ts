@@ -10,6 +10,7 @@ import {
 import type { Bindings } from "../types/bindings";
 import { originMatchesAnyPattern } from "../http/origins";
 import { getTrustedOriginPatterns } from "../middleware/cors";
+import { JWKS_KV_CACHE_KEY } from "../routes/jwks";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
@@ -285,21 +286,23 @@ async function handleAuthRequest(
 		);
 	});
 
-	// Add timeout protection to prevent indefinite hangs
+	// Add timeout protection to prevent indefinite hangs.
+	// IMPORTANT: store the timer ID so we can clear it on success.
+	// Without clearTimeout, the timer fires 25s after EVERY successful request,
+	// triggering a false Sentry error and an unhandled promise rejection.
+	let timeoutId: ReturnType<typeof setTimeout>;
 	const timeoutPromise = new Promise<Response>((_, reject) => {
-		setTimeout(() => {
+		timeoutId = setTimeout(() => {
 			const elapsed = Date.now() - startTime;
-			const error = new Error(`Request timeout after ${elapsed}ms`);
-			Sentry.captureException(error, {
-				tags: { context: "auth-handler-timeout", pathname },
-				extra: { elapsed, pathname },
-			});
-			reject(error);
+			reject(new Error(`Request timeout after ${elapsed}ms`));
 		}, BETTER_AUTH_HANDLER_TIMEOUT_MS);
 	});
 
 	try {
 		const response = await Promise.race([handlerPromise, timeoutPromise]);
+		// Handler resolved before the timeout -- cancel the timer so it does not
+		// fire a false rejection / false Sentry error 25 seconds from now.
+		clearTimeout(timeoutId!);
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
@@ -489,6 +492,9 @@ async function clearJwksAndResetAuth(
 		await purgePlaintextJwks(c);
 		// Then clear all remaining JWKS if needed
 		await c.env.DB.prepare("DELETE FROM jwks").run();
+		// Invalidate the KV cache used by the dedicated JWKS handler (src/routes/jwks.ts)
+		// so the next request re-reads from D1 and repopulates the cache with fresh keys.
+		await c.env.KV.delete(JWKS_KV_CACHE_KEY);
 		invalidateBetterAuthCache(c.env);
 	} catch {
 		if (originalError) throw originalError;

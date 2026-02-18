@@ -18,8 +18,8 @@ import {
 	AuthSignInEndpoint,
 	AuthSignOutEndpoint,
 	AuthSessionEndpoint,
-	AuthJwksEndpoint,
 } from "./endpoints/auth/openapi";
+import { handleJwks } from "./routes/jwks";
 import {
 	GetUserSettingsEndpoint,
 	UpdateUserSettingsEndpoint,
@@ -133,6 +133,12 @@ app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
 
+// Register dedicated JWKS handler BEFORE Better Auth routes.
+// This bypasses Better Auth's full pipeline (rate limiting KV ops, Prisma D1 query)
+// for the JWKS endpoint, making it immune to intermittent D1 slowdowns.
+// See src/routes/jwks.ts for details.
+app.get("/api/auth/jwks", handleJwks);
+
 // Register Better Auth routes (actual implementation - handles requests)
 // Must be registered BEFORE OpenAPI documentation routes so they handle requests first
 registerBetterAuthRoutes(app);
@@ -143,7 +149,6 @@ openapi.post("/api/auth/sign-up", AuthSignUpEndpoint);
 openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
 openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
 openapi.get("/api/auth/session", AuthSessionEndpoint);
-openapi.get("/api/auth/jwks", AuthJwksEndpoint);
 
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);
