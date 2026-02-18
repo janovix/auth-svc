@@ -45,9 +45,7 @@ type OrganizationApiMethods = {
 };
 
 async function getAuth(c: AdminOrgContext) {
-	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
-		.executionCtx;
-	const { auth } = await getBetterAuthContext(c.env, executionContext);
+	const { auth } = await getBetterAuthContext(c.env);
 	return auth as typeof auth & {
 		api: typeof auth.api & OrganizationApiMethods;
 	};

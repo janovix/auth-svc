@@ -51,9 +51,7 @@ type OrganizationApiMethods = {
  * Returns the auth instance with organization plugin methods properly typed
  */
 async function getAuth(c: InternalContext) {
-	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
-		.executionCtx;
-	const { auth } = await getBetterAuthContext(c.env, executionContext);
+	const { auth } = await getBetterAuthContext(c.env);
 	// Cast to include organization plugin methods which are added dynamically
 	return auth as typeof auth & {
 		api: typeof auth.api & OrganizationApiMethods;

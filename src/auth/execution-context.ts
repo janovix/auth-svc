@@ -1,249 +1,59 @@
 /**
  * Request-scoped execution context storage for Cloudflare Workers.
  *
- * This module provides a way to store and retrieve the current request's
- * execution context, allowing async callbacks (like email sending) to
- * access waitUntil() without capturing stale references.
+ * Uses Node.js AsyncLocalStorage (enabled via the `nodejs_als` compatibility flag)
+ * to associate an ExecutionContext with each request. This replaces the previous
+ * global stack approach, which was prone to race conditions when concurrent
+ * requests ran in the same Worker isolate.
  *
- * IMPORTANT: Cloudflare Workers can process multiple requests concurrently
- * within the same isolate. Using a simple global variable causes race conditions
- * where request B overwrites request A's context while A is still processing.
- *
- * Solution: Use a stack-based approach with timestamps to detect stale contexts.
- * Each request pushes its context on entry and pops on exit. Background tasks
- * capture a reference to the context at creation time rather than reading from
- * a global variable at execution time.
+ * Usage:
+ *   1. Call `runWithExecutionContext(ctx, fn)` at the top of each request handler.
+ *   2. Anywhere in the async call tree, call `executeInBackground(promise, label)`
+ *      to defer work via `waitUntil`. The ALS guarantees the correct context is used.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
 
-/**
- * Context entry with metadata for debugging and staleness detection.
- */
-interface ContextEntry {
-	ctx: ExecutionContext;
-	timestamp: number;
-	requestId: string;
-	backgroundPromises: Promise<unknown>[];
-}
+const executionContextStorage = new AsyncLocalStorage<ExecutionContext>();
 
 /**
- * Stack of execution contexts. Most recent is at the end.
- * Using a stack handles nested/concurrent requests better than a single variable.
+ * Runs `fn` with the given ExecutionContext stored in AsyncLocalStorage.
+ * All async operations inside `fn` (including callbacks triggered by Better Auth)
+ * will be able to retrieve this context via `getExecutionContext()`.
  */
-const contextStack: ContextEntry[] = [];
-
-/**
- * Maximum age (ms) for a context to be considered valid.
- * Cloudflare Workers have a 30s CPU time limit, so contexts older than this
- * are likely from completed requests.
- */
-const MAX_CONTEXT_AGE_MS = 30_000;
-
-/**
- * Generate a simple request ID for debugging.
- */
-function generateRequestId(): string {
-	return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Sets the current request's execution context.
- * Should be called at the start of each request handler.
- *
- * @returns A cleanup function to call when the request completes
- */
-export function setCurrentExecutionContext(
+export function runWithExecutionContext<T>(
 	ctx: ExecutionContext | undefined,
-): () => void {
+	fn: () => Promise<T>,
+): Promise<T> {
 	if (!ctx) {
-		console.warn(
-			`[ExecutionContext] setCurrentExecutionContext called with undefined context! Background tasks will not work.`,
-		);
-		return () => {}; // No-op cleanup for undefined context
+		return fn();
 	}
-
-	const requestId = generateRequestId();
-	const entry: ContextEntry = {
-		ctx,
-		timestamp: Date.now(),
-		requestId,
-		backgroundPromises: [],
-	};
-
-	contextStack.push(entry);
-	// Debug logging intentionally removed for production performance
-
-	// Cleanup function to remove this specific context
-	return () => {
-		const index = contextStack.findIndex((e) => e.requestId === requestId);
-		if (index !== -1) {
-			contextStack.splice(index, 1);
-		}
-	};
+	return executionContextStorage.run(ctx, fn);
 }
 
 /**
- * Gets the current request's execution context for use in callbacks.
- * Returns undefined if no valid context is available.
- *
- * This function cleans up stale contexts and returns the most recent valid one.
+ * Retrieves the ExecutionContext stored by `runWithExecutionContext` for the
+ * current async scope. Returns `undefined` if called outside a scoped handler.
  */
-export function getCurrentExecutionContext(): ExecutionContext | undefined {
-	const now = Date.now();
-
-	// Clean up stale contexts (from requests that may have completed without cleanup)
-	while (
-		contextStack.length > 0 &&
-		now - contextStack[0].timestamp > MAX_CONTEXT_AGE_MS
-	) {
-		const stale = contextStack.shift();
-		console.warn(
-			`[ExecutionContext] Cleaned up stale context ${stale?.requestId} (age: ${now - (stale?.timestamp ?? 0)}ms)`,
-		);
-	}
-
-	// Return the most recent context (last in stack)
-	if (contextStack.length > 0) {
-		return contextStack[contextStack.length - 1].ctx;
-	}
-
-	return undefined;
+export function getExecutionContext(): ExecutionContext | undefined {
+	return executionContextStorage.getStore();
 }
 
 /**
- * Gets the current request's ID for use in tracking and correlation.
- * Returns undefined if no valid context is available.
- */
-export function getCurrentRequestId(): string | undefined {
-	const now = Date.now();
-
-	// Skip stale contexts without modifying the stack
-	for (let i = contextStack.length - 1; i >= 0; i--) {
-		const entry = contextStack[i];
-		if (now - entry.timestamp <= MAX_CONTEXT_AGE_MS) {
-			return entry.requestId;
-		}
-	}
-
-	return undefined;
-}
-
-/**
- * Tracks a background promise for a request so cleanup can await it.
- * Used by executeInBackground to track promises that will be waited on.
- */
-export function trackBackgroundPromise(promise: Promise<unknown>): void {
-	const requestId = getCurrentRequestId();
-	if (!requestId) {
-		return;
-	}
-
-	const entry = contextStack.find((e) => e.requestId === requestId);
-	if (entry) {
-		entry.backgroundPromises.push(promise);
-	}
-}
-
-/**
- * Waits for all background promises in the current request to settle,
- * with a maximum timeout as fallback.
- * Returns a promise that resolves when all tasks are done or timeout occurs.
- */
-export function waitForBackgroundPromises(maxWaitMs = 12000): Promise<void> {
-	const requestId = getCurrentRequestId();
-	if (!requestId) {
-		return Promise.resolve();
-	}
-
-	const entry = contextStack.find((e) => e.requestId === requestId);
-	if (!entry || entry.backgroundPromises.length === 0) {
-		return Promise.resolve();
-	}
-
-	// Race between all promises settling and timeout
-	return Promise.race([
-		Promise.allSettled(entry.backgroundPromises).then(() => {}),
-		new Promise<void>((resolve) => setTimeout(resolve, maxWaitMs)),
-	]);
-}
-
-/**
- * Captures the current execution context for use in a callback.
- * Returns a function that can be called later to execute work in the background.
- *
- * This is safer than reading the global context at callback execution time
- * because it captures the context at the time the callback is created.
- *
- * @returns A function that takes a promise and runs it with waitUntil
- */
-export function captureBackgroundExecutor(): (
-	promise: Promise<unknown>,
-	errorContext: string,
-) => void {
-	// Capture the context NOW, at creation time
-	const capturedCtx = getCurrentExecutionContext();
-
-	return (promise: Promise<unknown>, errorContext: string) => {
-		// Wrap promise with error handling and timeout
-		const safePromise = Promise.race([
-			promise,
-			new Promise((_, reject) =>
-				setTimeout(
-					() => reject(new Error(`Background task timeout: ${errorContext}`)),
-					25_000,
-				),
-			),
-		]).catch((error) => {
-			console.error(`[Background] ${errorContext} failed:`, error);
-			Sentry.captureException(error, {
-				tags: { context: "background-task-failed" },
-				extra: { errorContext },
-			});
-		});
-
-		if (capturedCtx && typeof capturedCtx.waitUntil === "function") {
-			try {
-				capturedCtx.waitUntil(safePromise);
-			} catch (err) {
-				// waitUntil can throw if called after response is sent
-				console.warn(
-					`[Background] waitUntil failed for ${errorContext}, running detached:`,
-					err,
-				);
-			}
-		}
-		// If no context or waitUntil failed, the promise runs detached
-		// (it's already been started and has error handling)
-	};
-}
-
-/**
- * Executes a promise in the background using waitUntil if available.
- * Falls back to fire-and-forget with error logging if no context is available.
- *
- * NOTE: This reads the current context at execution time, which may not be
- * the correct context if called from an async callback. For callbacks,
- * prefer using captureBackgroundExecutor() at callback creation time.
+ * Executes a promise in the background using `waitUntil` if an ExecutionContext
+ * is available in the current async scope. Falls back to fire-and-forget with
+ * error logging if no context is available.
  *
  * @param promise - The promise to execute in the background
- * @param errorContext - A string describing the operation for error logging
+ * @param errorContext - A descriptive label used in error logs / Sentry events
  */
 export function executeInBackground(
 	promise: Promise<unknown>,
 	errorContext: string,
 ): void {
-	const ctx = getCurrentExecutionContext();
+	const ctx = getExecutionContext();
 
-	// Wrap promise with error handling and timeout to prevent hanging
-	const safePromise = Promise.race([
-		promise,
-		new Promise((_, reject) =>
-			setTimeout(
-				() => reject(new Error(`Background task timeout: ${errorContext}`)),
-				25_000,
-			),
-		),
-	]).catch((error) => {
+	const safePromise = promise.catch((error) => {
 		console.error(`[Background] ${errorContext} failed:`, error);
 		Sentry.captureException(error, {
 			tags: { context: "background-task-failed" },
@@ -251,24 +61,11 @@ export function executeInBackground(
 		});
 	});
 
-	// Track this promise for later cleanup
-	trackBackgroundPromise(safePromise);
-
-	if (ctx && typeof ctx.waitUntil === "function") {
-		try {
-			ctx.waitUntil(safePromise);
-		} catch (err) {
-			// waitUntil can throw if called after response is sent
-			console.warn(
-				`[Background] waitUntil failed for ${errorContext}, running detached:`,
-				err,
-			);
-		}
+	if (ctx) {
+		ctx.waitUntil(safePromise);
 	} else {
 		console.warn(
-			`[Background] NO EXECUTION CONTEXT for ${errorContext} - email will not be sent!`,
+			`[Background] No ExecutionContext for "${errorContext}" – running detached`,
 		);
 	}
-	// If no context or waitUntil failed, the promise runs detached
-	// (it's already been started and has error handling)
 }

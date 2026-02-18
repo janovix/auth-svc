@@ -4,8 +4,6 @@ import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { emailOTP, openAPI, captcha } from "better-auth/plugins";
-import { markOtpSent } from "./routes";
-import { getCurrentRequestId } from "./execution-context";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
 
@@ -14,7 +12,8 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
-import { executeInBackground } from "./execution-context";
+import { executeInBackground, getExecutionContext } from "./execution-context";
+import { createKVRateLimitStorage } from "../utils/kv-storage";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -93,14 +92,16 @@ const ENVIRONMENT_MAP: Record<string, JanovixEnvironment> = {
 };
 
 /**
- * Rate limit configuration type for Better Auth.
- * Supports custom rules for specific endpoints (stricter limits for OTP).
+ * Base rate limit configuration (without runtime KV storage).
+ * Environments that use Cloudflare KV have `customStorage` attached at
+ * build time via `buildRateLimitConfig`.
  */
-type RateLimitConfig = {
+type BaseRateLimitConfig = {
 	window: number;
 	max: number;
 	enabled: boolean;
-	storage?: "database" | "memory" | "secondary-storage";
+	/** Only used for in-memory or database storage (local/test). */
+	storage?: "database" | "memory";
 	modelName?: string;
 	customRules?: Record<string, { window: number; max: number } | false>;
 };
@@ -109,7 +110,7 @@ type RateLimitConfig = {
  * Custom rate limit rules for OTP endpoints.
  * These stricter limits prevent email abuse by limiting OTP requests.
  */
-const OTP_RATE_LIMIT_RULES: RateLimitConfig["customRules"] = {
+const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
 	// Limit OTP send requests: 1 per 60 seconds per IP
 	"/email-otp/send-verification-otp": {
 		window: 60,
@@ -122,50 +123,62 @@ const OTP_RATE_LIMIT_RULES: RateLimitConfig["customRules"] = {
 	},
 };
 
-const RATE_LIMITS: Record<JanovixEnvironment, RateLimitConfig> = {
+const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
 	local: {
-		window: 10,
+		window: 60,
 		max: 300,
 		enabled: false,
 		storage: "memory",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	preview: {
-		window: 10,
+		window: 60,
 		max: 120,
 		enabled: true,
-		storage: "secondary-storage",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	dev: {
-		window: 10,
+		window: 60,
 		max: 90,
 		enabled: true,
-		storage: "secondary-storage",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	qa: {
-		window: 10,
+		window: 60,
 		max: 80,
 		enabled: true,
-		storage: "secondary-storage",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	production: {
-		window: 10,
+		window: 60,
 		max: 60,
 		enabled: true,
-		storage: "secondary-storage",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	test: {
-		window: 10,
+		window: 60,
 		max: 60,
 		enabled: false,
 		storage: "memory",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 };
+
+/**
+ * Builds the final rate limit config for the given environment.
+ * For KV-backed environments, attaches `customStorage` which handles JSON
+ * serialisation and hard-codes the 60-second minimum KV TTL.
+ */
+function buildRateLimitConfig(
+	resolvedEnv: JanovixEnvironment,
+	kv: KVNamespace | undefined,
+): BetterAuthOptions["rateLimit"] {
+	const base = RATE_LIMITS[resolvedEnv];
+	if (kv && base.enabled && !base.storage) {
+		return { ...base, customStorage: createKVRateLimitStorage(kv) };
+	}
+	return base;
+}
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
 	local: ".janovix.workers.dev",
@@ -495,12 +508,6 @@ export function buildResolvedAuthConfig(
 						);
 
 						try {
-							// Mark that OTP callback was called (for rate-limit detection)
-							const requestId = getCurrentRequestId();
-							if (requestId) {
-								markOtpSent(email, requestId);
-							}
-
 							const apiKey = env.MANDRILL_API_KEY;
 							if (!apiKey) {
 								console.error(
@@ -674,7 +681,7 @@ export function buildResolvedAuthConfig(
 				// and sends updated Set-Cookie headers with extended maxAge.
 			},
 		},
-		rateLimit: RATE_LIMITS[resolvedEnv],
+		rateLimit: buildRateLimitConfig(resolvedEnv, env.KV),
 		advanced: buildAdvancedOptions(resolvedEnv, cookieDomain),
 		trustedOrigins,
 		// Note: Stripe customer creation is now handled by @better-auth/stripe plugin
@@ -946,6 +953,23 @@ function buildAdvancedOptions(
 		// Better Auth silently skips rate limiting entirely.
 		ipAddress: {
 			ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"],
+		},
+		// Defer Better Auth's internal background tasks (D1 session cleanup,
+		// cache invalidation, etc.) to Cloudflare Workers' waitUntil via ALS.
+		// Without this, Better Auth blocks the response waiting for those tasks,
+		// which causes the "script will never generate a response" hang.
+		// Note: Better Auth passes a Promise directly (not a factory function).
+		backgroundTasks: {
+			handler: (promise) => {
+				const ctx = getExecutionContext();
+				if (ctx) {
+					ctx.waitUntil(promise);
+				} else {
+					promise.catch((error: unknown) => {
+						console.error("[BackgroundTask] Unhandled error:", error);
+					});
+				}
+			},
 		},
 	};
 

@@ -557,31 +557,51 @@ describe("buildResolvedAuthConfig", () => {
 			});
 		});
 
-		it("uses secondary-storage for rate limits in production environments", () => {
+		it("uses customStorage for rate limits in production environments (when KV is provided)", () => {
+			const mockKV = {
+				get: vi.fn(),
+				put: vi.fn(),
+				delete: vi.fn(),
+				list: vi.fn(),
+				getWithMetadata: vi.fn(),
+			} as unknown as KVNamespace;
+
 			const config = buildResolvedAuthConfig(
 				buildEnv({
 					ENVIRONMENT: "production",
 					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					KV: mockKV,
 				}),
 			);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeDefined();
+			expect(rateLimit.storage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 
-		it("uses secondary-storage for rate limits in dev environment", () => {
+		it("uses customStorage for rate limits in dev environment (when KV is provided)", () => {
+			const mockKV = {
+				get: vi.fn(),
+				put: vi.fn(),
+				delete: vi.fn(),
+				list: vi.fn(),
+				getWithMetadata: vi.fn(),
+			} as unknown as KVNamespace;
+
 			const config = buildResolvedAuthConfig(
 				buildEnv({
 					ENVIRONMENT: "dev",
 					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					KV: mockKV,
 				}),
 			);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeDefined();
+			expect(rateLimit.storage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 

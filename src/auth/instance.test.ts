@@ -1,7 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
-import * as executionContextModule from "./execution-context";
 import type { Bindings } from "../types/bindings";
 
 const SECRET = "test-secret-123456789012345678901234567890";
@@ -36,19 +35,16 @@ describe("getBetterAuthContext", () => {
 		const context1 = await getBetterAuthContext(env);
 		const context2 = await getBetterAuthContext(env);
 
-		// Should return the same cached instance when using the same DB instance
 		expect(context1.auth).toBe(context2.auth);
 	});
 
 	it("creates different instances for different DB instances", async () => {
-		// Different DB objects simulate different request contexts
 		const env1 = buildEnv({ DB: {} as D1Database });
 		const env2 = buildEnv({ DB: {} as D1Database });
 
 		const context1 = await getBetterAuthContext(env1);
 		const context2 = await getBetterAuthContext(env2);
 
-		// Should be different instances because DB instances are different
 		expect(context1.auth).not.toBe(context2.auth);
 	});
 
@@ -64,43 +60,16 @@ describe("getBetterAuthContext", () => {
 		const context1 = await getBetterAuthContext(env1);
 		const context2 = await getBetterAuthContext(env2);
 
-		// Should be different instances for different environments
 		expect(context1.auth).not.toBe(context2.auth);
 	});
 
-	it("handles execution context parameter", async () => {
+	it("returns auth and accessPolicy (no cleanup in new API)", async () => {
 		const env = buildEnv({ DB: {} as D1Database });
-		const mockExecutionContext = {
-			waitUntil: () => {},
-			passThroughOnException: () => {},
-			props: {},
-		} as ExecutionContext;
-
-		const context = await getBetterAuthContext(env, mockExecutionContext);
+		const context = await getBetterAuthContext(env);
 
 		expect(context.auth).toBeDefined();
 		expect(context.accessPolicy).toBeDefined();
-	});
-
-	it("sets execution context for callbacks to use (critical for OTP emails)", async () => {
-		const env = buildEnv({ DB: {} as D1Database });
-		const mockExecutionContext = {
-			waitUntil: vi.fn(),
-			passThroughOnException: () => {},
-			props: {},
-		} as ExecutionContext;
-
-		const setContextSpy = vi.spyOn(
-			executionContextModule,
-			"setCurrentExecutionContext",
-		);
-
-		await getBetterAuthContext(env, mockExecutionContext);
-
-		// This is the critical assertion - execution context must be set
-		// for waitUntil to work in email callbacks
-		expect(setContextSpy).toHaveBeenCalledWith(mockExecutionContext);
-		setContextSpy.mockRestore();
+		expect("cleanup" in context).toBe(false);
 	});
 });
 
@@ -111,18 +80,14 @@ describe("invalidateBetterAuthCache", () => {
 			BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
 		});
 
-		// Create and cache an instance
 		const context1 = await getBetterAuthContext(env);
 		const cachedAuth = context1.auth;
 
-		// Verify it's cached
 		const context2 = await getBetterAuthContext(env);
 		expect(context2.auth).toBe(cachedAuth);
 
-		// Invalidate cache
 		invalidateBetterAuthCache(env);
 
-		// Next call should create a new instance
 		const context3 = await getBetterAuthContext(env);
 		expect(context3.auth).not.toBe(cachedAuth);
 	});
@@ -136,18 +101,14 @@ describe("invalidateBetterAuthCache", () => {
 		});
 		const env2 = buildEnv({ DB: sharedDb, ENVIRONMENT: "local" });
 
-		// Create instances for both environments
 		const context1a = await getBetterAuthContext(env1);
 		const context2a = await getBetterAuthContext(env2);
 
-		// Invalidate only dev environment
 		invalidateBetterAuthCache(env1);
 
-		// Dev should get a new instance
 		const context1b = await getBetterAuthContext(env1);
 		expect(context1b.auth).not.toBe(context1a.auth);
 
-		// Local should still use cached instance
 		const context2b = await getBetterAuthContext(env2);
 		expect(context2b.auth).toBe(context2a.auth);
 	});
@@ -155,7 +116,6 @@ describe("invalidateBetterAuthCache", () => {
 	it("handles invalidation when cache is empty", () => {
 		const env = buildEnv({ DB: {} as D1Database, ENVIRONMENT: "test" });
 
-		// Should not throw when cache is empty
 		expect(() => {
 			invalidateBetterAuthCache(env);
 		}).not.toThrow();

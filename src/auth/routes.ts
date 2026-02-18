@@ -3,50 +3,13 @@ import type { Context } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
-import {
-	getCurrentRequestId,
-	waitForBackgroundPromises,
-} from "./execution-context";
+import { runWithExecutionContext } from "./execution-context";
 import type { Bindings } from "../types/bindings";
 import { originMatchesAnyPattern } from "../http/origins";
 import { getTrustedOriginPatterns } from "../middleware/cors";
 import { JWKS_KV_CACHE_KEY } from "../routes/jwks";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
-
-/**
- * Track OTP send requests to detect rate limiting, keyed by request ID.
- * This prevents race conditions where concurrent requests interfere with each other.
- * Map<requestId, { email: string; sent: boolean }>
- */
-const otpSendTrackers = new Map<string, { email: string; sent: boolean }>();
-
-/**
- * Called by sendVerificationOTP callback to mark that OTP was actually sent
- */
-export function markOtpSent(email: string, requestId: string) {
-	const tracker = otpSendTrackers.get(requestId);
-	if (tracker && tracker.email === email) {
-		tracker.sent = true;
-	}
-}
-
-/**
- * Start tracking an OTP send request
- */
-function startOtpTracking(email: string, requestId: string) {
-	otpSendTrackers.set(requestId, { email, sent: false });
-}
-
-/**
- * Check if OTP was actually sent and clean up
- */
-function checkOtpSent(requestId: string): boolean {
-	const tracker = otpSendTrackers.get(requestId);
-	const wasSent = tracker?.sent ?? false;
-	otpSendTrackers.delete(requestId);
-	return wasSent;
-}
 
 export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	// Better Auth handles CORS and cookies internally based on its configuration
@@ -84,233 +47,104 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 
 	// Handle actual requests (GET, POST, etc.)
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-		const pathname = c.req.path;
+		// Establish AsyncLocalStorage scope so that all async code in this
+		// request (including Better Auth callbacks) can access the execution
+		// context via getExecutionContext() / executeInBackground().
+		return runWithExecutionContext(c.executionCtx, async () => {
+			const pathname = c.req.path;
 
-		// Get execution context from Hono context (Cloudflare Workers)
-		// Hono exposes executionCtx in Cloudflare Workers environment
-		const executionContext = (
-			c as unknown as { executionCtx?: ExecutionContext }
-		).executionCtx;
+			const { auth, accessPolicy } = await getBetterAuthContext(
+				c.env,
+				pathname, // Pass pathname to enable conditional Stripe loading
+			);
 
-		const { auth, accessPolicy, cleanup } = await getBetterAuthContext(
-			c.env,
-			executionContext,
-			pathname, // Pass pathname to enable conditional Stripe loading
-		);
+			// Handle internal access policy if enabled.
+			// Better Auth's trustedOrigins config handles browser access; we only
+			// block non-browser API calls that lack the internal token.
+			if (accessPolicy.enforceInternal) {
+				// Public routes accessible without an origin header or internal token:
+				// - /api/auth/jwks:           JWKS must be publicly reachable for JWT verification
+				// - /api/auth/verify-email:   Users click verification links in emails
+				// - /api/auth/callback/*:     OAuth provider callbacks (e.g. Google)
+				// - /api/auth/subscription/*: Stripe subscription routes / webhooks
+				const isPublicRoute =
+					pathname === "/api/auth/jwks" ||
+					pathname === "/api/auth/verify-email" ||
+					pathname.startsWith("/api/auth/callback/") ||
+					pathname.startsWith("/api/auth/error") ||
+					pathname.startsWith("/api/auth/subscription/");
 
-		// NOTE: We intentionally do NOT cleanup the context on a timer here.
-		// The old approach (setTimeout(cleanup, 100)) was cleaning up before
-		// the sendVerificationOTP callback ran, causing background tasks to fail.
-		// Instead, we rely on:
-		// 1. The MAX_CONTEXT_AGE_MS (30s) staleness detection to clean up eventually
-		// 2. Cleanup after the entire handler chain completes (see below)
-
-		// Note: purgePlaintextJwks() was moved out of the hot path for performance.
-		// It now only runs during JWKS error recovery (see clearJwksAndResetAuth).
-
-		// Track OTP send requests to detect rate limiting
-		let isOtpRequest = false;
-		let otpEmail: string | null = null;
-		let otpRequestId: string | undefined = undefined;
-		if (
-			pathname === "/api/auth/email-otp/send-verification-otp" &&
-			c.req.method === "POST"
-		) {
-			isOtpRequest = true;
-			// Try to get email from a CLONED request body for tracking
-			// We must clone to avoid consuming the body before Better Auth reads it
-			try {
-				const clonedRequest = c.req.raw.clone();
-				const body = (await clonedRequest.json()) as { email?: string };
-				if (body.email) {
-					otpEmail = body.email;
-					// Get current request ID for tracking (only available after context is set)
-					otpRequestId = getCurrentRequestId();
-					if (otpRequestId) {
-						startOtpTracking(otpEmail, otpRequestId);
+				if (!isPublicRoute) {
+					// For browser requests Better Auth validates via trustedOrigins.
+					// Only enforce the internal token for non-browser callers (no origin header).
+					const hasOrigin = !!c.req.header("origin");
+					if (!hasOrigin) {
+						const providedToken = c.req.header(INTERNAL_AUTH_HEADER);
+						if (!providedToken || providedToken !== accessPolicy.token) {
+							return c.json(
+								{
+									message:
+										"Forbidden: auth-core Better Auth surface is private.",
+								},
+								403,
+							);
+						}
 					}
 				}
-			} catch {
-				// Silently ignore body parsing failures
-			}
-		}
-
-		// Handle internal access policy if enabled
-		// Better Auth's trustedOrigins config handles browser access, so we only block non-browser API calls
-		if (accessPolicy.enforceInternal) {
-			// Public routes that can be accessed without origin header or internal token:
-			// - /api/auth/jwks: JWKS must be publicly reachable for JWT verification
-			// - /api/auth/verify-email: Users click verification links in emails (direct browser navigation)
-			// - /api/auth/callback/*: OAuth provider callbacks (Google, etc.) come from external servers
-			// - /api/auth/subscription/*: All Stripe subscription routes (redirects, callbacks, etc.)
-			const isPublicRoute =
-				pathname === "/api/auth/jwks" ||
-				pathname === "/api/auth/verify-email" ||
-				pathname.startsWith("/api/auth/callback/") ||
-				pathname.startsWith("/api/auth/error") ||
-				pathname.startsWith("/api/auth/subscription/");
-
-			if (isPublicRoute) {
-				const response = await handleAuthRequest(c, auth);
-
-				// CRITICAL: Schedule cleanup for public routes too!
-				// Without this, execution context leaks and causes hanging
-				// Wait for background tasks to complete, then cleanup
-				c.executionCtx?.waitUntil?.(
-					waitForBackgroundPromises(12000).then(() => cleanup()),
-				);
-
-				return response;
 			}
 
-			// For browser requests, Better Auth will handle origin checking via trustedOrigins
-			// Only require internal token for non-browser API calls (no origin header)
-			const hasOrigin = !!c.req.header("origin");
-			if (!hasOrigin) {
-				const providedToken = c.req.header(INTERNAL_AUTH_HEADER);
-				if (!providedToken || providedToken !== accessPolicy.token) {
-					// CRITICAL: Cleanup execution context before returning
-					c.executionCtx?.waitUntil?.(
-						waitForBackgroundPromises(12000).then(() => cleanup()),
-					);
-					return c.json(
-						{
-							message: "Forbidden: auth-core Better Auth surface is private.",
-						},
-						403,
-					);
-				}
-			}
-		}
-
-		const response = await handleAuthRequest(c, auth);
-
-		// Check if OTP was rate-limited (request succeeded but callback wasn't called)
-		if (isOtpRequest && otpEmail && otpRequestId && response.status === 200) {
-			const wasSent = checkOtpSent(otpRequestId);
-			if (!wasSent) {
-				// Modify response to indicate rate limiting
-				try {
-					const originalBody = (await response.clone().json()) as Record<
-						string,
-						unknown
-					>;
-					// Schedule cleanup after a delay to allow background tasks to complete
-					// Wait for background promises to settle, then cleanup
-					c.executionCtx?.waitUntil?.(
-						waitForBackgroundPromises(12000).then(() => cleanup()),
-					);
-					return new Response(
-						JSON.stringify({
-							...originalBody,
-							rateLimited: true,
-							message:
-								"An OTP was already sent recently. Please check your email or wait before requesting a new code.",
-						}),
-						{
-							status: 200,
-							headers: response.headers,
-						},
-					);
-				} catch {
-					// If we can't parse, just return original
-				}
-			}
-		}
-
-		// Schedule cleanup after a delay to allow background tasks (like email sending) to complete
-		// This must happen AFTER the handler has run so background tasks can use waitUntil
-		// Wait for background promises to settle, then cleanup
-		c.executionCtx?.waitUntil?.(
-			waitForBackgroundPromises(12000).then(() => cleanup()),
-		);
-
-		return response;
+			return handleAuthRequest(c, auth);
+		});
 	});
 }
-
-/**
- * Timeout in milliseconds for Better Auth handler.
- * This prevents indefinite hangs from external service calls (Stripe, email, etc.)
- * Cloudflare Workers have a 30s limit, so we use 25s to leave room for cleanup.
- */
-const BETTER_AUTH_HANDLER_TIMEOUT_MS = 25_000;
 
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
 ) {
 	const pathname = c.req.path;
-	const startTime = Date.now();
-
-	// Pass the original request directly to Better Auth
-	// We no longer pre-process the body to avoid any stream issues
-	const handlerPromise = auth.handler(c.req.raw).catch((error) => {
-		// Better Auth uses APIError with statusCode for redirects (302)
-		// Convert these "errors" to proper redirect responses
-		if (isBetterAuthRedirectError(error)) {
-			const headers = new Headers();
-			const errorHeaders = error.headers;
-			if (errorHeaders && typeof errorHeaders.forEach === "function") {
-				errorHeaders.forEach((value: string, key: string) => {
-					headers.set(key, value);
-				});
-			}
-			return new Response(null, {
-				status: error.statusCode,
-				headers,
-			});
-		}
-
-		// If Better Auth throws an error, convert it to a proper error response
-		// Better Auth should return responses, but if it throws, handle it gracefully
-		Sentry.captureException(error, {
-			tags: { context: "better-auth-handler", pathname },
-			extra: { pathname },
-		});
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		return new Response(
-			JSON.stringify({
-				success: false,
-				errors: [
-					{
-						code: 5000,
-						message: errorMessage || "Internal Server Error",
-					},
-				],
-			}),
-			{
-				status: 500,
-				headers: { "Content-Type": "application/json" },
-			},
-		);
-	});
-
-	// Add timeout protection to prevent indefinite hangs.
-	// IMPORTANT: store the timer ID so we can clear it on success.
-	// Without clearTimeout, the timer fires 25s after EVERY successful request,
-	// triggering a false Sentry error and an unhandled promise rejection.
-	let timeoutId: ReturnType<typeof setTimeout>;
-	const timeoutPromise = new Promise<Response>((_, reject) => {
-		timeoutId = setTimeout(() => {
-			const elapsed = Date.now() - startTime;
-			reject(new Error(`Request timeout after ${elapsed}ms`));
-		}, BETTER_AUTH_HANDLER_TIMEOUT_MS);
-	});
 
 	try {
-		const response = await Promise.race([handlerPromise, timeoutPromise]);
-		// Handler resolved before the timeout -- cancel the timer so it does not
-		// fire a false rejection / false Sentry error 25 seconds from now.
-		clearTimeout(timeoutId!);
+		// Pass the original request directly to Better Auth.
+		// Better Auth uses APIError with a statusCode for redirects (302); catch
+		// those and convert them to proper Response objects.
+		const response = await auth.handler(c.req.raw).catch((error) => {
+			if (isBetterAuthRedirectError(error)) {
+				const headers = new Headers();
+				const errorHeaders = error.headers;
+				if (errorHeaders && typeof errorHeaders.forEach === "function") {
+					errorHeaders.forEach((value: string, key: string) => {
+						headers.set(key, value);
+					});
+				}
+				return new Response(null, { status: error.statusCode, headers });
+			}
+
+			Sentry.captureException(error, {
+				tags: { context: "better-auth-handler", pathname },
+				extra: { pathname },
+			});
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			return new Response(
+				JSON.stringify({
+					success: false,
+					errors: [
+						{ code: 5000, message: errorMessage || "Internal Server Error" },
+					],
+				}),
+				{ status: 500, headers: { "Content-Type": "application/json" } },
+			);
+		});
+
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);
 		if (!shouldAttemptRecovery) {
 			return addCorsHeadersIfNeeded(c, response);
 		}
 
-		// Clear JWKS and invalidate cache for next request
-		// Don't retry immediately as body may have been consumed
+		// JWKS decrypt error detected — clear stale keys so the next request
+		// regenerates them. Don't retry immediately as the body may be consumed.
 		Sentry.captureMessage("JWKS decrypt error detected, cleared JWKS", {
 			level: "warning",
 			tags: { context: "jwks-decrypt-error", pathname },
@@ -330,17 +164,12 @@ async function handleAuthRequest(
 		);
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		const isTimeout = errorMessage.includes("timeout");
 
 		Sentry.captureException(error, {
-			tags: {
-				context: isTimeout ? "auth-handler-timeout" : "auth-handler-error",
-				pathname,
-			},
-			extra: { pathname, errorMessage, isTimeout },
+			tags: { context: "auth-handler-error", pathname },
+			extra: { pathname, errorMessage },
 		});
 
-		// Check if it's a JWKS decrypt error
 		if (isJwksDecryptError(error)) {
 			Sentry.captureMessage("JWKS decrypt error detected in catch", {
 				level: "warning",
@@ -349,23 +178,14 @@ async function handleAuthRequest(
 			await clearJwksAndResetAuth(c, error);
 		}
 
-		// Return appropriate error code for timeout vs other errors
-		const errorCode = isTimeout ? 5002 : 5000;
-		const userMessage = isTimeout
-			? "Request timed out. Please try again."
-			: errorMessage || "Internal Server Error";
-
 		return c.json(
 			{
 				success: false,
 				errors: [
-					{
-						code: errorCode,
-						message: userMessage,
-					},
+					{ code: 5000, message: errorMessage || "Internal Server Error" },
 				],
 			},
-			isTimeout ? 504 : 500,
+			500,
 		);
 	}
 }

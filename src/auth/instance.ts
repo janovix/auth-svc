@@ -5,7 +5,6 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { buildResolvedAuthConfig, type StripePriceIds } from "./config";
-import { setCurrentExecutionContext } from "./execution-context";
 import type { Bindings } from "../types/bindings";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
 import { PricingRepository, PricingService } from "../domain/pricing";
@@ -104,29 +103,20 @@ export function invalidateBetterAuthCache(env: Bindings) {
  * 1. Within the same Worker isolate with the same DB binding, we reuse the instance
  * 2. When a new request comes with a potentially different DB context, we detect it
  *
- * This approach balances performance (caching) with reliability (fresh connections
- * when needed) in Cloudflare Workers.
+ * Execution context management (waitUntil) is now handled externally by the
+ * route handler via `runWithExecutionContext` (AsyncLocalStorage). This function
+ * no longer needs to set or clean up any execution context.
  *
  * @param env - Cloudflare Worker bindings
- * @param executionContext - Optional execution context for waitUntil support
  * @param pathname - Optional request pathname to determine if Stripe plugin is needed
- * @returns Auth context with cleanup function for execution context
  */
 export async function getBetterAuthContext(
 	env: Bindings,
-	executionContext?: ExecutionContext,
 	pathname?: string,
 ): Promise<{
 	auth: ReturnType<typeof betterAuth>;
 	accessPolicy: { enforceInternal: boolean; token?: string };
-	cleanup: () => void;
 }> {
-	// Store execution context for this request (callbacks will access it dynamically)
-	// CRITICAL: This must be called before any auth operations that trigger callbacks
-	// (like email OTP sending) to ensure waitUntil() works in Cloudflare Workers.
-	// The cleanup function should be called when the request completes.
-	const cleanup = setCurrentExecutionContext(executionContext);
-
 	// Only fetch Stripe prices for subscription endpoints that need them
 	// Public endpoints (JWKS, sign-in, verify-email, etc.) don't need Stripe
 	const needsStripe = pathname?.startsWith("/api/auth/subscription/");
@@ -161,11 +151,7 @@ export async function getBetterAuthContext(
 		);
 	}
 
-	const resolved = buildResolvedAuthConfig(
-		env,
-		executionContext,
-		stripePriceIds,
-	);
+	const resolved = buildResolvedAuthConfig(env, undefined, stripePriceIds);
 
 	// Get or create cache for this specific DB instance
 	let dbCache = authCacheByDb.get(env.DB);
@@ -185,7 +171,6 @@ export async function getBetterAuthContext(
 		return {
 			auth: cached.auth,
 			accessPolicy: resolved.accessPolicy,
-			cleanup,
 		};
 	}
 
@@ -203,6 +188,5 @@ export async function getBetterAuthContext(
 	return {
 		auth,
 		accessPolicy: resolved.accessPolicy,
-		cleanup,
 	};
 }

@@ -8,7 +8,10 @@ import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
 import { sendPromotionEmail } from "../utils/mandrill";
-import { executeInBackground } from "../auth/execution-context";
+import {
+	executeInBackground,
+	runWithExecutionContext,
+} from "../auth/execution-context";
 
 type AdminBindings = {
 	Bindings: Bindings;
@@ -26,10 +29,7 @@ export async function getAuthenticatedAdmin(c: AdminContext): Promise<{
 	email?: string;
 } | null> {
 	try {
-		const executionContext = (
-			c as unknown as { executionCtx?: ExecutionContext }
-		).executionCtx;
-		const { auth } = await getBetterAuthContext(c.env, executionContext);
+		const { auth } = await getBetterAuthContext(c.env);
 
 		let session;
 		try {
@@ -247,121 +247,123 @@ adminRoutes.get("/stats", async (c) => {
  * 4. Sends a promotion notification email
  */
 adminRoutes.post("/users/:userId/promote", async (c) => {
-	const admin = await getAuthenticatedAdmin(c);
+	return runWithExecutionContext(c.executionCtx, async () => {
+		const admin = await getAuthenticatedAdmin(c);
 
-	if (!admin) {
-		return c.json(
-			{
-				success: false,
-				error: "Unauthorized",
-				message: "Admin access required",
-			},
-			403,
-		);
-	}
-
-	const userId = c.req.param("userId");
-
-	if (!userId) {
-		return c.json(
-			{
-				success: false,
-				error: "Bad Request",
-				message: "User ID is required",
-			},
-			400,
-		);
-	}
-
-	try {
-		// Get the target user
-		const targetUser = await c.env.DB.prepare(
-			`SELECT id, email, name, role FROM users WHERE id = ?`,
-		)
-			.bind(userId)
-			.first<{
-				id: string;
-				email: string;
-				name: string | null;
-				role: string;
-			}>();
-
-		if (!targetUser) {
+		if (!admin) {
 			return c.json(
 				{
 					success: false,
-					error: "Not Found",
-					message: "User not found",
+					error: "Unauthorized",
+					message: "Admin access required",
 				},
-				404,
+				403,
 			);
 		}
 
-		// Check if user is already promoted
-		if (targetUser.role !== "visitor") {
+		const userId = c.req.param("userId");
+
+		if (!userId) {
 			return c.json(
 				{
 					success: false,
 					error: "Bad Request",
-					message: `User is already a ${targetUser.role}, not a visitor`,
+					message: "User ID is required",
 				},
 				400,
 			);
 		}
 
-		// Update user role to "user"
-		await c.env.DB.prepare(
-			`UPDATE users SET role = 'user', updatedAt = datetime('now') WHERE id = ?`,
-		)
-			.bind(userId)
-			.run();
+		try {
+			// Get the target user
+			const targetUser = await c.env.DB.prepare(
+				`SELECT id, email, name, role FROM users WHERE id = ?`,
+			)
+				.bind(userId)
+				.first<{
+					id: string;
+					email: string;
+					name: string | null;
+					role: string;
+				}>();
 
-		console.log(
-			`[Admin] User ${userId} promoted from visitor to user by admin ${admin.email}`,
-		);
+			if (!targetUser) {
+				return c.json(
+					{
+						success: false,
+						error: "Not Found",
+						message: "User not found",
+					},
+					404,
+				);
+			}
 
-		// Send promotion email in background
-		const apiKey = c.env.MANDRILL_API_KEY;
-		if (apiKey) {
-			const authAppUrl =
-				c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+			// Check if user is already promoted
+			if (targetUser.role !== "visitor") {
+				return c.json(
+					{
+						success: false,
+						error: "Bad Request",
+						message: `User is already a ${targetUser.role}, not a visitor`,
+					},
+					400,
+				);
+			}
 
-			const emailPromise = sendPromotionEmail(apiKey, {
-				email: targetUser.email,
-				userName: targetUser.name || targetUser.email.split("@")[0],
-				loginUrl: `${authAppUrl}/login`,
-			});
+			// Update user role to "user"
+			await c.env.DB.prepare(
+				`UPDATE users SET role = 'user', updatedAt = datetime('now') WHERE id = ?`,
+			)
+				.bind(userId)
+				.run();
 
-			executeInBackground(
-				emailPromise,
-				`Promotion email to ${targetUser.email}`,
+			console.log(
+				`[Admin] User ${userId} promoted from visitor to user by admin ${admin.email}`,
 			);
-		} else {
-			console.warn(
-				"[Admin] MANDRILL_API_KEY not configured; promotion email skipped",
+
+			// Send promotion email in background
+			const apiKey = c.env.MANDRILL_API_KEY;
+			if (apiKey) {
+				const authAppUrl =
+					c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+
+				const emailPromise = sendPromotionEmail(apiKey, {
+					email: targetUser.email,
+					userName: targetUser.name || targetUser.email.split("@")[0],
+					loginUrl: `${authAppUrl}/login`,
+				});
+
+				executeInBackground(
+					emailPromise,
+					`Promotion email to ${targetUser.email}`,
+				);
+			} else {
+				console.warn(
+					"[Admin] MANDRILL_API_KEY not configured; promotion email skipped",
+				);
+			}
+
+			return c.json({
+				success: true,
+				data: {
+					userId: targetUser.id,
+					email: targetUser.email,
+					previousRole: "visitor",
+					newRole: "user",
+					message: "User promoted successfully",
+				},
+			});
+		} catch (error) {
+			console.error("[Admin] Error promoting user:", error);
+			return c.json(
+				{
+					success: false,
+					error: "Promotion Failed",
+					message:
+						error instanceof Error ? error.message : "Unknown error occurred",
+				},
+				500,
 			);
 		}
-
-		return c.json({
-			success: true,
-			data: {
-				userId: targetUser.id,
-				email: targetUser.email,
-				previousRole: "visitor",
-				newRole: "user",
-				message: "User promoted successfully",
-			},
-		});
-	} catch (error) {
-		console.error("[Admin] Error promoting user:", error);
-		return c.json(
-			{
-				success: false,
-				error: "Promotion Failed",
-				message:
-					error instanceof Error ? error.message : "Unknown error occurred",
-			},
-			500,
-		);
-	}
+	}); // end runWithExecutionContext
 });
