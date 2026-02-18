@@ -150,7 +150,8 @@ apiKeysRoutes.post("/", async (c) => {
 		return c.json(
 			{
 				success: false,
-				error: "API access requires a Pro or Ultra subscription plan",
+				error:
+					"API access requires a Business, Pro, Ultra, or Enterprise License plan",
 			},
 			403,
 		);
