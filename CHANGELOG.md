@@ -1,3 +1,10 @@
+# [1.4.0-rc.54](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.53...v1.4.0-rc.54) (2026-02-18)
+
+
+### Features
+
+* **auth:** implement dedicated JWKS endpoint handler ([351f240](https://github.com/janovix/auth-svc/commit/351f240084c2c9168bc20e920da8890abda59d0a))
+
 # [1.4.0-rc.53](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.52...v1.4.0-rc.53) (2026-02-17)
 
 

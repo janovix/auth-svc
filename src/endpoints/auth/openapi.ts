@@ -149,39 +149,3 @@ export class AuthSessionEndpoint extends OpenAPIRoute {
 		throw new Error("This endpoint is handled by Better Auth");
 	}
 }
-
-export class AuthJwksEndpoint extends OpenAPIRoute {
-	public schema = {
-		tags: ["Authentication"],
-		summary: "Get JSON Web Key Set (JWKS) for JWT verification",
-		description:
-			"Public endpoint that returns the JSON Web Key Set used to verify JWTs issued by this service. This endpoint is publicly accessible.",
-		operationId: "auth-jwks",
-		responses: {
-			"200": {
-				description: "JWKS data",
-				...contentJson(
-					z.object({
-						keys: z.array(
-							z.object({
-								kty: z.string(),
-								use: z.string().optional(),
-								kid: z.string().optional(),
-								alg: z.string().optional(),
-								crv: z.string().optional(),
-								x: z.string().optional(),
-								y: z.string().optional(),
-								n: z.string().optional(),
-								e: z.string().optional(),
-							}),
-						),
-					}),
-				),
-			},
-		},
-	};
-
-	public async handle(_c: AppContext) {
-		throw new Error("This endpoint is handled by Better Auth");
-	}
-}
