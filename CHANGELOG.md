@@ -1,3 +1,10 @@
+# [1.4.0-rc.56](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.55...v1.4.0-rc.56) (2026-02-18)
+
+
+### Features
+
+* **auth:** enhance rate limiting with custom storage for KV environments ([459cc8b](https://github.com/janovix/auth-svc/commit/459cc8b2df58d127a9fc6a64083d560c2115d3d1)), closes [hi#frequency](https://github.com/hi/issues/frequency)
+
 # [1.4.0-rc.55](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.54...v1.4.0-rc.55) (2026-02-18)
 
 
