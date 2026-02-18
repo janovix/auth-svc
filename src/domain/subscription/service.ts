@@ -69,6 +69,7 @@ export class SubscriptionService {
 				licenseExpiresAt: null,
 				organizationsOwned: orgsOwned,
 				organizationsLimit: 0,
+				stripeSubscriptionId: null,
 			};
 		}
 
@@ -108,6 +109,7 @@ export class SubscriptionService {
 			licenseExpiresAt,
 			organizationsOwned: orgsOwned,
 			organizationsLimit: limits?.maxOrganizations ?? 0,
+			stripeSubscriptionId: subscription.stripeSubscriptionId,
 		};
 	}
 
