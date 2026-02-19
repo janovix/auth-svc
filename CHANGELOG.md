@@ -1,3 +1,10 @@
+# [1.4.0-rc.59](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.58...v1.4.0-rc.59) (2026-02-19)
+
+
+### Features
+
+* **auth:** establish execution context for all routes ([b49c269](https://github.com/janovix/auth-svc/commit/b49c2697ced8112ffb624c464b3a210e1ff31b28))
+
 # [1.4.0-rc.58](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.57...v1.4.0-rc.58) (2026-02-18)
 
 
