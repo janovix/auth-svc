@@ -247,6 +247,10 @@ describe("ApiKeyService", () => {
 			expect(ApiKeyService.isPlanEligible("business")).toBe(true);
 		});
 
+		it("should allow enterprise plan (license)", () => {
+			expect(ApiKeyService.isPlanEligible("enterprise")).toBe(true);
+		});
+
 		it("should reject watchlist plan", () => {
 			expect(ApiKeyService.isPlanEligible("watchlist")).toBe(false);
 		});

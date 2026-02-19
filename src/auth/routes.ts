@@ -3,7 +3,6 @@ import type { Context } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 
 import { getBetterAuthContext, invalidateBetterAuthCache } from "./instance";
-import { runWithExecutionContext } from "./execution-context";
 import type { Bindings } from "../types/bindings";
 import { originMatchesAnyPattern } from "../http/origins";
 import { getTrustedOriginPatterns } from "../middleware/cors";
@@ -46,55 +45,52 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	});
 
 	// Handle actual requests (GET, POST, etc.)
+	// The ALS scope for ExecutionContext is established by the global middleware
+	// in app.ts (runWithExecutionContext), so all routes — including these —
+	// can call getExecutionContext() / executeInBackground() without extra wrapping.
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-		// Establish AsyncLocalStorage scope so that all async code in this
-		// request (including Better Auth callbacks) can access the execution
-		// context via getExecutionContext() / executeInBackground().
-		return runWithExecutionContext(c.executionCtx, async () => {
-			const pathname = c.req.path;
+		const pathname = c.req.path;
 
-			const { auth, accessPolicy } = await getBetterAuthContext(
-				c.env,
-				pathname, // Pass pathname to enable conditional Stripe loading
-			);
+		const { auth, accessPolicy } = await getBetterAuthContext(
+			c.env,
+			pathname, // Pass pathname to enable conditional Stripe loading
+		);
 
-			// Handle internal access policy if enabled.
-			// Better Auth's trustedOrigins config handles browser access; we only
-			// block non-browser API calls that lack the internal token.
-			if (accessPolicy.enforceInternal) {
-				// Public routes accessible without an origin header or internal token:
-				// - /api/auth/jwks:           JWKS must be publicly reachable for JWT verification
-				// - /api/auth/verify-email:   Users click verification links in emails
-				// - /api/auth/callback/*:     OAuth provider callbacks (e.g. Google)
-				// - /api/auth/subscription/*: Stripe subscription routes / webhooks
-				const isPublicRoute =
-					pathname === "/api/auth/jwks" ||
-					pathname === "/api/auth/verify-email" ||
-					pathname.startsWith("/api/auth/callback/") ||
-					pathname.startsWith("/api/auth/error") ||
-					pathname.startsWith("/api/auth/subscription/");
+		// Handle internal access policy if enabled.
+		// Better Auth's trustedOrigins config handles browser access; we only
+		// block non-browser API calls that lack the internal token.
+		if (accessPolicy.enforceInternal) {
+			// Public routes accessible without an origin header or internal token:
+			// - /api/auth/jwks:           JWKS must be publicly reachable for JWT verification
+			// - /api/auth/verify-email:   Users click verification links in emails
+			// - /api/auth/callback/*:     OAuth provider callbacks (e.g. Google)
+			// - /api/auth/subscription/*: Stripe subscription routes / webhooks
+			const isPublicRoute =
+				pathname === "/api/auth/jwks" ||
+				pathname === "/api/auth/verify-email" ||
+				pathname.startsWith("/api/auth/callback/") ||
+				pathname.startsWith("/api/auth/error") ||
+				pathname.startsWith("/api/auth/subscription/");
 
-				if (!isPublicRoute) {
-					// For browser requests Better Auth validates via trustedOrigins.
-					// Only enforce the internal token for non-browser callers (no origin header).
-					const hasOrigin = !!c.req.header("origin");
-					if (!hasOrigin) {
-						const providedToken = c.req.header(INTERNAL_AUTH_HEADER);
-						if (!providedToken || providedToken !== accessPolicy.token) {
-							return c.json(
-								{
-									message:
-										"Forbidden: auth-core Better Auth surface is private.",
-								},
-								403,
-							);
-						}
+			if (!isPublicRoute) {
+				// For browser requests Better Auth validates via trustedOrigins.
+				// Only enforce the internal token for non-browser callers (no origin header).
+				const hasOrigin = !!c.req.header("origin");
+				if (!hasOrigin) {
+					const providedToken = c.req.header(INTERNAL_AUTH_HEADER);
+					if (!providedToken || providedToken !== accessPolicy.token) {
+						return c.json(
+							{
+								message: "Forbidden: auth-core Better Auth surface is private.",
+							},
+							403,
+						);
 					}
 				}
 			}
+		}
 
-			return handleAuthRequest(c, auth);
-		});
+		return handleAuthRequest(c, auth);
 	});
 }
 

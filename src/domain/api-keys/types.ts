@@ -53,8 +53,13 @@ export interface ApiKeyValidationResult {
 	error?: string;
 }
 
-/** Plans that allow API access */
-export const API_ENABLED_PLANS = ["business", "pro", "ultra"] as const;
+/** Plans that allow API access (includes enterprise license) */
+export const API_ENABLED_PLANS = [
+	"business",
+	"pro",
+	"ultra",
+	"enterprise",
+] as const;
 export type ApiEnabledPlan = (typeof API_ENABLED_PLANS)[number];
 
 export function isApiEnabledPlan(plan: string): plan is ApiEnabledPlan {

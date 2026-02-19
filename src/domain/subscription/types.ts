@@ -132,6 +132,8 @@ export interface UserSubscriptionStatus {
 	// Organization stats
 	organizationsOwned: number;
 	organizationsLimit: number;
+	// Raw Stripe subscription ID (used for Stripe verification) — null when no subscription
+	stripeSubscriptionId: string | null;
 }
 
 /**

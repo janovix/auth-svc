@@ -363,7 +363,13 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 /**
  * GET /api/subscription/onboarding-status
  * Get user's onboarding status - profile completion and organization access
- * Used by middleware to determine if user needs onboarding
+ * Used by middleware to determine if user needs onboarding.
+ *
+ * Query params:
+ *   pendingInvitationsOnly=true  — skip the expensive subscription/Stripe checks
+ *                                  and return only the pending invitations array.
+ *                                  Use this for UI badge counts to avoid 7-9 DB
+ *                                  queries + a potential Stripe API call.
  */
 subscriptionRoutes.get("/onboarding-status", async (c) => {
 	try {
@@ -383,25 +389,13 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			role?: string;
 		};
 
+		// Fast path: caller only needs the pending invitations list (e.g. sidebar badge).
+		// Skip the expensive subscription / Stripe checks entirely.
+		const pendingInvitationsOnly =
+			c.req.query("pendingInvitationsOnly") === "true";
+
 		// Check if profile is complete (has name)
 		const hasName = !!user.name && user.name.trim().length > 0;
-
-		// Query the database directly for the current user role
-		// (Session may have stale role if user.create.after hook just updated it)
-		const dbUser = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ?`)
-			.bind(user.id)
-			.first<{ role: string }>();
-
-		const userRole = dbUser?.role ?? "user";
-
-		// Check if user has any organization membership (owner, admin, or member)
-		const orgMembership = await c.env.DB.prepare(
-			`SELECT COUNT(*) as count FROM members WHERE userId = ?`,
-		)
-			.bind(user.id)
-			.first<{ count: number }>();
-
-		const hasOrganization = (orgMembership?.count ?? 0) > 0;
 
 		// Check for ALL pending invitations (not just one)
 		const pendingInvitationsResult = await c.env.DB.prepare(
@@ -431,6 +425,56 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 
 		const pendingInvitations = pendingInvitationsResult.results || [];
 
+		// Map invitations once — used in both fast and slow paths
+		const mappedInvitations = pendingInvitations.map((inv) => ({
+			id: inv.id,
+			organizationId: inv.organizationId,
+			organizationName: inv.organizationName,
+			organizationLogo: inv.organizationLogo,
+			role: inv.role,
+			inviterName: inv.inviterName,
+			inviterEmail: inv.inviterEmail,
+			expiresAt: inv.expiresAt,
+		}));
+
+		// Fast path: return only the invitations without any subscription/Stripe work
+		if (pendingInvitationsOnly) {
+			return c.json({
+				success: true,
+				data: {
+					profileComplete: hasName,
+					hasOrganization: false,
+					hasSubscription: false,
+					subscriptionStatus: null,
+					plan: null,
+					pendingInvitation: mappedInvitations[0] || null,
+					pendingInvitations: mappedInvitations,
+					canCreateOrganization: false,
+					role: null,
+					isVisitor: false,
+				},
+			});
+		}
+
+		// Slow path: full onboarding status including subscription and org checks
+
+		// Query the database directly for the current user role
+		// (Session may have stale role if user.create.after hook just updated it)
+		const dbUser = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ?`)
+			.bind(user.id)
+			.first<{ role: string }>();
+
+		const userRole = dbUser?.role ?? "user";
+
+		// Check if user has any organization membership (owner, admin, or member)
+		const orgMembership = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM members WHERE userId = ?`,
+		)
+			.bind(user.id)
+			.first<{ count: number }>();
+
+		const hasOrganization = (orgMembership?.count ?? 0) > 0;
+
 		// Get subscription status to determine if user can create org
 		const stripe = getStripe(c);
 		const repository = new SubscriptionRepository(c.env.DB);
@@ -442,23 +486,21 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 		);
 		const subscriptionStatus = await service.getUserSubscriptionStatus(user.id);
 
-		// Also get raw DB record for debugging
-		const dbSubscription = await repository.getUserSubscription(user.id);
-
-		// Verify against Stripe directly if we have a Stripe-based subscription
-		// Skip verification for license-based subscriptions (no Stripe subscription to verify)
+		// Verify against Stripe directly if we have a Stripe-based subscription.
+		// subscriptionStatus.stripeSubscriptionId is populated by the service from the
+		// same DB record it already fetched, so no extra getUserSubscription() call needed.
 		if (
 			stripe &&
-			dbSubscription?.stripeSubscriptionId &&
-			!dbSubscription.licenseId
+			subscriptionStatus.stripeSubscriptionId &&
+			!subscriptionStatus.isLicenseBased
 		) {
 			try {
 				const stripeSub = await stripe.subscriptions.retrieve(
-					dbSubscription.stripeSubscriptionId,
+					subscriptionStatus.stripeSubscriptionId,
 				);
 
 				// If out of sync, report to Sentry
-				if (stripeSub.status !== dbSubscription.status) {
+				if (stripeSub.status !== subscriptionStatus.status) {
 					Sentry.captureMessage(
 						"Subscription status mismatch between Stripe and DB",
 						{
@@ -466,8 +508,8 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 							tags: { context: "subscription-status-mismatch" },
 							extra: {
 								stripeStatus: stripeSub.status,
-								dbStatus: dbSubscription.status,
-								subscriptionId: dbSubscription.stripeSubscriptionId,
+								dbStatus: subscriptionStatus.status,
+								subscriptionId: subscriptionStatus.stripeSubscriptionId,
 							},
 						},
 					);
@@ -475,7 +517,9 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			} catch (stripeError) {
 				Sentry.captureException(stripeError, {
 					tags: { context: "stripe-verification-failed" },
-					extra: { subscriptionId: dbSubscription.stripeSubscriptionId },
+					extra: {
+						subscriptionId: subscriptionStatus.stripeSubscriptionId,
+					},
 				});
 			}
 		}
@@ -494,18 +538,6 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			(subscriptionStatus.organizationsLimit === 0 ||
 				subscriptionStatus.organizationsOwned <
 					subscriptionStatus.organizationsLimit);
-
-		// Map invitations to response format
-		const mappedInvitations = pendingInvitations.map((inv) => ({
-			id: inv.id,
-			organizationId: inv.organizationId,
-			organizationName: inv.organizationName,
-			organizationLogo: inv.organizationLogo,
-			role: inv.role,
-			inviterName: inv.inviterName,
-			inviterEmail: inv.inviterEmail,
-			expiresAt: inv.expiresAt,
-		}));
 
 		// userRole is already queried from DB above (to avoid stale session role)
 		const isVisitor = userRole === "visitor";
