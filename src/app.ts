@@ -46,6 +46,7 @@ import {
 	AdminKvFlushEndpoint,
 	AdminPromoteUserEndpoint,
 } from "./endpoints/admin/openapi";
+import { runWithExecutionContext } from "./auth/execution-context";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { auditRoutes } from "./routes/audit";
@@ -79,6 +80,15 @@ const appMeta: AppMeta = {
 	version: pkg.version,
 	description: pkg.description,
 };
+
+// Establish AsyncLocalStorage scope for every request so that all route
+// handlers (auth, settings, subscription, admin, etc.) can access the
+// Cloudflare ExecutionContext via getExecutionContext() / executeInBackground().
+// This is required for Better Auth's backgroundTasks.handler to call
+// ctx.waitUntil() on background D1 writes from any route, not just /api/auth/*.
+app.use("*", async (c, next) => {
+	return runWithExecutionContext(c.executionCtx, next);
+});
 
 // Global middleware - Better Auth handles its own CORS via trustedOrigins config
 // Only apply CORS middleware to non-Better Auth routes

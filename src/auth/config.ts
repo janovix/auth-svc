@@ -273,6 +273,16 @@ export function buildResolvedAuthConfig(
 			},
 			errorURL: `${env.AUTH_FRONTEND_URL}/error`,
 		},
+		// Store OAuth state (PKCE/state parameter) in an encrypted, signed cookie
+		// on the client's browser instead of in D1. This avoids Cloudflare D1's
+		// eventual-consistency / read-after-write problem: the sign-in initiation
+		// writes the state to the D1 primary, but the callback may be served by a
+		// different PoP whose D1 replica hasn't synced yet → "Verification not found".
+		// With "cookie" strategy, the state is encrypted with BETTER_AUTH_SECRET,
+		// lives in the browser, and is always immediately available on callback.
+		account: {
+			storeStateStrategy: "cookie",
+		},
 		socialProviders: {
 			google: {
 				clientId: env.GOOGLE_CLIENT_ID as string,
