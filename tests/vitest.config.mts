@@ -45,6 +45,10 @@ export default defineWorkersConfig({
 						// These are often used by better-auth internally and can fail on Windows
 						// due to module resolution issues or platform-specific code
 						"@kysely/*",
+						"zod",
+						"better-auth",
+						"@noble/hashes",
+						"jose",
 					],
 				},
 			},
