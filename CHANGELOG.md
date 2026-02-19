@@ -1,3 +1,10 @@
+# [1.4.0-rc.60](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.59...v1.4.0-rc.60) (2026-02-19)
+
+
+### Bug Fixes
+
+* **auth:** update rate limits for various environments ([e14d369](https://github.com/janovix/auth-svc/commit/e14d369d904f5a41635dc6ad879c239992656b0b))
+
 # [1.4.0-rc.59](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.58...v1.4.0-rc.59) (2026-02-19)
 
 
