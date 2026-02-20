@@ -1,3 +1,10 @@
+# [1.4.0-rc.61](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.60...v1.4.0-rc.61) (2026-02-20)
+
+
+### Features
+
+* **routes:** add internal organizations route for member enumeration ([8bb897e](https://github.com/janovix/auth-svc/commit/8bb897e6d77c4ccba06d9b5d13d6d94d317e353f))
+
 # [1.4.0-rc.60](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.59...v1.4.0-rc.60) (2026-02-19)
 
 
