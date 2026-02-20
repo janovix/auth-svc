@@ -247,18 +247,24 @@ export class PricingService {
 	}
 
 	/**
-	 * Get subscription (base) price for a plan
+	 * Get subscription (base) price for a plan by plan name (e.g., "business", "pro")
 	 */
-	async getSubscriptionPriceForPlan(planId: string): Promise<PlanPrice | null> {
-		const prices = await this.repository.getPricesForPlan(planId);
+	async getSubscriptionPriceForPlan(
+		planName: string,
+	): Promise<PlanPrice | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+		const prices = await this.repository.getPricesForPlan(plan.id);
 		return prices.find((p) => p.priceType === "subscription") ?? null;
 	}
 
 	/**
-	 * Get seat price for a plan
+	 * Get seat price for a plan by plan name (e.g., "business", "pro")
 	 */
-	async getSeatPriceForPlan(planId: string): Promise<PlanPrice | null> {
-		const prices = await this.repository.getPricesForPlan(planId);
+	async getSeatPriceForPlan(planName: string): Promise<PlanPrice | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+		const prices = await this.repository.getPricesForPlan(plan.id);
 		return prices.find((p) => p.priceType === "seat") ?? null;
 	}
 
@@ -324,10 +330,7 @@ export class PricingService {
 	async getSubscriptionPriceIdByPlanName(
 		planName: string,
 	): Promise<string | null> {
-		const plan = await this.repository.getPlanByName(planName);
-		if (!plan) return null;
-
-		const price = await this.getSubscriptionPriceForPlan(plan.id);
+		const price = await this.getSubscriptionPriceForPlan(planName);
 		return price?.stripePriceId ?? null;
 	}
 

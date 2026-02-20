@@ -200,16 +200,17 @@ organizationRoutes.post("/update-seats", async (c) => {
 		}
 
 		// Fetch seat price from database for this plan
-		const planId = subscription.plan;
-		const seatPrice = await pricingService.getSeatPriceForPlan(planId);
+		const planName = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planName);
 		if (!seatPrice) {
-			console.error(
-				`[Organization] Seat price not configured in database for plan ${planId}`,
+			console.log(
+				`[Organization] No seat pricing configured for plan ${planName}, skipping seat update`,
 			);
-			return c.json(
-				{ success: false, error: "Seat pricing not configured for plan" },
-				500,
-			);
+			return c.json({
+				success: true,
+				message: "Seat billing not configured for this plan",
+				seatsUpdated: false,
+			});
 		}
 
 		// Count members and update seat quantity
@@ -311,16 +312,17 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		}
 
 		// Fetch seat price from database for this plan
-		const planId = subscription.plan;
-		const seatPrice = await pricingService.getSeatPriceForPlan(planId);
+		const planName = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planName);
 		if (!seatPrice) {
-			console.error(
-				`[Organization] Seat price not configured in database for plan ${planId}`,
+			console.log(
+				`[Organization] No seat pricing configured for plan ${planName}, skipping sync`,
 			);
-			return c.json(
-				{ success: false, error: "Seat pricing not configured for plan" },
-				500,
-			);
+			return c.json({
+				success: true,
+				message: "Seat billing not configured for this plan",
+				synced: 0,
+			});
 		}
 
 		let synced = 0;
