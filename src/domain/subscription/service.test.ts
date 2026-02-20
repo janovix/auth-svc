@@ -694,6 +694,99 @@ describe("SubscriptionService", () => {
 		});
 	});
 
+	describe("canCreateOrganization", () => {
+		it("should deny creation when user has no subscription", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(null);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(0);
+
+			const result = await service.canCreateOrganization("user-none");
+
+			expect(result.allowed).toBe(false);
+			expect(result.reason).toMatch(/subscription is required/i);
+		});
+
+		it("should deny creation when subscription is canceled", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue({
+				...mockSubscription,
+				status: "canceled",
+			});
+			mockRepository.countOrganizationsOwned.mockResolvedValue(0);
+
+			const result = await service.canCreateOrganization("user-456");
+
+			expect(result.allowed).toBe(false);
+			expect(result.reason).toMatch(/canceled/i);
+		});
+
+		it("should allow creation when limit is 0 (unlimited enterprise license)", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+			// User already owns many orgs, but limit is 0 (unlimited)
+			mockRepository.countOrganizationsOwned.mockResolvedValue(99);
+
+			const mockPricingRepo = {
+				...createMockPricingRepositoryForBusiness(),
+				getLicenseByUserId: vi.fn().mockResolvedValue({
+					id: "license-001",
+					maxOrganizations: 0, // 0 = unlimited
+					maxUsers: 0,
+					reportsPerMonth: 0,
+					noticesPerMonth: 0,
+					alertsPerMonth: 0,
+					operationsPerMonth: 0,
+					clientsPerMonth: 0,
+					watchlistQueriesPerDay: 0,
+					expiresAt: null,
+					status: "active",
+				}),
+			};
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const result =
+				await serviceWithPricing.canCreateOrganization("user-license");
+
+			expect(result.allowed).toBe(true);
+		});
+
+		it("should allow creation when orgs owned is below the plan limit", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(0); // 0 owned, limit is 1
+
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const result = await serviceWithPricing.canCreateOrganization("user-456");
+
+			expect(result.allowed).toBe(true);
+		});
+
+		it("should deny creation when orgs owned meets the plan limit", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(mockSubscription);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(1); // 1 owned, limit is 1
+
+			const mockPricingRepo = createMockPricingRepositoryForBusiness();
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const result = await serviceWithPricing.canCreateOrganization("user-456");
+
+			expect(result.allowed).toBe(false);
+			expect(result.reason).toMatch(/limit/i);
+		});
+	});
+
 	describe("getUserFeatures", () => {
 		it("should return enterprise features for license-based subscription", async () => {
 			mockRepository.getUserSubscription.mockResolvedValue(

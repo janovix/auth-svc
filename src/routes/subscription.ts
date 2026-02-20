@@ -114,6 +114,16 @@ subscriptionRoutes.get("/status", async (c) => {
 
 	const status = await service.getUserSubscriptionStatus(effectiveUserId);
 
+	// organizationsOwned and organizationsLimit are user-level fields: they describe
+	// how many organizations the *requesting user* can create, not the org owner.
+	// When resolving from the org owner, override these with the authenticated user's
+	// own values so the UI correctly reflects their creation rights.
+	if (resolveFromOrg && effectiveUserId !== user.id) {
+		const selfStatus = await service.getUserSubscriptionStatus(user.id);
+		status.organizationsOwned = selfStatus.organizationsOwned;
+		status.organizationsLimit = selfStatus.organizationsLimit;
+	}
+
 	return c.json({
 		success: true,
 		data: status,
