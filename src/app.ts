@@ -57,6 +57,7 @@ import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
 import { adminOrganizationsRoutes } from "./routes/admin-organizations";
+import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 import { pricingRoutes } from "./routes/pricing";
 import { apiKeysRoutes } from "./routes/api-keys";
 import { internalApiKeysRoutes } from "./routes/internal-api-keys";
@@ -178,6 +179,9 @@ app.route("/internal/settings", internalSettingsRoutes);
 
 // Admin organizations (session + admin role; admin app calls this directly)
 app.route("/admin/organizations", adminOrganizationsRoutes);
+
+// Internal organizations (service binding access, no auth; for org member enumeration)
+app.route("/internal/organizations", internalOrganizationsRoutes);
 
 // Register Settings OpenAPI documentation
 openapi.get("/api/settings/user", GetUserSettingsEndpoint);
