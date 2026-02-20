@@ -1,3 +1,10 @@
+# [1.4.0-rc.62](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.61...v1.4.0-rc.62) (2026-02-20)
+
+
+### Features
+
+* **subscription:** enhance organization creation logic in SubscriptionService tests ([164cde5](https://github.com/janovix/auth-svc/commit/164cde5b480aa00d993eceeebc6685a47c8b24ca))
+
 # [1.4.0-rc.61](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.60...v1.4.0-rc.61) (2026-02-20)
 
 
