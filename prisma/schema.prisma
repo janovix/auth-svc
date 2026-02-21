@@ -51,8 +51,30 @@ model User {
   // Better Auth organization plugin relations
   memberships     Member[]
   invitationsSent Invitation[]
+  // Better Auth passkey plugin relations
+  passkeys        Passkey[]
 
   @@map("users")
+}
+
+// Better Auth Passkey model (camelCase - managed by Better Auth, NO @map directives on columns)
+model Passkey {
+  id           String    @id
+  name         String?
+  publicKey    String
+  userId       String
+  credentialID String    @unique
+  counter      Int
+  deviceType   String
+  backedUp     Boolean
+  transports   String?
+  createdAt    DateTime? @default(now())
+  aaguid       String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passkey")
 }
 
 // Better Auth Session model

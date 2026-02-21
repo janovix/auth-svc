@@ -4,6 +4,7 @@ import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
 
@@ -233,6 +234,73 @@ export type ResolvedAuthConfig = {
 	options: BetterAuthOptions;
 	accessPolicy: AuthAccessPolicy;
 };
+
+/**
+ * Resolves the WebAuthn Relying Party ID (rpID) from the frontend URL.
+ * rpID must be the registrable domain of the origin where credentials are created.
+ * Examples: "janovix.com" (prod), "janovix.workers.dev" (dev), "localhost" (local)
+ */
+function resolvePasskeyRpID(
+	frontendUrl: string | undefined,
+	env: JanovixEnvironment,
+): string {
+	if (frontendUrl) {
+		try {
+			const url = new URL(frontendUrl);
+			return url.hostname;
+		} catch {
+			// fall through to defaults
+		}
+	}
+	if (env === "production") {
+		return "janovix.com";
+	}
+	if (env === "dev" || env === "preview") {
+		return "janovix.workers.dev";
+	}
+	return "localhost";
+}
+
+/**
+ * Resolves the WebAuthn origin(s) from the frontend URL.
+ * Must exactly match the origin where navigator.credentials is called.
+ * For local/test, includes common localhost origins.
+ */
+function resolvePasskeyOrigin(
+	frontendUrl: string | undefined,
+	env: JanovixEnvironment,
+): string | string[] {
+	if (frontendUrl) {
+		try {
+			const url = new URL(frontendUrl);
+			const origin = `${url.protocol}//${url.host}`;
+			if (env === "local" || env === "test") {
+				return [
+					origin,
+					"http://localhost:3000",
+					"http://localhost:3001",
+					"http://localhost:8080",
+					"https://localhost:3000",
+				];
+			}
+			return origin;
+		} catch {
+			// fall through to defaults
+		}
+	}
+	if (env === "local" || env === "test") {
+		return [
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:8080",
+			"https://localhost:3000",
+		];
+	}
+	if (env === "production") {
+		return "https://auth.janovix.com";
+	}
+	return "https://auth.janovix.workers.dev";
+}
 
 export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 	const fallback = env.ENVIRONMENT?.toLowerCase?.() ?? "local";
@@ -589,6 +657,11 @@ export function buildResolvedAuthConfig(
 							);
 						}
 					},
+			}),
+			passkey({
+				rpID: resolvePasskeyRpID(env.AUTH_FRONTEND_URL, resolvedEnv),
+				rpName: "Janovix",
+				origin: resolvePasskeyOrigin(env.AUTH_FRONTEND_URL, resolvedEnv),
 			}),
 			// Stripe plugin for user-based billing
 			// Price IDs are fetched from database (plan_prices table)
