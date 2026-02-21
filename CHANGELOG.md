@@ -1,3 +1,10 @@
+# [1.4.0-rc.63](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.62...v1.4.0-rc.63) (2026-02-21)
+
+
+### Features
+
+* **passkey:** add support for Better Auth passkey plugin ([a3dd710](https://github.com/janovix/auth-svc/commit/a3dd710e7996e3146abf569ba0b9c07a9cac8001))
+
 # [1.4.0-rc.62](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.61...v1.4.0-rc.62) (2026-02-20)
 
 
