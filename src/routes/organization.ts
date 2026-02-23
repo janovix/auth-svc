@@ -13,7 +13,7 @@ import {
 	SubscriptionRepository,
 	SubscriptionService,
 } from "../domain/subscription";
-import { PricingRepository } from "../domain/pricing";
+import { PricingRepository, PricingService } from "../domain/pricing";
 
 type OrganizationBindings = {
 	Bindings: Bindings;
@@ -156,7 +156,7 @@ organizationRoutes.post("/update-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			console.log(
 				"[Organization] Stripe not configured for seat billing, skipping update",
 			);
@@ -170,24 +170,61 @@ organizationRoutes.post("/update-seats", async (c) => {
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
 		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
 			pricingRepository,
 		);
 
+		// Get the owner's subscription to determine plan
+		const ownerUserId =
+			await repository.getOrganizationOwnerUserId(organizationId);
+		if (!ownerUserId) {
+			return c.json(
+				{ success: false, error: "Organization owner not found" },
+				404,
+			);
+		}
+
+		const subscription = await repository.getUserSubscription(ownerUserId);
+		if (!subscription) {
+			console.log(
+				"[Organization] No active subscription found, skipping seat update",
+			);
+			return c.json({
+				success: true,
+				message: "No active subscription",
+				seatsUpdated: false,
+			});
+		}
+
+		// Fetch seat price from database for this plan
+		const planName = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planName);
+		if (!seatPrice) {
+			console.log(
+				`[Organization] No seat pricing configured for plan ${planName}, skipping seat update`,
+			);
+			return c.json({
+				success: true,
+				message: "Seat billing not configured for this plan",
+				seatsUpdated: false,
+			});
+		}
+
 		// Count members and update seat quantity
 		const memberCount =
 			await repository.countOrganizationMembers(organizationId);
 
 		console.log(
-			`[Organization] Updating seats for org ${organizationId}: ${memberCount} members`,
+			`[Organization] Updating seats for org ${organizationId}: ${memberCount} members, seat price: ${seatPrice.stripePriceId}`,
 		);
 
 		await service.updateSubscriptionSeatQuantity(
 			organizationId,
 			memberCount,
-			c.env.STRIPE_SEAT_PRICE_ID,
+			seatPrice.stripePriceId,
 		);
 
 		return c.json({
@@ -228,7 +265,7 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		}
 
 		// Check if Stripe is configured
-		if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_SEAT_PRICE_ID) {
+		if (!c.env.STRIPE_SECRET_KEY) {
 			return c.json({
 				success: true,
 				message: "Seat billing not configured",
@@ -254,11 +291,39 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
 		const pricingRepository = new PricingRepository(c.env.DB);
+		const pricingService = new PricingService(pricingRepository);
 		const service = new SubscriptionService(
 			repository,
 			stripe,
 			pricingRepository,
 		);
+
+		// Get user's subscription to determine plan
+		const subscription = await repository.getUserSubscription(session.user.id);
+		if (!subscription) {
+			console.log(
+				"[Organization] No active subscription found for user, skipping sync",
+			);
+			return c.json({
+				success: true,
+				message: "No active subscription",
+				synced: 0,
+			});
+		}
+
+		// Fetch seat price from database for this plan
+		const planName = subscription.plan;
+		const seatPrice = await pricingService.getSeatPriceForPlan(planName);
+		if (!seatPrice) {
+			console.log(
+				`[Organization] No seat pricing configured for plan ${planName}, skipping sync`,
+			);
+			return c.json({
+				success: true,
+				message: "Seat billing not configured for this plan",
+				synced: 0,
+			});
+		}
 
 		let synced = 0;
 		for (const org of orgsResult.results) {
@@ -269,7 +334,7 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 				await service.updateSubscriptionSeatQuantity(
 					org.organizationId,
 					memberCount,
-					c.env.STRIPE_SEAT_PRICE_ID,
+					seatPrice.stripePriceId,
 				);
 				synced++;
 			} catch (error) {
@@ -292,6 +357,146 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 			{
 				success: false,
 				error: error instanceof Error ? error.message : "Failed to sync seats",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * POST /api/organization/transfer-ownership
+ * Transfer organization ownership from the current owner to another member.
+ *
+ * Requirements:
+ * - Caller must be the current owner of the organization
+ * - New owner must be an existing member of the organization
+ * - Cannot transfer to yourself
+ * - Old owner becomes "admin" after transfer
+ * - New owner becomes "owner"
+ *
+ * Body: { organizationId: string, newOwnerUserId: string }
+ */
+organizationRoutes.post("/transfer-ownership", async (c) => {
+	try {
+		const { auth } = await getBetterAuthContext(c.env);
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+
+		if (!session?.user) {
+			return c.json({ success: false, error: "Unauthorized" }, 401);
+		}
+
+		const body = await c.req.json<{
+			organizationId: string;
+			newOwnerUserId: string;
+		}>();
+		const { organizationId, newOwnerUserId } = body;
+
+		if (!organizationId || !newOwnerUserId) {
+			return c.json(
+				{
+					success: false,
+					error: "organizationId and newOwnerUserId are required",
+				},
+				400,
+			);
+		}
+
+		// Cannot transfer to yourself
+		if (newOwnerUserId === session.user.id) {
+			return c.json(
+				{
+					success: false,
+					error: "Cannot transfer ownership to yourself",
+				},
+				400,
+			);
+		}
+
+		// Verify caller is the current owner
+		const callerMembership = await c.env.DB.prepare(
+			`SELECT id, role FROM members WHERE organizationId = ? AND userId = ?`,
+		)
+			.bind(organizationId, session.user.id)
+			.first<{ id: string; role: string }>();
+
+		if (!callerMembership || callerMembership.role !== "owner") {
+			return c.json(
+				{
+					success: false,
+					error: "Only the organization owner can transfer ownership",
+				},
+				403,
+			);
+		}
+
+		// Verify new owner is a member of the organization
+		const newOwnerMembership = await c.env.DB.prepare(
+			`SELECT id, role FROM members WHERE organizationId = ? AND userId = ?`,
+		)
+			.bind(organizationId, newOwnerUserId)
+			.first<{ id: string; role: string }>();
+
+		if (!newOwnerMembership) {
+			return c.json(
+				{
+					success: false,
+					error: "The selected user is not a member of this organization",
+				},
+				404,
+			);
+		}
+
+		// Perform the transfer: old owner -> admin, new owner -> owner
+		// Use batch for atomicity
+		const now = new Date().toISOString();
+
+		await c.env.DB.batch([
+			c.env.DB.prepare(
+				`UPDATE members SET role = 'admin', updatedAt = ? WHERE id = ?`,
+			).bind(now, callerMembership.id),
+			c.env.DB.prepare(
+				`UPDATE members SET role = 'owner', updatedAt = ? WHERE id = ?`,
+			).bind(now, newOwnerMembership.id),
+		]);
+
+		// Get organization and new owner details for the response
+		const org = await c.env.DB.prepare(
+			`SELECT name FROM organizations WHERE id = ?`,
+		)
+			.bind(organizationId)
+			.first<{ name: string }>();
+
+		const newOwner = await c.env.DB.prepare(
+			`SELECT name, email FROM users WHERE id = ?`,
+		)
+			.bind(newOwnerUserId)
+			.first<{ name: string; email: string }>();
+
+		console.log(
+			`[Organization] Ownership transferred for org ${organizationId} (${org?.name}) from ${session.user.id} to ${newOwnerUserId} (${newOwner?.email})`,
+		);
+
+		return c.json({
+			success: true,
+			data: {
+				organizationId,
+				previousOwnerId: session.user.id,
+				newOwnerId: newOwnerUserId,
+				newOwnerName: newOwner?.name ?? null,
+				newOwnerEmail: newOwner?.email ?? null,
+			},
+		});
+	} catch (error) {
+		console.error("[Organization] Error transferring ownership:", error);
+		return c.json(
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to transfer ownership",
 			},
 			500,
 		);

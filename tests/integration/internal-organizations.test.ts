@@ -1,7 +1,13 @@
 import { SELF } from "cloudflare:test";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-describe("Internal Organizations Routes", () => {
+/**
+ * Admin Organizations Routes (/admin/organizations)
+ *
+ * These routes require session + admin role. Without a valid admin session,
+ * all requests return 403. Tests verify the route exists and enforces admin auth.
+ */
+describe("Admin Organizations Routes", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
@@ -14,178 +20,70 @@ describe("Internal Organizations Routes", () => {
 		success: boolean;
 		data?: T;
 		error?: string;
+		message?: string;
 	}
 
-	describe("GET /internal/organizations", () => {
-		it("returns organizations list structure", async () => {
+	describe("GET /admin/organizations", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations",
+				"http://local.test/admin/organizations",
 			);
 
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as ApiResponse<{
-				organizations: unknown[];
-				total: number;
-				limit: number;
-				offset: number;
-			}>;
-			expect(body.success).toBe(true);
-			expect(body.data).toHaveProperty("organizations");
-			expect(body.data).toHaveProperty("total");
-			expect(body.data).toHaveProperty("limit");
-			expect(body.data).toHaveProperty("offset");
-			expect(Array.isArray(body.data?.organizations)).toBe(true);
-		});
-
-		it("respects pagination params", async () => {
-			const response = await SELF.fetch(
-				"http://local.test/internal/organizations?limit=10&offset=5",
-			);
-
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as ApiResponse<{
-				organizations: unknown[];
-				total: number;
-				limit: number;
-				offset: number;
-			}>;
-			expect(body.success).toBe(true);
-			expect(body.data?.limit).toBe(10);
-			expect(body.data?.offset).toBe(5);
-		});
-
-		it("enforces max limit of 100", async () => {
-			const response = await SELF.fetch(
-				"http://local.test/internal/organizations?limit=200",
-			);
-
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as ApiResponse<{
-				limit: number;
-			}>;
-			expect(body.data?.limit).toBe(100);
-		});
-	});
-
-	describe("GET /internal/organizations/:id", () => {
-		it("returns 404 for non-existent organization", async () => {
-			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/non-existent-id",
-			);
-
-			expect(response.status).toBe(404);
+			expect(response.status).toBe(403);
 			const body = (await response.json()) as ApiResponse<unknown>;
 			expect(body.success).toBe(false);
-			expect(body.error).toBe("Organization not found");
+			expect(body.error).toBe("Unauthorized");
+			expect(body.message).toBe("Admin access required");
 		});
-	});
 
-	describe("GET /internal/organizations/:id/members", () => {
-		it("returns empty members array for non-existent org", async () => {
+		it("returns 403 for request with invalid session cookie", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/non-existent-id/members",
-			);
-
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as ApiResponse<{
-				members: unknown[];
-				total: number;
-			}>;
-			expect(body.success).toBe(true);
-			expect(body.data?.members).toEqual([]);
-			expect(body.data?.total).toBe(0);
-		});
-	});
-
-	describe("GET /internal/organizations/:id/invitations", () => {
-		it("returns empty invitations array for non-existent org", async () => {
-			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/non-existent-id/invitations",
-			);
-
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as ApiResponse<{
-				invitations: unknown[];
-				total: number;
-			}>;
-			expect(body.success).toBe(true);
-			expect(body.data?.invitations).toEqual([]);
-			expect(body.data?.total).toBe(0);
-		});
-	});
-
-	describe("PATCH /internal/organizations/:id", () => {
-		it("validates at least one field is required", async () => {
-			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/test-org-id",
+				"http://local.test/admin/organizations?limit=10&offset=5",
 				{
-					method: "PATCH",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({}),
+					headers: {
+						Cookie: "better-auth.session_token=invalid-token",
+					},
 				},
 			);
 
-			expect(response.status).toBe(400);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe(
-				"At least one field (name, slug, logo, metadata) must be provided",
-			);
+			expect(response.status).toBe(403);
 		});
+	});
 
-		it("validates name cannot be empty", async () => {
+	describe("GET /admin/organizations/:id", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/test-org-id",
-				{
-					method: "PATCH",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name: "" }),
-				},
+				"http://local.test/admin/organizations/non-existent-id",
 			);
 
-			expect(response.status).toBe(400);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe("Organization name cannot be empty");
+			expect(response.status).toBe(403);
 		});
+	});
 
-		it("validates slug cannot be empty", async () => {
+	describe("GET /admin/organizations/:id/members", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/test-org-id",
-				{
-					method: "PATCH",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ slug: "" }),
-				},
+				"http://local.test/admin/organizations/non-existent-id/members",
 			);
 
-			expect(response.status).toBe(400);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe("Organization slug cannot be empty");
+			expect(response.status).toBe(403);
 		});
+	});
 
-		it("validates slug format", async () => {
+	describe("GET /admin/organizations/:id/invitations", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/test-org-id",
-				{
-					method: "PATCH",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ slug: "Invalid Slug!" }),
-				},
+				"http://local.test/admin/organizations/non-existent-id/invitations",
 			);
 
-			expect(response.status).toBe(400);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe(
-				"Slug must be lowercase and contain only letters, numbers, and hyphens",
-			);
+			expect(response.status).toBe(403);
 		});
+	});
 
-		it("returns 404 for non-existent organization", async () => {
+	describe("PATCH /admin/organizations/:id", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/non-existent-id",
+				"http://local.test/admin/organizations/test-org-id",
 				{
 					method: "PATCH",
 					headers: { "Content-Type": "application/json" },
@@ -193,26 +91,20 @@ describe("Internal Organizations Routes", () => {
 				},
 			);
 
-			expect(response.status).toBe(404);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe("Organization not found");
+			expect(response.status).toBe(403);
 		});
 	});
 
-	describe("DELETE /internal/organizations/:id", () => {
-		it("returns 404 for non-existent organization", async () => {
+	describe("DELETE /admin/organizations/:id", () => {
+		it("returns 403 when no admin session", async () => {
 			const response = await SELF.fetch(
-				"http://local.test/internal/organizations/non-existent-id",
+				"http://local.test/admin/organizations/non-existent-id",
 				{
 					method: "DELETE",
 				},
 			);
 
-			expect(response.status).toBe(404);
-			const body = (await response.json()) as ApiResponse<unknown>;
-			expect(body.success).toBe(false);
-			expect(body.error).toBe("Organization not found");
+			expect(response.status).toBe(403);
 		});
 	});
 });

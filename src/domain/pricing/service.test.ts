@@ -32,6 +32,8 @@ describe("PricingService", () => {
 		getLicenseById: ReturnType<typeof vi.fn>;
 		getLicenseByUserId: ReturnType<typeof vi.fn>;
 		activateLicense: ReturnType<typeof vi.fn>;
+		supersedeLicense: ReturnType<typeof vi.fn>;
+		revokeLicense: ReturnType<typeof vi.fn>;
 	};
 
 	const mockBusinessPlan: SubscriptionPlan = {
@@ -68,7 +70,7 @@ describe("PricingService", () => {
 		reportsPerMonth: 0,
 		noticesPerMonth: 3,
 		alertsPerMonth: 50,
-		transactionsPerMonth: 250,
+		operationsPerMonth: 250,
 		clientsPerMonth: 50,
 		watchlistQueriesPerDay: 50,
 		metadata: null,
@@ -84,7 +86,7 @@ describe("PricingService", () => {
 		reportsPerMonth: 10,
 		noticesPerMonth: 15,
 		alertsPerMonth: 250,
-		transactionsPerMonth: 1500,
+		operationsPerMonth: 1500,
 		clientsPerMonth: 300,
 		watchlistQueriesPerDay: 200,
 		metadata: null,
@@ -138,6 +140,8 @@ describe("PricingService", () => {
 			getLicenseById: vi.fn(),
 			getLicenseByUserId: vi.fn(),
 			activateLicense: vi.fn(),
+			supersedeLicense: vi.fn(),
+			revokeLicense: vi.fn(),
 		};
 		service = new PricingService(
 			mockRepository as unknown as PricingRepository,
@@ -208,7 +212,7 @@ describe("PricingService", () => {
 				reportsPerMonth: 0,
 				noticesPerMonth: 3,
 				alertsPerMonth: 50,
-				transactionsPerMonth: 250,
+				operationsPerMonth: 250,
 				clientsPerMonth: 50,
 				watchlistQueriesPerDay: 50,
 			});
@@ -229,18 +233,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-XXXX-XXXX-XXXX",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				transactionsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-01"),
@@ -269,18 +275,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-REVOKED",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "revoked",
 				expiresAt: null,
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				transactionsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-01"),
@@ -299,18 +307,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-EXPIRED",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: null,
+				issuedBy: null,
 				status: "active",
 				expiresAt: new Date("2023-01-01"), // Past date
 				activatedAt: null,
-				maxOrganizations: null,
-				maxUsers: null,
-				reportsIncluded: null,
-				noticesIncluded: null,
-				alertsIncluded: null,
-				transactionsIncluded: null,
-				clientsIncluded: null,
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2022-01-01"),
 				updatedAt: new Date("2022-01-01"),
@@ -322,6 +332,38 @@ describe("PricingService", () => {
 
 			expect(result.valid).toBe(false);
 			expect(result.error).toBe("License has expired");
+		});
+
+		it("should return invalid for superseded license", async () => {
+			const mockLicense: EnterpriseLicense = {
+				id: "lic_1",
+				key: "ENT-SUPERSEDED",
+				organizationName: "Acme Corp",
+				userId: "user_123",
+				issuedBy: null,
+				status: "superseded",
+				expiresAt: null,
+				activatedAt: new Date("2024-01-15"),
+				notes: null,
+				maxOrganizations: 0,
+				maxUsers: 0,
+				reportsPerMonth: 0,
+				noticesPerMonth: 0,
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
+				metadata: null,
+				createdAt: new Date("2024-01-01"),
+				updatedAt: new Date("2024-01-01"),
+			};
+
+			mockRepository.getLicenseByKey.mockResolvedValue(mockLicense);
+
+			const result = await service.validateLicenseKey("ENT-SUPERSEDED");
+
+			expect(result.valid).toBe(false);
+			expect(result.error).toBe("License is superseded");
 		});
 	});
 
@@ -347,18 +389,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-CUSTOM",
 				organizationName: "Acme Corp",
-				planId: "plan_pro",
 				userId: "user_123",
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: new Date("2024-01-15"),
+				notes: null,
 				maxOrganizations: 10, // Override
 				maxUsers: 100, // Override
-				reportsIncluded: null, // Use plan default
-				noticesIncluded: 50, // Override
-				alertsIncluded: null,
-				transactionsIncluded: null,
-				clientsIncluded: null,
+				reportsPerMonth: 0, // Use plan default
+				noticesPerMonth: 50, // Override
+				alertsPerMonth: 0,
+				operationsPerMonth: 0,
+				clientsPerMonth: 0,
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-15"),
@@ -375,14 +419,14 @@ describe("PricingService", () => {
 
 			expect(limits).toBeDefined();
 			expect(limits?.source).toBe("license");
-			expect(limits?.planName).toBe("pro");
-			// Check overrides
+			expect(limits?.planName).toBe("enterprise");
+			// License is self-contained -- all limits come from the license directly
 			expect(limits?.maxOrganizations).toBe(10);
 			expect(limits?.usersPerOrg).toBe(100);
 			expect(limits?.noticesPerMonth).toBe(50);
-			// Check plan defaults
-			expect(limits?.reportsPerMonth).toBe(10); // From pro plan
-			expect(limits?.alertsPerMonth).toBe(250); // From pro plan
+			// 0 = unlimited (no plan fallback)
+			expect(limits?.reportsPerMonth).toBe(0);
+			expect(limits?.alertsPerMonth).toBe(0);
 		});
 	});
 
@@ -392,18 +436,20 @@ describe("PricingService", () => {
 				id: "lic_1",
 				key: "ENT-PARTIAL",
 				organizationName: "Acme Corp",
-				planId: "plan_business",
 				userId: "user_123",
+				issuedBy: null,
 				status: "active",
 				expiresAt: null,
 				activatedAt: new Date("2024-01-15"),
+				notes: null,
 				maxOrganizations: 5, // Override
-				maxUsers: null, // Use plan default (5)
-				reportsIncluded: 20, // Override
-				noticesIncluded: null, // Use plan default (3)
-				alertsIncluded: null, // Use plan default (50)
-				transactionsIncluded: 1000, // Override
-				clientsIncluded: null, // Use plan default (50)
+				maxUsers: 0, // Use plan default (5)
+				reportsPerMonth: 20, // Override
+				noticesPerMonth: 0, // Use plan default (3)
+				alertsPerMonth: 0, // Use plan default (50)
+				operationsPerMonth: 1000, // Override
+				clientsPerMonth: 0, // Use plan default (50)
+				watchlistQueriesPerDay: 0,
 				metadata: null,
 				createdAt: new Date("2024-01-01"),
 				updatedAt: new Date("2024-01-15"),
@@ -417,15 +463,16 @@ describe("PricingService", () => {
 
 			expect(limits).toBeDefined();
 			expect(limits?.source).toBe("license");
-			// Overridden values
+			expect(limits?.planName).toBe("enterprise");
+			// License is self-contained -- all limits come from the license directly
 			expect(limits?.maxOrganizations).toBe(5);
 			expect(limits?.reportsPerMonth).toBe(20);
-			expect(limits?.transactionsPerMonth).toBe(1000);
-			// Plan defaults
-			expect(limits?.usersPerOrg).toBe(5);
-			expect(limits?.noticesPerMonth).toBe(3);
-			expect(limits?.alertsPerMonth).toBe(50);
-			expect(limits?.clientsPerMonth).toBe(50);
+			expect(limits?.operationsPerMonth).toBe(1000);
+			// 0 = unlimited (no plan fallback since license is self-contained)
+			expect(limits?.usersPerOrg).toBe(0);
+			expect(limits?.noticesPerMonth).toBe(0);
+			expect(limits?.alertsPerMonth).toBe(0);
+			expect(limits?.clientsPerMonth).toBe(0);
 		});
 
 		it("should return null when license not found", async () => {
@@ -434,6 +481,95 @@ describe("PricingService", () => {
 			const limits = await service.getEffectiveLimitsForLicense("nonexistent");
 
 			expect(limits).toBeNull();
+		});
+	});
+
+	describe("activateLicense", () => {
+		const mockActiveLicense: EnterpriseLicense = {
+			id: "lic_new",
+			key: "ENT-NEW-LICENSE",
+			organizationName: "New Corp",
+			userId: null,
+			issuedBy: null,
+			status: "active",
+			expiresAt: null,
+			activatedAt: null,
+			notes: null,
+			maxOrganizations: 5,
+			maxUsers: 10,
+			reportsPerMonth: 100,
+			noticesPerMonth: 50,
+			alertsPerMonth: 200,
+			operationsPerMonth: 500,
+			clientsPerMonth: 250,
+			watchlistQueriesPerDay: 100,
+			metadata: null,
+			createdAt: new Date("2024-01-01"),
+			updatedAt: new Date("2024-01-01"),
+		};
+
+		it("should activate a valid license for a new user", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(mockActiveLicense);
+			mockRepository.activateLicense.mockResolvedValue(undefined);
+			mockRepository.getLicenseById.mockResolvedValue({
+				...mockActiveLicense,
+				userId: "user_new",
+				activatedAt: new Date(),
+			});
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(true);
+			expect(result.license).toBeDefined();
+			expect(mockRepository.activateLicense).toHaveBeenCalledWith(
+				"lic_new",
+				"user_new",
+			);
+		});
+
+		it("should fail if license is already assigned to another user", async () => {
+			const assignedLicense = {
+				...mockActiveLicense,
+				userId: "user_other",
+			};
+			mockRepository.getLicenseByKey.mockResolvedValue(assignedLicense);
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is already in use");
+			expect(mockRepository.activateLicense).not.toHaveBeenCalled();
+		});
+
+		it("should fail if license key is invalid", async () => {
+			mockRepository.getLicenseByKey.mockResolvedValue(null);
+
+			const result = await service.activateLicense("INVALID-KEY", "user_new");
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License key not found");
+		});
+
+		it("should fail if license is superseded", async () => {
+			const supersededLicense = {
+				...mockActiveLicense,
+				status: "superseded" as const,
+			};
+			mockRepository.getLicenseByKey.mockResolvedValue(supersededLicense);
+
+			const result = await service.activateLicense(
+				"ENT-NEW-LICENSE",
+				"user_new",
+			);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe("License is superseded");
 		});
 	});
 });

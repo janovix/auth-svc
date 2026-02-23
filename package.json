@@ -1,6 +1,6 @@
 {
 	"name": "auth-svc",
-	"version": "1.4.0",
+	"version": "1.5.0-rc.1",
 	"description": "Complete backend API template using Hono + Chanfana + D1 + Vitest.",
 	"cloudflare": {
 		"label": "Backend OpenAPI Template",
@@ -17,14 +17,16 @@
 		"publish": true
 	},
 	"dependencies": {
-		"@better-auth/stripe": "^1.4.12",
+		"@better-auth/passkey": "^1.4.18",
+		"@better-auth/stripe": "^1.4.18",
 		"@prisma/adapter-d1": "^6.17.1",
 		"@prisma/client": "^6.17.1",
 		"@sentry/cloudflare": "^10.32.1",
 		"@types/stripe": "^8.0.417",
-		"better-auth": "1.4.12",
+		"better-auth": "1.4.18",
 		"chanfana": "2.8.3",
 		"hono": "4.10.7",
+		"jose": "^6.1.3",
 		"kysely": "^0.28.9",
 		"stripe": "^20.1.2",
 		"zod": "3.25.67"
@@ -77,8 +79,9 @@
 		"prepare": "husky",
 		"schema": "npx chanfana",
 		"prisma:generate": "prisma generate",
-		"seedLocalDb": "wrangler d1 migrations apply DB --local && pnpm run seed:plans && npx prisma generate",
+		"seedLocalDb": "wrangler d1 migrations apply DB --local && pnpm run seed:plans:local && npx prisma generate",
 		"seed:plans": "node scripts/seed-plans.mjs",
+		"seed:plans:local": "cross-env ENV=local node scripts/seed-plans.mjs",
 		"seed:plans:dev": "REMOTE=true node scripts/seed-plans.mjs",
 		"seed:plans:preview": "ENV=preview REMOTE=true node scripts/seed-plans.mjs",
 		"seed:plans:prod": "ENV=prod REMOTE=true node scripts/seed-plans.mjs",

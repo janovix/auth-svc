@@ -32,8 +32,8 @@ export class SubscriptionRepository {
 				`SELECT * FROM subscription 
 				 WHERE referenceId = ? 
 				 ORDER BY 
-				   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
 				   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+				   CASE WHEN stripeSubscriptionId IS NOT NULL OR licenseId IS NOT NULL THEN 0 ELSE 1 END,
 				   createdAt DESC 
 				 LIMIT 1`,
 			)
@@ -44,6 +44,7 @@ export class SubscriptionRepository {
 				referenceId: string;
 				stripeCustomerId: string | null;
 				stripeSubscriptionId: string | null;
+				licenseId: string | null;
 				status: string | null;
 				periodStart: string | null;
 				periodEnd: string | null;
@@ -63,6 +64,7 @@ export class SubscriptionRepository {
 			referenceId: result.referenceId,
 			stripeCustomerId: result.stripeCustomerId,
 			stripeSubscriptionId: result.stripeSubscriptionId,
+			licenseId: result.licenseId,
 			status: result.status as SubscriptionStatus | null,
 			periodStart: result.periodStart ? new Date(result.periodStart) : null,
 			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,
@@ -90,6 +92,7 @@ export class SubscriptionRepository {
 				referenceId: string;
 				stripeCustomerId: string | null;
 				stripeSubscriptionId: string | null;
+				licenseId: string | null;
 				status: string | null;
 				periodStart: string | null;
 				periodEnd: string | null;
@@ -109,6 +112,7 @@ export class SubscriptionRepository {
 			referenceId: result.referenceId,
 			stripeCustomerId: result.stripeCustomerId,
 			stripeSubscriptionId: result.stripeSubscriptionId,
+			licenseId: result.licenseId,
 			status: result.status as SubscriptionStatus | null,
 			periodStart: result.periodStart ? new Date(result.periodStart) : null,
 			periodEnd: result.periodEnd ? new Date(result.periodEnd) : null,
@@ -141,7 +145,7 @@ export class SubscriptionRepository {
 				reports_used: number;
 				notices_used: number;
 				alerts_used: number;
-				transactions_used: number;
+				operations_used: number;
 				clients_used: number;
 				users_count: number;
 				period_start: string;
@@ -161,7 +165,7 @@ export class SubscriptionRepository {
 			reportsUsed: result.reports_used,
 			noticesUsed: result.notices_used,
 			alertsUsed: result.alerts_used,
-			transactionsUsed: result.transactions_used,
+			operationsUsed: result.operations_used,
 			clientsUsed: result.clients_used,
 			usersCount: result.users_count,
 			periodStart: new Date(result.period_start),
@@ -192,7 +196,7 @@ export class SubscriptionRepository {
 				`
 				INSERT INTO organization_usage (
 					id, organization_id, owner_user_id, reports_used, notices_used, alerts_used, 
-					transactions_used, clients_used, users_count, period_start, period_end, created_at, updated_at
+					operations_used, clients_used, users_count, period_start, period_end, created_at, updated_at
 				) VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, ?, ?, ?, ?)
 				ON CONFLICT(organization_id) DO UPDATE SET
 					owner_user_id = excluded.owner_user_id,
@@ -224,14 +228,14 @@ export class SubscriptionRepository {
 	 */
 	async incrementUsage(
 		organizationId: string,
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
 		count: number = 1,
 	): Promise<void> {
 		const column = {
 			reports: "reports_used",
 			notices: "notices_used",
 			alerts: "alerts_used",
-			transactions: "transactions_used",
+			operations: "operations_used",
 			clients: "clients_used",
 		}[metric];
 
@@ -279,7 +283,7 @@ export class SubscriptionRepository {
 				`
 				UPDATE organization_usage 
 				SET reports_used = 0, notices_used = 0, alerts_used = 0, 
-				    transactions_used = 0, clients_used = 0,
+				    operations_used = 0, clients_used = 0,
 				    period_start = ?, period_end = ?, 
 				    overage_reported_at = NULL, stripe_usage_record_id = NULL,
 				    updated_at = datetime('now')

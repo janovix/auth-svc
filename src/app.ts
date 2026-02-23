@@ -3,6 +3,7 @@
  * This file contains all routes and middleware without the Sentry wrapper.
  * Used by both production (index.ts) and tests (testWorker.ts).
  */
+import * as Sentry from "@sentry/cloudflare";
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
 import { ContentfulStatusCode } from "hono/utils/http-status";
@@ -17,8 +18,8 @@ import {
 	AuthSignInEndpoint,
 	AuthSignOutEndpoint,
 	AuthSessionEndpoint,
-	AuthJwksEndpoint,
 } from "./endpoints/auth/openapi";
+import { handleJwks } from "./routes/jwks";
 import {
 	GetUserSettingsEndpoint,
 	UpdateUserSettingsEndpoint,
@@ -36,18 +37,18 @@ import {
 // Note: Subscription management is now handled by Better Auth Stripe plugin
 // Our custom routes only handle usage tracking and org limit checks
 import {
-	GetAmlComplianceSettingsEndpoint,
-	PutAmlComplianceSettingsEndpoint,
-	PatchAmlComplianceSettingsEndpoint,
-} from "./endpoints/aml-settings/openapi";
-import {
 	PrepareAvatarUploadEndpoint,
 	UploadAvatarEndpoint,
 	DeleteAvatarEndpoint,
 } from "./endpoints/upload/openapi";
+import {
+	AdminGetStatsEndpoint,
+	AdminKvFlushEndpoint,
+	AdminPromoteUserEndpoint,
+} from "./endpoints/admin/openapi";
+import { runWithExecutionContext } from "./auth/execution-context";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
-import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { auditRoutes } from "./routes/audit";
 import { internalAuditRoutes } from "./routes/internal-audit";
 import { subscriptionRoutes } from "./routes/subscription";
@@ -55,8 +56,22 @@ import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
+import { adminOrganizationsRoutes } from "./routes/admin-organizations";
 import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 import { pricingRoutes } from "./routes/pricing";
+import { apiKeysRoutes } from "./routes/api-keys";
+import { internalApiKeysRoutes } from "./routes/internal-api-keys";
+import { usageRightsRoutes } from "./routes/usage-rights";
+import { internalUsageRightsRoutes } from "./routes/internal-usage-rights";
+import { licenseAdminRoutes } from "./routes/license-admin";
+import { subscriptionAdminRoutes } from "./routes/subscription-admin";
+import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
+import {
+	GetAmlComplianceSettingsEndpoint,
+	PutAmlComplianceSettingsEndpoint,
+	PatchAmlComplianceSettingsEndpoint,
+	PatchAmlSelfServiceSettingsEndpoint,
+} from "./endpoints/aml-settings/openapi";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -66,6 +81,15 @@ const appMeta: AppMeta = {
 	version: pkg.version,
 	description: pkg.description,
 };
+
+// Establish AsyncLocalStorage scope for every request so that all route
+// handlers (auth, settings, subscription, admin, etc.) can access the
+// Cloudflare ExecutionContext via getExecutionContext() / executeInBackground().
+// This is required for Better Auth's backgroundTasks.handler to call
+// ctx.waitUntil() on background D1 writes from any route, not just /api/auth/*.
+app.use("*", async (c, next) => {
+	return runWithExecutionContext(c.executionCtx, next);
+});
 
 // Global middleware - Better Auth handles its own CORS via trustedOrigins config
 // Only apply CORS middleware to non-Better Auth routes
@@ -87,6 +111,10 @@ app.onError((err, c) => {
 	}
 
 	console.error("Global error handler caught:", err); // Log the error if it's not known
+
+	Sentry.captureException(err, {
+		tags: { context: "global-error-handler" },
+	});
 
 	// For other errors, return a generic 500 response
 	return c.json(
@@ -123,6 +151,12 @@ app.get("/docsz", (c) => {
 	return c.html(getScalarHtml(appMeta));
 });
 
+// Register dedicated JWKS handler BEFORE Better Auth routes.
+// This bypasses Better Auth's full pipeline (rate limiting KV ops, Prisma D1 query)
+// for the JWKS endpoint, making it immune to intermittent D1 slowdowns.
+// See src/routes/jwks.ts for details.
+app.get("/api/auth/jwks", handleJwks);
+
 // Register Better Auth routes (actual implementation - handles requests)
 // Must be registered BEFORE OpenAPI documentation routes so they handle requests first
 registerBetterAuthRoutes(app);
@@ -133,30 +167,20 @@ openapi.post("/api/auth/sign-up", AuthSignUpEndpoint);
 openapi.post("/api/auth/sign-in", AuthSignInEndpoint);
 openapi.post("/api/auth/sign-out", AuthSignOutEndpoint);
 openapi.get("/api/auth/session", AuthSessionEndpoint);
-openapi.get("/api/auth/jwks", AuthJwksEndpoint);
 
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);
 
-// Register AML Compliance Settings proxy routes (proxies to aml-svc via service binding)
+// Register AML Compliance Settings proxy (proxied to aml-svc via service binding)
 app.route("/api/settings/aml-compliance", amlSettingsProxyRoutes);
-
-// Register AML Settings OpenAPI documentation
-openapi.get(
-	"/api/settings/aml-compliance/:orgId",
-	GetAmlComplianceSettingsEndpoint,
-);
-openapi.put(
-	"/api/settings/aml-compliance/:orgId",
-	PutAmlComplianceSettingsEndpoint,
-);
-openapi.patch(
-	"/api/settings/aml-compliance/:orgId",
-	PatchAmlComplianceSettingsEndpoint,
-);
 
 // Register Internal routes for service bindings
 app.route("/internal/settings", internalSettingsRoutes);
+
+// Admin organizations (session + admin role; admin app calls this directly)
+app.route("/admin/organizations", adminOrganizationsRoutes);
+
+// Internal organizations (service binding access, no auth; for org member enumeration)
 app.route("/internal/organizations", internalOrganizationsRoutes);
 
 // Register Settings OpenAPI documentation
@@ -175,6 +199,24 @@ openapi.get(
 	GetOrganizationMembershipEndpoint,
 );
 openapi.get("/api/settings/resolved", GetResolvedSettingsEndpoint);
+
+// Register AML Compliance Settings OpenAPI documentation
+openapi.get(
+	"/api/settings/aml-compliance/:orgId",
+	GetAmlComplianceSettingsEndpoint,
+);
+openapi.put(
+	"/api/settings/aml-compliance/:orgId",
+	PutAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId",
+	PatchAmlComplianceSettingsEndpoint,
+);
+openapi.patch(
+	"/api/settings/aml-compliance/:orgId/self-service",
+	PatchAmlSelfServiceSettingsEndpoint,
+);
 
 // Register Audit routes (actual implementation)
 app.route("/api/audit", auditRoutes);
@@ -195,6 +237,18 @@ app.route("/api/subscription", subscriptionRoutes);
 // Register Pricing routes (database-driven plans, prices, and limits)
 app.route("/api/pricing", pricingRoutes);
 
+// Register API Keys routes (organization-scoped keys for third-party access)
+app.route("/api/api-keys", apiKeysRoutes);
+
+// Register Internal API Keys routes (service binding validation)
+app.route("/internal/api-keys", internalApiKeysRoutes);
+
+// Register Usage Rights routes (entitlement checks, metering, gates)
+app.route("/api/usage-rights", usageRightsRoutes);
+
+// Register Internal Usage Rights routes (service binding, no auth)
+app.route("/internal/usage-rights", internalUsageRightsRoutes);
+
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);
 
@@ -211,6 +265,17 @@ openapi.delete("/api/upload/avatar/:key", DeleteAvatarEndpoint);
 
 // Register Admin routes (KV management, etc.)
 app.route("/api/admin", adminRoutes);
+
+// Register License Admin routes (CRUD for enterprise licenses)
+app.route("/api/admin/licenses", licenseAdminRoutes);
+
+// Register Subscription Admin routes (list, stats, usage for admin)
+app.route("/api/admin/subscriptions", subscriptionAdminRoutes);
+
+// Register Admin OpenAPI documentation
+openapi.get("/api/admin/stats", AdminGetStatsEndpoint);
+openapi.delete("/api/admin/kv/flush", AdminKvFlushEndpoint);
+openapi.post("/api/admin/users/:userId/promote", AdminPromoteUserEndpoint);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);

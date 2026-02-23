@@ -6,8 +6,9 @@
  * This should be run after creating the products/prices in Stripe Dashboard.
  *
  * Usage:
- *   node scripts/seed-plans.mjs                    # Local dev
- *   REMOTE=true node scripts/seed-plans.mjs       # Remote dev
+ *   node scripts/seed-plans.mjs                           # Local dev (defaults to 'dev' environment)
+ *   ENV=local node scripts/seed-plans.mjs                 # Local dev with separate Stripe account
+ *   REMOTE=true node scripts/seed-plans.mjs               # Remote dev
  *   ENV=preview REMOTE=true node scripts/seed-plans.mjs   # Preview
  *   ENV=prod REMOTE=true node scripts/seed-plans.mjs      # Production
  */
@@ -27,6 +28,43 @@ const __dirname = dirname(__filename);
 // Get these from your Stripe Dashboard after creating products and prices.
 
 const STRIPE_IDS = {
+	// Local development environment (separate Stripe account)
+	local: {
+		watchlist: {
+			subscription: "price_1SxrWOPFcJmmJgfAhM7BbYZ6",
+			seat: "price_1SxsF8PFcJmmJgfANp38kpW4",
+		},
+		business: {
+			subscription: "price_1SxrVOPFcJmmJgfAPoCqKteA",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+		pro: {
+			subscription: "price_1SxrVjPFcJmmJgfARQdlCT1X",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+		ultra: {
+			subscription: "price_1SxrWCPFcJmmJgfAIsvKSSdt",
+			seat: "price_1SxrWbPFcJmmJgfAMjD5boQ7",
+			extra_org: "price_1SxrWoPFcJmmJgfA4H9V89NZ",
+			overage_report: "price_1SxrYNPFcJmmJgfAIgql5fAf",
+			overage_notice: "price_1SxrYAPFcJmmJgfA40h8UksB",
+			overage_client: "price_1SxrXdPFcJmmJgfANuZchO6X",
+			overage_operation: "price_1SxrXPPFcJmmJgfAjOqEy9MH",
+			overage_alert: "price_1SxrXwPFcJmmJgfAqSwOD9q9",
+		},
+	},
 	// Development environment
 	dev: {
 		watchlist: {
@@ -40,7 +78,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 		pro: {
@@ -50,7 +88,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 		ultra: {
@@ -60,7 +98,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 	},
@@ -77,7 +115,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 		pro: {
@@ -87,7 +125,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 		ultra: {
@@ -97,7 +135,7 @@ const STRIPE_IDS = {
 			overage_report: "price_1SpXE3A9qUPmowPezcwmvPmn",
 			overage_notice: "price_1SpXDsA9qUPmowPePqapNz3a",
 			overage_client: "price_1SpXChA9qUPmowPeGRfLqnzI",
-			overage_transaction: "price_1SpWihA9qUPmowPeEPuBSOXK",
+			overage_operation: "price_1SpWihA9qUPmowPeEPuBSOXK",
 			overage_alert: "price_1SpHKdA9qUPmowPenLSlPMjp",
 		},
 	},
@@ -114,8 +152,8 @@ const STRIPE_IDS = {
 			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_BUSINESS",
 			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_BUSINESS",
 			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_BUSINESS",
-			overage_transaction:
-				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_BUSINESS",
+			overage_operation:
+				"price_REPLACE_WITH_PROD_OPERATION_OVERAGE_AML_BUSINESS",
 			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_BUSINESS",
 		},
 		pro: {
@@ -125,8 +163,7 @@ const STRIPE_IDS = {
 			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_PRO",
 			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_PRO",
 			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_PRO",
-			overage_transaction:
-				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_PRO",
+			overage_operation: "price_REPLACE_WITH_PROD_OPERATION_OVERAGE_AML_PRO",
 			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_PRO",
 		},
 		ultra: {
@@ -136,8 +173,7 @@ const STRIPE_IDS = {
 			overage_report: "price_REPLACE_WITH_PROD_REPORT_OVERAGE_AML_ULTRA",
 			overage_notice: "price_REPLACE_WITH_PROD_NOTICE_OVERAGE_AML_ULTRA",
 			overage_client: "price_REPLACE_WITH_PROD_CLIENT_OVERAGE_AML_ULTRA",
-			overage_transaction:
-				"price_REPLACE_WITH_PROD_TRANSACTION_OVERAGE_AML_ULTRA",
+			overage_operation: "price_REPLACE_WITH_PROD_OPERATION_OVERAGE_AML_ULTRA",
 			overage_alert: "price_REPLACE_WITH_PROD_ALERT_OVERAGE_AML_ULTRA",
 		},
 	},
@@ -231,7 +267,7 @@ const PLAN_LIMITS = {
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,
-		transactionsPerMonth: 0,
+		operationsPerMonth: 0,
 		clientsPerMonth: 0,
 		watchlistQueriesPerDay: 50,
 	},
@@ -241,7 +277,7 @@ const PLAN_LIMITS = {
 		reportsPerMonth: 1,
 		noticesPerMonth: 2,
 		alertsPerMonth: 20,
-		transactionsPerMonth: 50,
+		operationsPerMonth: 50,
 		clientsPerMonth: 25,
 		watchlistQueriesPerDay: 50,
 	},
@@ -251,7 +287,7 @@ const PLAN_LIMITS = {
 		reportsPerMonth: 15,
 		noticesPerMonth: 20,
 		alertsPerMonth: 100,
-		transactionsPerMonth: 500,
+		operationsPerMonth: 500,
 		clientsPerMonth: 250,
 		watchlistQueriesPerDay: 200,
 	},
@@ -261,7 +297,7 @@ const PLAN_LIMITS = {
 		reportsPerMonth: 100,
 		noticesPerMonth: 100,
 		alertsPerMonth: 500,
-		transactionsPerMonth: 2000,
+		operationsPerMonth: 2000,
 		clientsPerMonth: 1000,
 		watchlistQueriesPerDay: 500,
 	},
@@ -353,13 +389,13 @@ const PRICES = {
 			description: "Cliente Extra",
 		},
 		{
-			id: "price_aml_business_transaction_overage",
-			priceType: "overage_transaction",
+			id: "price_aml_business_operation_overage",
+			priceType: "overage_operation",
 			amount: 1500, // $15 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
-			description: "Transacción Extra",
+			description: "Operación Extra",
 		},
 		{
 			id: "price_aml_business_alert_overage",
@@ -427,13 +463,13 @@ const PRICES = {
 			description: "Cliente Extra",
 		},
 		{
-			id: "price_aml_pro_transaction_overage",
-			priceType: "overage_transaction",
+			id: "price_aml_pro_operation_overage",
+			priceType: "overage_operation",
 			amount: 1500, // $15 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
-			description: "Transacción Extra",
+			description: "Operación Extra",
 		},
 		{
 			id: "price_aml_pro_alert_overage",
@@ -501,13 +537,13 @@ const PRICES = {
 			description: "Cliente Extra",
 		},
 		{
-			id: "price_aml_ultra_transaction_overage",
-			priceType: "overage_transaction",
+			id: "price_aml_ultra_operation_overage",
+			priceType: "overage_operation",
 			amount: 1500, // $15 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
-			description: "Transacción Extra",
+			description: "Operación Extra",
 		},
 		{
 			id: "price_aml_ultra_alert_overage",
@@ -599,7 +635,7 @@ ON CONFLICT(id) DO UPDATE SET
 	for (const plan of PLANS) {
 		const limits = PLAN_LIMITS[plan.name];
 		// Using simple INSERT since we DELETE first (avoids UNIQUE constraint issues)
-		sql += `INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, transactions_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+		sql += `INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
 VALUES (
     ${escapeSqlString(`limit_${plan.name}`)},
     ${escapeSqlString(plan.id)},
@@ -608,7 +644,7 @@ VALUES (
     ${limits.reportsPerMonth},
     ${limits.noticesPerMonth},
     ${limits.alertsPerMonth},
-    ${limits.transactionsPerMonth},
+    ${limits.operationsPerMonth},
     ${limits.clientsPerMonth},
     ${limits.watchlistQueriesPerDay},
     datetime('now'),
@@ -745,7 +781,7 @@ Plans created/updated:`);
 					`     - Notices/mo: ${limits.noticesPerMonth}, Reports/mo: ${limits.reportsPerMonth}`,
 				);
 				console.log(
-					`     - Alerts/mo: ${limits.alertsPerMonth}, Txns/mo: ${limits.transactionsPerMonth}`,
+					`     - Alerts/mo: ${limits.alertsPerMonth}, Ops/mo: ${limits.operationsPerMonth}`,
 				);
 				console.log(`     - Clients/mo: ${limits.clientsPerMonth}`);
 				console.log(

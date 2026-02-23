@@ -381,4 +381,92 @@ amlSettingsProxyRoutes.patch("/:orgId", async (c) => {
 	}
 });
 
+/**
+ * PATCH /api/settings/aml-compliance/:orgId/self-service
+ * Partial update KYC self-service settings (owner/admin only)
+ */
+amlSettingsProxyRoutes.patch("/:orgId/self-service", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const orgId = c.req.param("orgId");
+
+	// Check if user is owner or admin of this organization
+	const hasAccess = await isOrgOwnerOrAdmin(c, user.id, orgId);
+	if (!hasAccess) {
+		return c.json(
+			{ success: false, error: "Forbidden: Owner or admin access required" },
+			403,
+		);
+	}
+
+	// Check if AML_SERVICE binding is available
+	if (!c.env.AML_SERVICE) {
+		console.error("[AmlProxy] AML_SERVICE binding not available");
+		return c.json({ success: false, error: "AML service not available" }, 503);
+	}
+
+	try {
+		const body = await c.req.json();
+
+		const response = await c.env.AML_SERVICE.fetch(
+			new Request(
+				`https://aml-svc.internal/organization-settings/${orgId}/self-service`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+						Accept: "application/json",
+					},
+					body: JSON.stringify(body),
+				},
+			),
+		);
+
+		// Handle error responses
+		if (!response.ok) {
+			const errorResult = (await response.json().catch(() => ({
+				success: false,
+				error: "Unknown error",
+				message: undefined,
+				details: undefined,
+			}))) as {
+				success?: boolean;
+				error?: string;
+				message?: string;
+				details?: unknown;
+			};
+			const statusCode = (response.status as 400 | 500) || 500;
+			return c.json(
+				{
+					success: false,
+					error:
+						errorResult.error || "Failed to update KYC self-service settings",
+					message: errorResult.message || (errorResult.details as string),
+				},
+				statusCode,
+			);
+		}
+
+		// Success response - pass through the data
+		const result = await response.json();
+		return c.json(result, 200);
+	} catch (error) {
+		console.error(
+			"[AmlProxy] Error patching KYC self-service settings:",
+			error,
+		);
+		return c.json(
+			{
+				success: false,
+				error: "Failed to update KYC self-service settings",
+				message: error instanceof Error ? error.message : "Unknown error",
+			},
+			500,
+		);
+	}
+});
+
 export { amlSettingsProxyRoutes };

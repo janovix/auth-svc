@@ -7,6 +7,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import { sendPromotionEmail } from "../utils/mandrill";
+import { executeInBackground } from "../auth/execution-context";
 
 type AdminBindings = {
 	Bindings: Bindings;
@@ -17,17 +19,14 @@ type AdminContext = Context<AdminBindings>;
 export const adminRoutes = new Hono<AdminBindings>();
 
 /**
- * Helper to get authenticated admin user
+ * Helper to get authenticated admin user (exported for use by admin-organizations routes)
  */
-async function getAuthenticatedAdmin(c: AdminContext): Promise<{
+export async function getAuthenticatedAdmin(c: AdminContext): Promise<{
 	id: string;
 	email?: string;
 } | null> {
 	try {
-		const executionContext = (
-			c as unknown as { executionCtx?: ExecutionContext }
-		).executionCtx;
-		const { auth } = await getBetterAuthContext(c.env, executionContext);
+		const { auth } = await getBetterAuthContext(c.env);
 
 		let session;
 		try {
@@ -127,6 +126,235 @@ adminRoutes.delete("/kv/flush", async (c) => {
 			{
 				success: false,
 				error: "KV Flush Failed",
+				message:
+					error instanceof Error ? error.message : "Unknown error occurred",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * GET /api/admin/stats
+ * Get platform-wide statistics for admin dashboard
+ *
+ * Returns:
+ * - Total users count
+ * - Total organizations count
+ * - Users by role breakdown
+ */
+adminRoutes.get("/stats", async (c) => {
+	const admin = await getAuthenticatedAdmin(c);
+
+	if (!admin) {
+		return c.json(
+			{
+				success: false,
+				error: "Unauthorized",
+				message: "Admin access required",
+			},
+			403,
+		);
+	}
+
+	try {
+		// Get total users count
+		const totalUsersResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM users`,
+		).first<{ count: number }>();
+
+		const totalUsers = totalUsersResult?.count ?? 0;
+
+		// Get total organizations count
+		const totalOrgsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM organizations`,
+		).first<{ count: number }>();
+
+		const totalOrganizations = totalOrgsResult?.count ?? 0;
+
+		// Get users by role
+		const usersByRoleResult = await c.env.DB.prepare(
+			`SELECT role, COUNT(*) as count FROM users GROUP BY role`,
+		).all<{ role: string; count: number }>();
+
+		const usersByRole = (usersByRoleResult?.results ?? []).reduce(
+			(acc, row) => {
+				acc[row.role] = row.count;
+				return acc;
+			},
+			{} as Record<string, number>,
+		);
+
+		// Subscription counts
+		const activeSubsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM subscription WHERE status = 'active'`,
+		).first<{ count: number }>();
+		const activeSubscriptions = activeSubsResult?.count ?? 0;
+
+		const trialingSubsResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM subscription WHERE status = 'trialing'`,
+		).first<{ count: number }>();
+		const trialingSubscriptions = trialingSubsResult?.count ?? 0;
+
+		// License counts
+		const activeLicensesResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM enterprise_licenses WHERE status = 'active'`,
+		).first<{ count: number }>();
+		const activeLicenses = activeLicensesResult?.count ?? 0;
+
+		const totalLicensesResult = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM enterprise_licenses`,
+		).first<{ count: number }>();
+		const totalLicenses = totalLicensesResult?.count ?? 0;
+
+		return c.json({
+			success: true,
+			data: {
+				totalUsers,
+				totalOrganizations,
+				usersByRole,
+				activeSubscriptions,
+				trialingSubscriptions,
+				activeLicenses,
+				totalLicenses,
+			},
+		});
+	} catch (error) {
+		console.error("[Admin] Error fetching stats:", error);
+		return c.json(
+			{
+				success: false,
+				error: "Stats Fetch Failed",
+				message:
+					error instanceof Error ? error.message : "Unknown error occurred",
+			},
+			500,
+		);
+	}
+});
+
+/**
+ * POST /api/admin/users/:userId/promote
+ * Promote a visitor to user role (beta access grant)
+ *
+ * This endpoint:
+ * 1. Validates the admin is authenticated
+ * 2. Checks the target user exists and is a visitor
+ * 3. Updates the user's role to "user"
+ * 4. Sends a promotion notification email
+ */
+adminRoutes.post("/users/:userId/promote", async (c) => {
+	const admin = await getAuthenticatedAdmin(c);
+
+	if (!admin) {
+		return c.json(
+			{
+				success: false,
+				error: "Unauthorized",
+				message: "Admin access required",
+			},
+			403,
+		);
+	}
+
+	const userId = c.req.param("userId");
+
+	if (!userId) {
+		return c.json(
+			{
+				success: false,
+				error: "Bad Request",
+				message: "User ID is required",
+			},
+			400,
+		);
+	}
+
+	try {
+		// Get the target user
+		const targetUser = await c.env.DB.prepare(
+			`SELECT id, email, name, role FROM users WHERE id = ?`,
+		)
+			.bind(userId)
+			.first<{
+				id: string;
+				email: string;
+				name: string | null;
+				role: string;
+			}>();
+
+		if (!targetUser) {
+			return c.json(
+				{
+					success: false,
+					error: "Not Found",
+					message: "User not found",
+				},
+				404,
+			);
+		}
+
+		// Check if user is already promoted
+		if (targetUser.role !== "visitor") {
+			return c.json(
+				{
+					success: false,
+					error: "Bad Request",
+					message: `User is already a ${targetUser.role}, not a visitor`,
+				},
+				400,
+			);
+		}
+
+		// Update user role to "user"
+		await c.env.DB.prepare(
+			`UPDATE users SET role = 'user', updatedAt = datetime('now') WHERE id = ?`,
+		)
+			.bind(userId)
+			.run();
+
+		console.log(
+			`[Admin] User ${userId} promoted from visitor to user by admin ${admin.email}`,
+		);
+
+		// Send promotion email in background
+		const apiKey = c.env.MANDRILL_API_KEY;
+		if (apiKey) {
+			const authAppUrl =
+				c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+
+			const emailPromise = sendPromotionEmail(apiKey, {
+				email: targetUser.email,
+				userName: targetUser.name || targetUser.email.split("@")[0],
+				loginUrl: `${authAppUrl}/login`,
+			});
+
+			executeInBackground(
+				emailPromise,
+				`Promotion email to ${targetUser.email}`,
+			);
+		} else {
+			console.warn(
+				"[Admin] MANDRILL_API_KEY not configured; promotion email skipped",
+			);
+		}
+
+		return c.json({
+			success: true,
+			data: {
+				userId: targetUser.id,
+				email: targetUser.email,
+				previousRole: "visitor",
+				newRole: "user",
+				message: "User promoted successfully",
+			},
+		});
+	} catch (error) {
+		console.error("[Admin] Error promoting user:", error);
+		return c.json(
+			{
+				success: false,
+				error: "Promotion Failed",
 				message:
 					error instanceof Error ? error.message : "Unknown error occurred",
 			},

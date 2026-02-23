@@ -773,7 +773,7 @@ pricingRoutes.patch("/limits/:planId", async (c) => {
 			reportsPerMonth?: number;
 			noticesPerMonth?: number;
 			alertsPerMonth?: number;
-			transactionsPerMonth?: number;
+			operationsPerMonth?: number;
 			clientsPerMonth?: number;
 		}>();
 

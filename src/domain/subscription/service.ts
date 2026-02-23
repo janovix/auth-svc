@@ -65,8 +65,11 @@ export class SubscriptionService {
 				currentPeriodStart: null,
 				currentPeriodEnd: null,
 				cancelAtPeriodEnd: false,
+				isLicenseBased: false,
+				licenseExpiresAt: null,
 				organizationsOwned: orgsOwned,
 				organizationsLimit: 0,
+				stripeSubscriptionId: null,
 			};
 		}
 
@@ -74,12 +77,22 @@ export class SubscriptionService {
 		// Get limits from database via pricing service, or null if not available
 		const limits = await this.getUserPlanLimits(userId);
 		const isTrialing = subscription.status === "trialing";
+		const isLicenseBased = !!subscription.licenseId;
 
 		let trialDaysRemaining: number | null = null;
 		if (isTrialing && subscription.trialEnd) {
 			const now = new Date();
 			const diff = subscription.trialEnd.getTime() - now.getTime();
 			trialDaysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+		}
+
+		// Fetch license expiry if this is a license-based subscription
+		let licenseExpiresAt: string | null = null;
+		if (isLicenseBased && this.pricingService) {
+			const license = await this.pricingService.getLicenseByUserId(userId);
+			if (license?.expiresAt) {
+				licenseExpiresAt = license.expiresAt.toISOString();
+			}
 		}
 
 		return {
@@ -92,8 +105,11 @@ export class SubscriptionService {
 			currentPeriodStart: subscription.periodStart?.toISOString() || null,
 			currentPeriodEnd: subscription.periodEnd?.toISOString() || null,
 			cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+			isLicenseBased,
+			licenseExpiresAt,
 			organizationsOwned: orgsOwned,
 			organizationsLimit: limits?.maxOrganizations ?? 0,
+			stripeSubscriptionId: subscription.stripeSubscriptionId,
 		};
 	}
 
@@ -119,7 +135,11 @@ export class SubscriptionService {
 			};
 		}
 
-		if (status.organizationsOwned >= status.organizationsLimit) {
+		// 0 means unlimited -- skip limit check
+		if (
+			status.organizationsLimit > 0 &&
+			status.organizationsOwned >= status.organizationsLimit
+		) {
 			return {
 				allowed: false,
 				reason: `You've reached the limit of ${status.organizationsLimit} organization(s) for your ${status.plan} plan`,
@@ -151,7 +171,7 @@ export class SubscriptionService {
 					reportsPerMonth: effectiveLimits.reportsPerMonth,
 					noticesPerMonth: effectiveLimits.noticesPerMonth,
 					alertsPerMonth: effectiveLimits.alertsPerMonth,
-					transactionsPerMonth: effectiveLimits.transactionsPerMonth,
+					operationsPerMonth: effectiveLimits.operationsPerMonth,
 					clientsPerMonth: effectiveLimits.clientsPerMonth,
 				};
 			}
@@ -173,6 +193,11 @@ export class SubscriptionService {
 	async getUserFeatures(userId: string): Promise<Feature[]> {
 		const subscription = await this.repository.getUserSubscription(userId);
 		if (!subscription) return [];
+
+		// Enterprise license users get all enterprise features
+		if (subscription.licenseId || subscription.plan === "enterprise") {
+			return PLAN_FEATURES.enterprise || [];
+		}
 
 		const plan = subscription.plan;
 		// Features are still static for now - could be moved to DB later
@@ -265,9 +290,9 @@ export class SubscriptionService {
 				used = usage.alertsUsed;
 				included = limits.alertsPerMonth;
 				break;
-			case "transactions":
-				used = usage.transactionsUsed;
-				included = limits.transactionsPerMonth;
+			case "operations":
+				used = usage.operationsUsed;
+				included = limits.operationsPerMonth;
 				break;
 			case "clients":
 				used = usage.clientsUsed;
@@ -296,7 +321,7 @@ export class SubscriptionService {
 	 */
 	async reportUsage(
 		organizationId: string,
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
 		count: number = 1,
 	): Promise<void> {
 		await this.repository.incrementUsage(organizationId, metric, count);
@@ -517,7 +542,7 @@ export class SubscriptionService {
 	async reportOverageToStripeForMetric(
 		organizationId: string,
 		ownerUserId: string,
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients",
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
 		subscriptionItemId: string,
 	): Promise<void> {
 		if (!this.stripe) {
@@ -549,9 +574,9 @@ export class SubscriptionService {
 				used = usage.alertsUsed;
 				limit = limits.alertsPerMonth;
 				break;
-			case "transactions":
-				used = usage.transactionsUsed;
-				limit = limits.transactionsPerMonth;
+			case "operations":
+				used = usage.operationsUsed;
+				limit = limits.operationsPerMonth;
 				break;
 			case "clients":
 				used = usage.clientsUsed;
@@ -657,9 +682,9 @@ export class SubscriptionService {
 	}
 
 	/**
-	 * Report transaction overage usage to Stripe
+	 * Report operation overage usage to Stripe
 	 */
-	async reportTransactionOverageToStripe(
+	async reportOperationOverageToStripe(
 		organizationId: string,
 		ownerUserId: string,
 		subscriptionItemId: string,
@@ -667,7 +692,7 @@ export class SubscriptionService {
 		return this.reportOverageToStripeForMetric(
 			organizationId,
 			ownerUserId,
-			"transactions",
+			"operations",
 			subscriptionItemId,
 		);
 	}

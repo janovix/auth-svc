@@ -13,6 +13,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import Stripe from "stripe";
+import * as Sentry from "@sentry/cloudflare";
 import type { Bindings } from "../types/bindings";
 import {
 	SubscriptionRepository,
@@ -81,7 +82,12 @@ function createSubscriptionService(
 
 /**
  * GET /api/subscription/status
- * Get current user's subscription status
+ * Get current user's subscription status.
+ *
+ * Query params:
+ *   resolveFromOrg=true  – resolve from the active organization's owner
+ *     instead of the requesting user. This ensures invited members see
+ *     the org-level entitlement (owner's subscription/license).
  */
 subscriptionRoutes.get("/status", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -90,8 +96,33 @@ subscriptionRoutes.get("/status", async (c) => {
 	}
 
 	const service = createSubscriptionService(c);
+	const resolveFromOrg = c.req.query("resolveFromOrg") === "true";
 
-	const status = await service.getUserSubscriptionStatus(user.id);
+	let effectiveUserId = user.id;
+
+	if (resolveFromOrg && user.organizationId) {
+		const ownerResult = await c.env.DB.prepare(
+			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+		)
+			.bind(user.organizationId)
+			.first<{ userId: string }>();
+
+		if (ownerResult) {
+			effectiveUserId = ownerResult.userId;
+		}
+	}
+
+	const status = await service.getUserSubscriptionStatus(effectiveUserId);
+
+	// organizationsOwned and organizationsLimit are user-level fields: they describe
+	// how many organizations the *requesting user* can create, not the org owner.
+	// When resolving from the org owner, override these with the authenticated user's
+	// own values so the UI correctly reflects their creation rights.
+	if (resolveFromOrg && effectiveUserId !== user.id) {
+		const selfStatus = await service.getUserSubscriptionStatus(user.id);
+		status.organizationsOwned = selfStatus.organizationsOwned;
+		status.organizationsLimit = selfStatus.organizationsLimit;
+	}
 
 	return c.json({
 		success: true,
@@ -164,7 +195,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 				reports: usage.reportsUsed,
 				notices: usage.noticesUsed,
 				alerts: usage.alertsUsed,
-				transactions: usage.transactionsUsed,
+				operations: usage.operationsUsed,
 				clients: usage.clientsUsed,
 				users: usage.usersCount,
 			},
@@ -173,7 +204,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 						reports: limits.reportsPerMonth,
 						notices: limits.noticesPerMonth,
 						alerts: limits.alertsPerMonth,
-						transactions: limits.transactionsPerMonth,
+						operations: limits.operationsPerMonth,
 						clients: limits.clientsPerMonth,
 						users: limits.usersPerOrg,
 					}
@@ -246,9 +277,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				}
 			} catch {
 				// Customer doesn't exist in Stripe, will create a new one
-				console.log(
-					`[Stripe] Customer ${existingSubscription.stripeCustomerId} not found in Stripe, creating new`,
-				);
 			}
 		}
 
@@ -275,9 +303,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 		if (existingCustomers.data.length > 0) {
 			// Use existing customer, update metadata if needed
 			customer = existingCustomers.data[0];
-			console.log(
-				`[Stripe] Found existing customer ${customer.id} for email ${userResult.email}`,
-			);
 
 			// Update the customer with current user info
 			await stripe.customers.update(customer.id, {
@@ -298,9 +323,6 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				},
 			});
 			customer = newCustomer;
-			console.log(
-				`[Stripe] Created new customer ${customer.id} for email ${userResult.email}`,
-			);
 		}
 
 		// Store the customer ID in a subscription record
@@ -329,16 +351,14 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 				.run();
 		}
 
-		console.log(
-			`[Stripe] Created customer ${customer.id} for user ${userResult.id}`,
-		);
-
 		return c.json({
 			success: true,
 			data: { customerId: customer.id, existed: false },
 		});
 	} catch (error) {
-		console.error("[Stripe] Error ensuring customer:", error);
+		Sentry.captureException(error, {
+			tags: { context: "stripe-ensure-customer" },
+		});
 		return c.json(
 			{
 				success: false,
@@ -353,7 +373,13 @@ subscriptionRoutes.post("/ensure-customer", async (c) => {
 /**
  * GET /api/subscription/onboarding-status
  * Get user's onboarding status - profile completion and organization access
- * Used by middleware to determine if user needs onboarding
+ * Used by middleware to determine if user needs onboarding.
+ *
+ * Query params:
+ *   pendingInvitationsOnly=true  — skip the expensive subscription/Stripe checks
+ *                                  and return only the pending invitations array.
+ *                                  Use this for UI badge counts to avoid 7-9 DB
+ *                                  queries + a potential Stripe API call.
  */
 subscriptionRoutes.get("/onboarding-status", async (c) => {
 	try {
@@ -370,19 +396,16 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			id: string;
 			name: string | null;
 			image?: string | null;
+			role?: string;
 		};
+
+		// Fast path: caller only needs the pending invitations list (e.g. sidebar badge).
+		// Skip the expensive subscription / Stripe checks entirely.
+		const pendingInvitationsOnly =
+			c.req.query("pendingInvitationsOnly") === "true";
 
 		// Check if profile is complete (has name)
 		const hasName = !!user.name && user.name.trim().length > 0;
-
-		// Check if user has any organization membership (owner, admin, or member)
-		const orgMembership = await c.env.DB.prepare(
-			`SELECT COUNT(*) as count FROM members WHERE userId = ?`,
-		)
-			.bind(user.id)
-			.first<{ count: number }>();
-
-		const hasOrganization = (orgMembership?.count ?? 0) > 0;
 
 		// Check for ALL pending invitations (not just one)
 		const pendingInvitationsResult = await c.env.DB.prepare(
@@ -412,106 +435,7 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 
 		const pendingInvitations = pendingInvitationsResult.results || [];
 
-		// Get subscription status to determine if user can create org
-		const stripe = getStripe(c);
-		const repository = new SubscriptionRepository(c.env.DB);
-		const pricingRepository = new PricingRepository(c.env.DB);
-		const service = new SubscriptionService(
-			repository,
-			stripe,
-			pricingRepository,
-		);
-		const subscriptionStatus = await service.getUserSubscriptionStatus(user.id);
-
-		// Also get raw DB record for debugging
-		const dbSubscription = await repository.getUserSubscription(user.id);
-
-		// Debug: Log LOCAL DB subscription data
-		console.log(
-			"[Onboarding Status] LOCAL DB subscription record:",
-			dbSubscription
-				? {
-						id: dbSubscription.id,
-						plan: dbSubscription.plan,
-						status: dbSubscription.status,
-						stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
-						stripeCustomerId: dbSubscription.stripeCustomerId,
-						periodStart: dbSubscription.periodStart?.toISOString(),
-						periodEnd: dbSubscription.periodEnd?.toISOString(),
-						cancelAtPeriodEnd: dbSubscription.cancelAtPeriodEnd,
-					}
-				: "NO SUBSCRIPTION RECORD IN DB",
-		);
-
-		// Verify against Stripe directly if we have a subscription
-		let stripeVerification: { status: string; plan?: string } | null = null;
-		if (stripe && dbSubscription?.stripeSubscriptionId) {
-			try {
-				const stripeSub = await stripe.subscriptions.retrieve(
-					dbSubscription.stripeSubscriptionId,
-				);
-				stripeVerification = {
-					status: stripeSub.status,
-					plan:
-						typeof stripeSub.items.data[0]?.price?.lookup_key === "string"
-							? stripeSub.items.data[0].price.lookup_key
-							: stripeSub.items.data[0]?.price?.id,
-				};
-				console.log("[Onboarding Status] STRIPE DIRECT verification:", {
-					stripeSubscriptionId: dbSubscription.stripeSubscriptionId,
-					stripeStatus: stripeSub.status,
-					stripePlan: stripeVerification.plan,
-					localStatus: dbSubscription.status,
-					localPlan: dbSubscription.plan,
-					IN_SYNC: stripeSub.status === dbSubscription.status,
-				});
-
-				// If out of sync, log a warning
-				if (stripeSub.status !== dbSubscription.status) {
-					console.warn(
-						"[Onboarding Status] ⚠️ STATUS MISMATCH! Stripe says:",
-						stripeSub.status,
-						"but DB says:",
-						dbSubscription.status,
-					);
-				}
-			} catch (stripeError) {
-				console.error(
-					"[Onboarding Status] Failed to verify with Stripe:",
-					stripeError,
-				);
-			}
-		}
-
-		// Check if subscription is in a valid status for creating organizations
-		// Only 'active' or 'trialing' status allows org creation - 'incomplete' does NOT
-		const isSubscriptionValid =
-			subscriptionStatus.hasSubscription &&
-			(subscriptionStatus.status === "active" ||
-				subscriptionStatus.status === "trialing");
-
-		// Can create org only if subscription is valid AND within org limit
-		const canCreateOrg =
-			isSubscriptionValid &&
-			subscriptionStatus.organizationsOwned <
-				subscriptionStatus.organizationsLimit;
-
-		// Debug: Log computed subscription status
-		console.log("[Onboarding Status] Computed subscription status:", {
-			userId: user.id,
-			hasSubscription: subscriptionStatus.hasSubscription,
-			status: subscriptionStatus.status,
-			isSubscriptionValid,
-			plan: subscriptionStatus.plan,
-			organizationsOwned: subscriptionStatus.organizationsOwned,
-			organizationsLimit: subscriptionStatus.organizationsLimit,
-			hasOrganization,
-			profileComplete: hasName,
-			canCreateOrganization: canCreateOrg,
-			stripeVerification,
-		});
-
-		// Map invitations to response format
+		// Map invitations once — used in both fast and slow paths
 		const mappedInvitations = pendingInvitations.map((inv) => ({
 			id: inv.id,
 			organizationId: inv.organizationId,
@@ -523,6 +447,111 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 			expiresAt: inv.expiresAt,
 		}));
 
+		// Fast path: return only the invitations without any subscription/Stripe work
+		if (pendingInvitationsOnly) {
+			return c.json({
+				success: true,
+				data: {
+					profileComplete: hasName,
+					hasOrganization: false,
+					hasSubscription: false,
+					subscriptionStatus: null,
+					plan: null,
+					pendingInvitation: mappedInvitations[0] || null,
+					pendingInvitations: mappedInvitations,
+					canCreateOrganization: false,
+					role: null,
+					isVisitor: false,
+				},
+			});
+		}
+
+		// Slow path: full onboarding status including subscription and org checks
+
+		// Query the database directly for the current user role
+		// (Session may have stale role if user.create.after hook just updated it)
+		const dbUser = await c.env.DB.prepare(`SELECT role FROM users WHERE id = ?`)
+			.bind(user.id)
+			.first<{ role: string }>();
+
+		const userRole = dbUser?.role ?? "user";
+
+		// Check if user has any organization membership (owner, admin, or member)
+		const orgMembership = await c.env.DB.prepare(
+			`SELECT COUNT(*) as count FROM members WHERE userId = ?`,
+		)
+			.bind(user.id)
+			.first<{ count: number }>();
+
+		const hasOrganization = (orgMembership?.count ?? 0) > 0;
+
+		// Get subscription status to determine if user can create org
+		const stripe = getStripe(c);
+		const repository = new SubscriptionRepository(c.env.DB);
+		const pricingRepository = new PricingRepository(c.env.DB);
+		const service = new SubscriptionService(
+			repository,
+			stripe,
+			pricingRepository,
+		);
+		const subscriptionStatus = await service.getUserSubscriptionStatus(user.id);
+
+		// Verify against Stripe directly if we have a Stripe-based subscription.
+		// subscriptionStatus.stripeSubscriptionId is populated by the service from the
+		// same DB record it already fetched, so no extra getUserSubscription() call needed.
+		if (
+			stripe &&
+			subscriptionStatus.stripeSubscriptionId &&
+			!subscriptionStatus.isLicenseBased
+		) {
+			try {
+				const stripeSub = await stripe.subscriptions.retrieve(
+					subscriptionStatus.stripeSubscriptionId,
+				);
+
+				// If out of sync, report to Sentry
+				if (stripeSub.status !== subscriptionStatus.status) {
+					Sentry.captureMessage(
+						"Subscription status mismatch between Stripe and DB",
+						{
+							level: "warning",
+							tags: { context: "subscription-status-mismatch" },
+							extra: {
+								stripeStatus: stripeSub.status,
+								dbStatus: subscriptionStatus.status,
+								subscriptionId: subscriptionStatus.stripeSubscriptionId,
+							},
+						},
+					);
+				}
+			} catch (stripeError) {
+				Sentry.captureException(stripeError, {
+					tags: { context: "stripe-verification-failed" },
+					extra: {
+						subscriptionId: subscriptionStatus.stripeSubscriptionId,
+					},
+				});
+			}
+		}
+
+		// Check if subscription is in a valid status for creating organizations
+		// Only 'active' or 'trialing' status allows org creation - 'incomplete' does NOT
+		const isSubscriptionValid =
+			subscriptionStatus.hasSubscription &&
+			(subscriptionStatus.status === "active" ||
+				subscriptionStatus.status === "trialing");
+
+		// Can create org only if subscription is valid AND within org limit
+		// 0 means unlimited -- no limit check needed
+		const canCreateOrg =
+			isSubscriptionValid &&
+			(subscriptionStatus.organizationsLimit === 0 ||
+				subscriptionStatus.organizationsOwned <
+					subscriptionStatus.organizationsLimit);
+
+		// userRole is already queried from DB above (to avoid stale session role)
+		const isVisitor = userRole === "visitor";
+
 		return c.json({
 			success: true,
 			data: {
@@ -532,15 +561,22 @@ subscriptionRoutes.get("/onboarding-status", async (c) => {
 				hasSubscription: isSubscriptionValid,
 				subscriptionStatus: subscriptionStatus.status,
 				plan: subscriptionStatus.plan,
+				// License info
+				isLicenseBased: subscriptionStatus.isLicenseBased,
 				// Keep pendingInvitation for backward compatibility (first invitation)
 				pendingInvitation: mappedInvitations[0] || null,
 				// New field: all pending invitations
 				pendingInvitations: mappedInvitations,
 				canCreateOrganization: canCreateOrg,
+				// User role for beta access flow
+				role: userRole,
+				isVisitor,
 			},
 		});
 	} catch (error) {
-		console.error("[Onboarding Status] Error:", error);
+		Sentry.captureException(error, {
+			tags: { context: "onboarding-status-error" },
+		});
 		return c.json(
 			{ success: false, error: "Failed to get onboarding status" },
 			500,
@@ -583,8 +619,7 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 
 	const license = validation.license;
 
-	// Get plan name
-	const plan = await pricingService.getPlanById(license.planId);
+	// License is self-contained -- limits come directly from the license
 	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
 
 	return c.json({
@@ -592,17 +627,18 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 		data: {
 			key: license.key,
 			organizationName: license.organizationName,
-			plan: plan?.displayName || plan?.name || license.planId,
+			plan: "Enterprise License",
 			expiresAt: license.expiresAt?.toISOString() ?? null,
 			limits: limits
 				? {
 						maxOrganizations: limits.maxOrganizations,
 						maxUsers: limits.usersPerOrg,
-						reportsIncluded: limits.reportsPerMonth,
-						noticesIncluded: limits.noticesPerMonth,
-						alertsIncluded: limits.alertsPerMonth,
-						transactionsIncluded: limits.transactionsPerMonth,
-						clientsIncluded: limits.clientsPerMonth,
+						reportsPerMonth: limits.reportsPerMonth,
+						noticesPerMonth: limits.noticesPerMonth,
+						alertsPerMonth: limits.alertsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
+						clientsPerMonth: limits.clientsPerMonth,
+						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
 				: null,
 			isActive: license.status === "active",
@@ -612,7 +648,10 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 
 /**
  * POST /api/subscription/license/activate
- * Activate a license key for the current user
+ * Activate a license key for the current user.
+ *
+ * If the user has an active Stripe subscription it is cancelled immediately.
+ * If the user has a previous active license it is superseded.
  */
 subscriptionRoutes.post("/license/activate", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -645,37 +684,94 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 
 	const license = activation.license;
 
-	// Get plan info
-	const plan = await pricingService.getPlanById(license.planId);
-
-	// Create or update user subscription based on license
+	// ---------- Fetch full existing subscription record ----------
 	const existingSubscription = await c.env.DB.prepare(
-		`SELECT id FROM subscription WHERE referenceId = ? LIMIT 1`,
+		`SELECT id, stripeSubscriptionId, stripeCustomerId, status, plan, licenseId
+		 FROM subscription WHERE referenceId = ? LIMIT 1`,
 	)
 		.bind(user.id)
-		.first<{ id: string }>();
+		.first<{
+			id: string;
+			stripeSubscriptionId: string | null;
+			stripeCustomerId: string | null;
+			status: string | null;
+			plan: string;
+			licenseId: string | null;
+		}>();
 
-	// Use plan name for the subscription
-	const planName = plan?.name || license.planId;
+	let previousPlanCancelled = false;
+	let previousPlan: string | null = null;
 
 	if (existingSubscription) {
+		// ---------- Cancel active Stripe subscription ----------
+		if (
+			existingSubscription.stripeSubscriptionId &&
+			existingSubscription.status &&
+			["active", "trialing"].includes(existingSubscription.status)
+		) {
+			const stripe = getStripe(c);
+			if (stripe) {
+				try {
+					await stripe.subscriptions.cancel(
+						existingSubscription.stripeSubscriptionId,
+					);
+					previousPlanCancelled = true;
+					previousPlan = existingSubscription.plan;
+				} catch (stripeErr) {
+					// Graceful degradation: report but continue activating the license
+					Sentry.captureException(stripeErr, {
+						tags: { context: "license-cancel-stripe-failed" },
+						extra: {
+							subscriptionId: existingSubscription.stripeSubscriptionId,
+						},
+					});
+					// Still mark as cancelled from our side
+					previousPlanCancelled = true;
+					previousPlan = existingSubscription.plan;
+				}
+			}
+		}
+
+		// ---------- Supersede previous license ----------
+		if (
+			existingSubscription.licenseId &&
+			existingSubscription.licenseId !== license.id
+		) {
+			try {
+				await pricingRepository.supersedeLicense(
+					existingSubscription.licenseId,
+				);
+			} catch (err) {
+				Sentry.captureException(err, {
+					tags: { context: "license-supersede-failed" },
+					extra: { licenseId: existingSubscription.licenseId },
+				});
+			}
+		}
+
+		// ---------- Update subscription record cleanly ----------
 		await c.env.DB.prepare(
 			`UPDATE subscription
-			 SET plan = ?, status = 'active', licenseId = ?, updatedAt = datetime('now')
+			 SET plan = 'enterprise',
+			     status = 'active',
+			     licenseId = ?,
+			     stripeSubscriptionId = NULL,
+			     cancelAtPeriodEnd = 0,
+			     canceledAt = CASE WHEN ? THEN datetime('now') ELSE canceledAt END,
+			     updatedAt = datetime('now')
 			 WHERE id = ?`,
 		)
-			.bind(planName, license.id, existingSubscription.id)
+			.bind(license.id, previousPlanCancelled ? 1 : 0, existingSubscription.id)
 			.run();
 	} else {
+		// ---------- No existing record – create one ----------
 		await c.env.DB.prepare(
 			`INSERT INTO subscription (id, plan, referenceId, status, licenseId, createdAt, updatedAt)
-			 VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now'))`,
+			 VALUES (?, 'enterprise', ?, 'active', ?, datetime('now'), datetime('now'))`,
 		)
-			.bind(crypto.randomUUID(), planName, user.id, license.id)
+			.bind(crypto.randomUUID(), user.id, license.id)
 			.run();
 	}
-
-	console.log(`[License] Activated license ${license.id} for user ${user.id}`);
 
 	// Get effective limits for the response
 	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
@@ -684,17 +780,20 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 		success: true,
 		data: {
 			message: "License activated successfully",
-			plan: plan?.displayName || planName,
+			plan: "Enterprise License",
 			organizationName: license.organizationName,
+			previousPlanCancelled,
+			previousPlan,
 			limits: limits
 				? {
 						maxOrganizations: limits.maxOrganizations,
 						maxUsers: limits.usersPerOrg,
-						reportsIncluded: limits.reportsPerMonth,
-						noticesIncluded: limits.noticesPerMonth,
-						alertsIncluded: limits.alertsPerMonth,
-						transactionsIncluded: limits.transactionsPerMonth,
-						clientsIncluded: limits.clientsPerMonth,
+						reportsPerMonth: limits.reportsPerMonth,
+						noticesPerMonth: limits.noticesPerMonth,
+						alertsPerMonth: limits.alertsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
+						clientsPerMonth: limits.clientsPerMonth,
+						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
 				: null,
 		},
@@ -724,6 +823,25 @@ subscriptionRoutes.post("/portal", async (c) => {
 
 		if (!returnUrl) {
 			return c.json({ success: false, error: "Missing returnUrl" }, 400);
+		}
+
+		// Check if user has a license-based subscription (no Stripe portal for enterprise licenses)
+		const licenseCheck = await c.env.DB.prepare(
+			`SELECT licenseId FROM subscription 
+			 WHERE referenceId = ? AND licenseId IS NOT NULL AND status = 'active'
+			 LIMIT 1`,
+		)
+			.bind(user.id)
+			.first<{ licenseId: string }>();
+
+		if (licenseCheck?.licenseId) {
+			return c.json(
+				{
+					success: false,
+					error: "Enterprise license subscriptions are managed outside Stripe",
+				},
+				400,
+			);
 		}
 
 		const stripe = getStripe(c);
@@ -756,7 +874,9 @@ subscriptionRoutes.post("/portal", async (c) => {
 			data: { url: portalSession.url },
 		});
 	} catch (error) {
-		console.error("[Portal Session] Error:", error);
+		Sentry.captureException(error, {
+			tags: { context: "portal-session-error" },
+		});
 		return c.json(
 			{
 				success: false,
@@ -787,7 +907,7 @@ subscriptionRoutes.post("/usage/report", async (c) => {
 
 	const body = await c.req.json<{
 		organizationId: string;
-		metric: "reports" | "notices" | "alerts" | "transactions" | "clients";
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients";
 		count?: number;
 	}>();
 

@@ -1,10 +1,10 @@
 import { PrismaD1 } from "@prisma/adapter-d1";
 import { PrismaClient } from "@prisma/client";
+import * as Sentry from "@sentry/cloudflare";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { buildResolvedAuthConfig, type StripePriceIds } from "./config";
-import { setCurrentExecutionContext } from "./execution-context";
 import type { Bindings } from "../types/bindings";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
 import { PricingRepository, PricingService } from "../domain/pricing";
@@ -35,7 +35,7 @@ function createPrismaClient(db: D1Database) {
 
 /**
  * Fetch Stripe price IDs from the database
- * Falls back to env vars if database fetch fails
+ * Throws error if database configuration is incomplete
  */
 async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 	// Return cached prices if still valid
@@ -44,45 +44,42 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 		return cachedPriceIds;
 	}
 
-	try {
-		const pricingRepository = new PricingRepository(env.DB);
-		const pricingService = new PricingService(pricingRepository);
-		const priceMap = await pricingService.getAllSubscriptionPrices();
+	const pricingRepository = new PricingRepository(env.DB);
+	const pricingService = new PricingService(pricingRepository);
+	const priceMap = await pricingService.getAllSubscriptionPrices();
 
-		const priceIds: StripePriceIds = {
-			watchlist:
-				priceMap.get("watchlist") ||
-				env.STRIPE_WATCHLIST_PRICE_ID ||
-				"price_watchlist",
-			business:
-				priceMap.get("business") ||
-				env.STRIPE_BUSINESS_PRICE_ID ||
-				"price_aml_business",
-			pro: priceMap.get("pro") || env.STRIPE_PRO_PRICE_ID || "price_aml_pro",
-			ultra:
-				priceMap.get("ultra") || env.STRIPE_ULTRA_PRICE_ID || "price_aml_ultra",
-		};
+	// Validate all required price IDs are present
+	const missingPlans: string[] = [];
+	const requiredPlans = ["watchlist", "business", "pro", "ultra"];
 
-		console.log("[Auth] Loaded Stripe price IDs from database:", priceIds);
-
-		// Cache the price IDs
-		cachedPriceIds = priceIds;
-		priceIdsCacheTime = now;
-
-		return priceIds;
-	} catch (error) {
-		console.warn(
-			"[Auth] Failed to fetch price IDs from database, using env vars:",
-			error,
-		);
-		// Fall back to env vars
-		return {
-			watchlist: env.STRIPE_WATCHLIST_PRICE_ID || "price_watchlist",
-			business: env.STRIPE_BUSINESS_PRICE_ID || "price_aml_business",
-			pro: env.STRIPE_PRO_PRICE_ID || "price_aml_pro",
-			ultra: env.STRIPE_ULTRA_PRICE_ID || "price_aml_ultra",
-		};
+	for (const plan of requiredPlans) {
+		if (!priceMap.has(plan)) {
+			missingPlans.push(plan);
+		}
 	}
+
+	if (missingPlans.length > 0) {
+		throw new Error(
+			`Missing required Stripe price configuration in database for plans: ${missingPlans.join(", ")}. ` +
+				`Expected price types: subscription, seat, overage_alert, overage_operation. ` +
+				`Please run seed script or configure via admin panel.`,
+		);
+	}
+
+	const priceIds: StripePriceIds = {
+		watchlist: priceMap.get("watchlist")!,
+		business: priceMap.get("business")!,
+		pro: priceMap.get("pro")!,
+		ultra: priceMap.get("ultra")!,
+	};
+
+	console.log("[Auth] Loaded Stripe price IDs from database:", priceIds);
+
+	// Cache the price IDs
+	cachedPriceIds = priceIds;
+	priceIdsCacheTime = now;
+
+	return priceIds;
 }
 
 export function invalidateBetterAuthCache(env: Bindings) {
@@ -90,7 +87,9 @@ export function invalidateBetterAuthCache(env: Bindings) {
 	// Get the cache for this DB instance
 	const dbCache = authCacheByDb.get(env.DB);
 	if (dbCache) {
-		dbCache.delete(resolved.cacheKey);
+		// Delete both cache variants (with and without Stripe)
+		dbCache.delete(`${resolved.cacheKey}-with-stripe`);
+		dbCache.delete(`${resolved.cacheKey}-no-stripe`);
 	}
 	// Also invalidate price cache
 	cachedPriceIds = null;
@@ -104,49 +103,55 @@ export function invalidateBetterAuthCache(env: Bindings) {
  * 1. Within the same Worker isolate with the same DB binding, we reuse the instance
  * 2. When a new request comes with a potentially different DB context, we detect it
  *
- * This approach balances performance (caching) with reliability (fresh connections
- * when needed) in Cloudflare Workers.
+ * Execution context management (waitUntil) is now handled externally by the
+ * route handler via `runWithExecutionContext` (AsyncLocalStorage). This function
+ * no longer needs to set or clean up any execution context.
  *
  * @param env - Cloudflare Worker bindings
- * @param executionContext - Optional execution context for waitUntil support
- * @returns Auth context with cleanup function for execution context
+ * @param pathname - Optional request pathname to determine if Stripe plugin is needed
  */
 export async function getBetterAuthContext(
 	env: Bindings,
-	executionContext?: ExecutionContext,
+	pathname?: string,
 ): Promise<{
 	auth: ReturnType<typeof betterAuth>;
 	accessPolicy: { enforceInternal: boolean; token?: string };
-	cleanup: () => void;
 }> {
-	// Store execution context for this request (callbacks will access it dynamically)
-	// CRITICAL: This must be called before any auth operations that trigger callbacks
-	// (like email OTP sending) to ensure waitUntil() works in Cloudflare Workers.
-	// The cleanup function should be called when the request completes.
-	const cleanup = setCurrentExecutionContext(executionContext);
+	// Only fetch Stripe prices for subscription endpoints that need them
+	// Public endpoints (JWKS, sign-in, verify-email, etc.) don't need Stripe
+	const needsStripe = pathname?.startsWith("/api/auth/subscription/");
 
-	// Fetch prices from database (with caching) - use timeout to prevent hanging
 	let stripePriceIds: StripePriceIds | undefined;
-	try {
-		stripePriceIds = await Promise.race([
-			fetchStripePriceIds(env),
-			new Promise<StripePriceIds>((_, reject) =>
-				setTimeout(() => reject(new Error("Price fetch timeout")), 5000),
-			),
-		]);
-	} catch (error) {
-		console.warn(
-			"[Auth] Price fetch failed or timed out, using defaults:",
-			error,
+
+	if (needsStripe) {
+		// Fetch prices from database (with caching) - use timeout to prevent hanging
+		try {
+			stripePriceIds = await Promise.race([
+				fetchStripePriceIds(env),
+				new Promise<StripePriceIds>((_, reject) =>
+					setTimeout(() => reject(new Error("Price fetch timeout")), 5000),
+				),
+			]);
+		} catch (error) {
+			console.error(
+				"[Auth] Failed to fetch price IDs from database. Stripe billing will not be available:",
+				error,
+			);
+			Sentry.captureException(error, {
+				tags: { context: "stripe-price-fetch-timeout" },
+				extra: { pathname },
+			});
+			// Continue without price IDs - Better Auth Stripe plugin won't load
+		}
+	} else {
+		// Skip price fetch for non-subscription endpoints (JWKS, auth, etc.)
+		// Better Auth will initialize without Stripe plugin, which is fine
+		console.log(
+			`[Auth] Skipping Stripe price fetch for ${pathname || "unknown endpoint"}`,
 		);
-		// Continue without price IDs - will use env var fallbacks
 	}
 
-	const resolved = buildResolvedAuthConfig(
-		env,
-		executionContext,
-		stripePriceIds,
-	);
+	const resolved = buildResolvedAuthConfig(env, undefined, stripePriceIds);
 
 	// Get or create cache for this specific DB instance
 	let dbCache = authCacheByDb.get(env.DB);
@@ -155,12 +160,17 @@ export async function getBetterAuthContext(
 		authCacheByDb.set(env.DB, dbCache);
 	}
 
-	const cached = dbCache.get(resolved.cacheKey);
+	// Cache key must differentiate between instances with/without Stripe
+	// to prevent using a non-Stripe instance for subscription endpoints
+	const cacheKey = stripePriceIds
+		? `${resolved.cacheKey}-with-stripe`
+		: `${resolved.cacheKey}-no-stripe`;
+
+	const cached = dbCache.get(cacheKey);
 	if (cached) {
 		return {
 			auth: cached.auth,
 			accessPolicy: resolved.accessPolicy,
-			cleanup,
 		};
 	}
 
@@ -173,11 +183,10 @@ export async function getBetterAuthContext(
 		secondaryStorage,
 	});
 
-	dbCache.set(resolved.cacheKey, { auth });
+	dbCache.set(cacheKey, { auth });
 
 	return {
 		auth,
 		accessPolicy: resolved.accessPolicy,
-		cleanup,
 	};
 }

@@ -1,9 +1,10 @@
 import type { BetterAuthOptions } from "better-auth";
+import * as Sentry from "@sentry/cloudflare";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI } from "better-auth/plugins";
-import { markOtpSent } from "./routes";
+import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
 
@@ -12,7 +13,8 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
-import { executeInBackground } from "./execution-context";
+import { executeInBackground, getExecutionContext } from "./execution-context";
+import { createKVRateLimitStorage } from "../utils/kv-storage";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -37,7 +39,7 @@ export const PLAN_LIMITS = {
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,
-		transactionsPerMonth: 0,
+		operationsPerMonth: 0,
 		clientsPerMonth: 0,
 		watchlistQueriesPerDay: 50,
 	},
@@ -47,7 +49,7 @@ export const PLAN_LIMITS = {
 		reportsPerMonth: 1,
 		noticesPerMonth: 2,
 		alertsPerMonth: 20,
-		transactionsPerMonth: 50,
+		operationsPerMonth: 50,
 		clientsPerMonth: 25,
 		watchlistQueriesPerDay: 50,
 	},
@@ -57,7 +59,7 @@ export const PLAN_LIMITS = {
 		reportsPerMonth: 15,
 		noticesPerMonth: 20,
 		alertsPerMonth: 100,
-		transactionsPerMonth: 500,
+		operationsPerMonth: 500,
 		clientsPerMonth: 250,
 		watchlistQueriesPerDay: 200,
 	},
@@ -67,7 +69,7 @@ export const PLAN_LIMITS = {
 		reportsPerMonth: 100,
 		noticesPerMonth: 100,
 		alertsPerMonth: 500,
-		transactionsPerMonth: 2000,
+		operationsPerMonth: 2000,
 		clientsPerMonth: 1000,
 		watchlistQueriesPerDay: 500,
 	},
@@ -90,17 +92,94 @@ const ENVIRONMENT_MAP: Record<string, JanovixEnvironment> = {
 	local: "local",
 };
 
-const RATE_LIMITS: Record<
-	JanovixEnvironment,
-	{ window: number; max: number; enabled: boolean }
-> = {
-	local: { window: 10, max: 300, enabled: false },
-	preview: { window: 10, max: 120, enabled: true },
-	dev: { window: 10, max: 90, enabled: true },
-	qa: { window: 10, max: 80, enabled: true },
-	production: { window: 10, max: 60, enabled: true },
-	test: { window: 10, max: 60, enabled: false },
+/**
+ * Base rate limit configuration (without runtime KV storage).
+ * Environments that use Cloudflare KV have `customStorage` attached at
+ * build time via `buildRateLimitConfig`.
+ */
+type BaseRateLimitConfig = {
+	window: number;
+	max: number;
+	enabled: boolean;
+	/** Only used for in-memory or database storage (local/test). */
+	storage?: "database" | "memory";
+	modelName?: string;
+	customRules?: Record<string, { window: number; max: number } | false>;
 };
+
+/**
+ * Custom rate limit rules for OTP endpoints.
+ * These stricter limits prevent email abuse by limiting OTP requests.
+ */
+const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
+	// Limit OTP send requests: 1 per 60 seconds per IP
+	"/email-otp/send-verification-otp": {
+		window: 60,
+		max: 3,
+	},
+	// Limit OTP verification attempts per IP
+	"/sign-in/email-otp": {
+		window: 60,
+		max: 3,
+	},
+};
+
+const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
+	local: {
+		window: 60,
+		max: 300,
+		enabled: false,
+		storage: "memory",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	preview: {
+		window: 60,
+		max: 200,
+		enabled: true,
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	dev: {
+		window: 60,
+		max: 300,
+		enabled: true,
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	qa: {
+		window: 60,
+		max: 300,
+		enabled: true,
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	production: {
+		window: 60,
+		max: 100,
+		enabled: true,
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+	test: {
+		window: 60,
+		max: 60,
+		enabled: false,
+		storage: "memory",
+		customRules: OTP_RATE_LIMIT_RULES,
+	},
+};
+
+/**
+ * Builds the final rate limit config for the given environment.
+ * For KV-backed environments, attaches `customStorage` which handles JSON
+ * serialisation and hard-codes the 60-second minimum KV TTL.
+ */
+function buildRateLimitConfig(
+	resolvedEnv: JanovixEnvironment,
+	kv: KVNamespace | undefined,
+): BetterAuthOptions["rateLimit"] {
+	const base = RATE_LIMITS[resolvedEnv];
+	if (kv && base.enabled && !base.storage) {
+		return { ...base, customStorage: createKVRateLimitStorage(kv) };
+	}
+	return base;
+}
 
 const COOKIE_DOMAIN_BY_ENV: Partial<Record<JanovixEnvironment, string>> = {
 	local: ".janovix.workers.dev",
@@ -156,6 +235,73 @@ export type ResolvedAuthConfig = {
 	accessPolicy: AuthAccessPolicy;
 };
 
+/**
+ * Resolves the WebAuthn Relying Party ID (rpID) from the frontend URL.
+ * rpID must be the registrable domain of the origin where credentials are created.
+ * Examples: "janovix.com" (prod), "janovix.workers.dev" (dev), "localhost" (local)
+ */
+function resolvePasskeyRpID(
+	frontendUrl: string | undefined,
+	env: JanovixEnvironment,
+): string {
+	if (frontendUrl) {
+		try {
+			const url = new URL(frontendUrl);
+			return url.hostname;
+		} catch {
+			// fall through to defaults
+		}
+	}
+	if (env === "production") {
+		return "janovix.com";
+	}
+	if (env === "dev" || env === "preview") {
+		return "janovix.workers.dev";
+	}
+	return "localhost";
+}
+
+/**
+ * Resolves the WebAuthn origin(s) from the frontend URL.
+ * Must exactly match the origin where navigator.credentials is called.
+ * For local/test, includes common localhost origins.
+ */
+function resolvePasskeyOrigin(
+	frontendUrl: string | undefined,
+	env: JanovixEnvironment,
+): string | string[] {
+	if (frontendUrl) {
+		try {
+			const url = new URL(frontendUrl);
+			const origin = `${url.protocol}//${url.host}`;
+			if (env === "local" || env === "test") {
+				return [
+					origin,
+					"http://localhost:3000",
+					"http://localhost:3001",
+					"http://localhost:8080",
+					"https://localhost:3000",
+				];
+			}
+			return origin;
+		} catch {
+			// fall through to defaults
+		}
+	}
+	if (env === "local" || env === "test") {
+		return [
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:8080",
+			"https://localhost:3000",
+		];
+	}
+	if (env === "production") {
+		return "https://auth.janovix.com";
+	}
+	return "https://auth.janovix.workers.dev";
+}
+
 export function resolveAuthEnvironment(env: Bindings): JanovixEnvironment {
 	const fallback = env.ENVIRONMENT?.toLowerCase?.() ?? "local";
 	return ENVIRONMENT_MAP[fallback] ?? "local";
@@ -187,6 +333,31 @@ export function buildResolvedAuthConfig(
 			enabled: true,
 			requireEmailVerification: true,
 			// No password reset - passwordless system
+		},
+		onAPIError: {
+			throw: false,
+			onError: (error) => {
+				console.error(`[Auth error:] `, error);
+			},
+			errorURL: `${env.AUTH_FRONTEND_URL}/error`,
+		},
+		// Store OAuth state (PKCE/state parameter) in an encrypted, signed cookie
+		// on the client's browser instead of in D1. This avoids Cloudflare D1's
+		// eventual-consistency / read-after-write problem: the sign-in initiation
+		// writes the state to the D1 primary, but the callback may be served by a
+		// different PoP whose D1 replica hasn't synced yet → "Verification not found".
+		// With "cookie" strategy, the state is encrypted with BETTER_AUTH_SECRET,
+		// lives in the browser, and is always immediately available on callback.
+		account: {
+			storeStateStrategy: "cookie",
+		},
+		socialProviders: {
+			google: {
+				clientId: env.GOOGLE_CLIENT_ID as string,
+				clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+				accessType: "offline",
+				prompt: "select_account consent",
+			},
 		},
 		plugins: [
 			openAPI({
@@ -224,7 +395,9 @@ export function buildResolvedAuthConfig(
 			admin({
 				// Admin users can manage all users, roles, and perform admin operations
 				// Users with "admin" role or in adminUserIds list get admin privileges
-				defaultRole: "user",
+				// New users start as "visitor" until manually promoted to "user" by an admin
+				// This enables a beta access flow where visitors see a waiting page
+				defaultRole: "visitor",
 				adminRoles: ["admin"],
 			}),
 			organization({
@@ -235,7 +408,7 @@ export function buildResolvedAuthConfig(
 					// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders
 					// Then by active/trialing status, then by most recent
 					const subscription = await env.DB.prepare(
-						`SELECT plan, status, stripeSubscriptionId FROM subscription 
+						`SELECT plan, status, stripeSubscriptionId, licenseId FROM subscription 
 					 WHERE referenceId = ? 
 					 ORDER BY 
 					   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
@@ -248,6 +421,7 @@ export function buildResolvedAuthConfig(
 							plan: string;
 							status: string;
 							stripeSubscriptionId: string | null;
+							licenseId: string | null;
 						}>();
 
 					// Debug: log what we found
@@ -273,13 +447,32 @@ export function buildResolvedAuthConfig(
 						return false;
 					}
 
-					// Get org limit based on plan
-					const limits = PLAN_LIMITS[subscription.plan as PlanName];
-					if (!limits) {
+					// Resolve organization limit based on plan type
+					let maxOrganizations: number;
+
+					if (subscription.plan === "enterprise" && subscription.licenseId) {
+						// Enterprise license: fetch limits from the license record
+						const license = await env.DB.prepare(
+							`SELECT max_organizations FROM enterprise_licenses WHERE id = ? AND status = 'active'`,
+						)
+							.bind(subscription.licenseId)
+							.first<{ max_organizations: number }>();
+
+						// 0 means unlimited
+						maxOrganizations = license?.max_organizations ?? 0;
 						console.log(
-							`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+							`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
 						);
-						return false;
+					} else {
+						// Stripe plan: use hardcoded PLAN_LIMITS
+						const limits = PLAN_LIMITS[subscription.plan as PlanName];
+						if (!limits) {
+							console.log(
+								`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+							);
+							return false;
+						}
+						maxOrganizations = limits.maxOrganizations;
 					}
 
 					// Count organizations owned by user
@@ -291,15 +484,16 @@ export function buildResolvedAuthConfig(
 
 					const orgsOwned = orgsResult?.count ?? 0;
 
-					if (orgsOwned >= limits.maxOrganizations) {
+					// 0 means unlimited -- skip limit check
+					if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
 						console.log(
-							`[Org Guard] User ${user.id} has ${orgsOwned}/${limits.maxOrganizations} orgs, denying creation`,
+							`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
 						);
 						return false;
 					}
 
 					console.log(
-						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${limits.maxOrganizations} used)`,
+						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${maxOrganizations === 0 ? "unlimited" : maxOrganizations} used)`,
 					);
 					return true;
 				},
@@ -392,9 +586,6 @@ export function buildResolvedAuthConfig(
 						);
 
 						try {
-							// Mark that OTP callback was called (for rate-limit detection)
-							markOtpSent(email);
-
 							const apiKey = env.MANDRILL_API_KEY;
 							if (!apiKey) {
 								console.error(
@@ -420,11 +611,25 @@ export function buildResolvedAuthConfig(
 								userName,
 								otp,
 								type,
-							).then(() => {
-								console.log(
-									`[Email OTP] Email sent successfully for ${email} in ${Date.now() - callbackStart}ms`,
-								);
-							});
+							)
+								.then(() => {
+									const elapsed = Date.now() - callbackStart;
+									console.log(
+										`[Email OTP] Email sent successfully for ${email} in ${elapsed}ms`,
+									);
+								})
+								.catch((error) => {
+									// Catch and log errors to prevent unhandled rejections
+									const elapsed = Date.now() - callbackStart;
+									console.error(
+										`[Email OTP] Failed to send email for ${email} after ${elapsed}ms:`,
+										error instanceof Error ? error.message : String(error),
+									);
+									Sentry.captureException(error, {
+										tags: { context: "otp-email-send-failed" },
+										extra: { email, elapsed, type },
+									});
+								});
 
 							// Use dynamic execution context to handle background task
 							console.log(
@@ -443,15 +648,24 @@ export function buildResolvedAuthConfig(
 								error instanceof Error ? error.message : String(error),
 								error instanceof Error ? error.stack : undefined,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "otp-callback-error" },
+								extra: { email, type },
+							});
 							console.log(
 								`[Email OTP] Callback completed for ${email} in ${Date.now() - callbackStart}ms (with error)`,
 							);
 						}
 					},
 			}),
+			passkey({
+				rpID: resolvePasskeyRpID(env.AUTH_FRONTEND_URL, resolvedEnv),
+				rpName: "Janovix",
+				origin: resolvePasskeyOrigin(env.AUTH_FRONTEND_URL, resolvedEnv),
+			}),
 			// Stripe plugin for user-based billing
-			// Price IDs are fetched from database (plan_prices table) or fall back to env vars
-			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
+			// Price IDs are fetched from database (plan_prices table)
+			...(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET && stripePriceIds
 				? [
 						stripe({
 							stripeClient: new Stripe(env.STRIPE_SECRET_KEY, {
@@ -464,11 +678,7 @@ export function buildResolvedAuthConfig(
 								plans: [
 									{
 										name: "watchlist",
-										// Price ID from database (via stripePriceIds param) or env var fallback
-										priceId:
-											stripePriceIds?.watchlist ||
-											env.STRIPE_WATCHLIST_PRICE_ID ||
-											"price_watchlist",
+										priceId: stripePriceIds.watchlist,
 										limits: PLAN_LIMITS.watchlist,
 										freeTrial: {
 											days: 14,
@@ -476,10 +686,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "business",
-										priceId:
-											stripePriceIds?.business ||
-											env.STRIPE_BUSINESS_PRICE_ID ||
-											"price_aml_business",
+										priceId: stripePriceIds.business,
 										limits: PLAN_LIMITS.business,
 										freeTrial: {
 											days: 14,
@@ -487,10 +694,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "pro",
-										priceId:
-											stripePriceIds?.pro ||
-											env.STRIPE_PRO_PRICE_ID ||
-											"price_aml_pro",
+										priceId: stripePriceIds.pro,
 										limits: PLAN_LIMITS.pro,
 										freeTrial: {
 											days: 14,
@@ -498,10 +702,7 @@ export function buildResolvedAuthConfig(
 									},
 									{
 										name: "ultra",
-										priceId:
-											stripePriceIds?.ultra ||
-											env.STRIPE_ULTRA_PRICE_ID ||
-											"price_aml_ultra",
+										priceId: stripePriceIds.ultra,
 										limits: PLAN_LIMITS.ultra,
 										freeTrial: {
 											days: 14,
@@ -529,10 +730,19 @@ export function buildResolvedAuthConfig(
 						}),
 					]
 				: []),
-			// NOTE: Cloudflare Turnstile captcha protection is handled in routes.ts
-			// with proper 5-second timeout to prevent request hanging in Cloudflare Workers.
-			// Better Auth's captcha plugin doesn't support timeouts, which can cause
-			// indefinite hangs when Turnstile is slow to respond.
+			// Turnstile captcha plugin for bot protection on email-sending endpoints
+			// Only load if TURNSTILE_SECRET_KEY is configured (production)
+			// In local/test environments without the secret, captcha is skipped
+			...(env.TURNSTILE_SECRET_KEY
+				? [
+						captcha({
+							provider: "cloudflare-turnstile",
+							secretKey: env.TURNSTILE_SECRET_KEY,
+							// Protect the endpoints that send emails to prevent abuse
+							endpoints: ["/sign-up/email", "/email-otp/send-verification-otp"],
+						}),
+					]
+				: []),
 		],
 		session: {
 			updateAge: 60 * 30,
@@ -542,13 +752,19 @@ export function buildResolvedAuthConfig(
 			cookieCache: {
 				enabled: true,
 				strategy: "jwe",
-				// Short maxAge ensures banned users are checked against DB frequently
-				// This enables immediate session revocation when users are banned
-				maxAge: 60, // 1 minute - sessions revalidate against DB every minute
-				refreshCache: false, // Disable auto-refresh to force DB validation on expiry
+				// maxAge of 60 seconds ensures:
+				// - Cookie cache expires regularly, forcing DB validation and session refresh
+				// - updateAge (30 min) session refresh logic runs properly
+				// - Set-Cookie headers are sent with extended maxAge
+				// - Banned users are detected within ~60 seconds (reduced from 5 minutes)
+				maxAge: 60, // 60 seconds - balance between DB hits and session freshness
+				// refreshCache intentionally NOT set (defaults to false)
+				// With refreshCache: false, when the cookie cache expires, Better Auth
+				// hits the database, which properly triggers updateAge session refresh
+				// and sends updated Set-Cookie headers with extended maxAge.
 			},
 		},
-		rateLimit: RATE_LIMITS[resolvedEnv],
+		rateLimit: buildRateLimitConfig(resolvedEnv, env.KV),
 		advanced: buildAdvancedOptions(resolvedEnv, cookieDomain),
 		trustedOrigins,
 		// Note: Stripe customer creation is now handled by @better-auth/stripe plugin
@@ -590,6 +806,10 @@ export function buildResolvedAuthConfig(
 								`[Session] Error auto-selecting organization for user ${session.userId}:`,
 								error,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "session-hook-auto-select-org" },
+								extra: { userId: session.userId },
+							});
 						}
 
 						// No organization found or error occurred - return session unchanged
@@ -598,6 +818,42 @@ export function buildResolvedAuthConfig(
 				},
 			},
 			user: {
+				create: {
+					after: async (user: { id: string; email: string; role?: string }) => {
+						// Check if the newly registered user has pending org invitations
+						// If so, promote them from "visitor" to "user" so they can onboard
+						try {
+							const pendingInvite = await env.DB.prepare(
+								`SELECT id FROM invitations
+							 WHERE email = ? AND status = 'pending'
+							 AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))
+							 LIMIT 1`,
+							)
+								.bind(user.email)
+								.first<{ id: string }>();
+
+							if (pendingInvite) {
+								await env.DB.prepare(
+									`UPDATE users SET role = 'user' WHERE id = ? AND role = 'visitor'`,
+								)
+									.bind(user.id)
+									.run();
+								console.log(
+									`[User Create] Auto-promoted user ${user.id} (${user.email}) from visitor to user due to pending invitation ${pendingInvite.id}`,
+								);
+							}
+						} catch (error) {
+							console.error(
+								`[User Create] Error checking pending invitations for ${user.id}:`,
+								error,
+							);
+							Sentry.captureException(error, {
+								tags: { context: "user-create-hook-pending-invite" },
+								extra: { userId: user.id, email: user.email },
+							});
+						}
+					},
+				},
 				update: {
 					after: async (user: {
 						id: string;
@@ -736,6 +992,10 @@ export function buildResolvedAuthConfig(
 								`[Stripe Sync] Error syncing user to Stripe:`,
 								error,
 							);
+							Sentry.captureException(error, {
+								tags: { context: "stripe-sync-user-update" },
+								extra: { userId: user.id },
+							});
 						});
 
 						executeInBackground(promise, `Stripe sync for user ${user.id}`);
@@ -770,6 +1030,29 @@ function buildAdvancedOptions(
 		defaultCookieAttributes: {
 			path: "/",
 			sameSite: "lax",
+		},
+		// Configure IP address detection for Cloudflare Workers.
+		// This is REQUIRED for rate limiting to work - without a detected IP,
+		// Better Auth silently skips rate limiting entirely.
+		ipAddress: {
+			ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"],
+		},
+		// Defer Better Auth's internal background tasks (D1 session cleanup,
+		// cache invalidation, etc.) to Cloudflare Workers' waitUntil via ALS.
+		// Without this, Better Auth blocks the response waiting for those tasks,
+		// which causes the "script will never generate a response" hang.
+		// Note: Better Auth passes a Promise directly (not a factory function).
+		backgroundTasks: {
+			handler: (promise) => {
+				const ctx = getExecutionContext();
+				if (ctx) {
+					ctx.waitUntil(promise);
+				} else {
+					promise.catch((error: unknown) => {
+						console.error("[BackgroundTask] Unhandled error:", error);
+					});
+				}
+			},
 		},
 	};
 

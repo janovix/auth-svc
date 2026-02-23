@@ -156,14 +156,9 @@ settingsRoutes.get("/organization/:orgId", async (c) => {
 
 	const orgId = c.req.param("orgId");
 	const service = new SettingsService(c.env.DB);
-	const settings = await service.getOrganizationSettings(orgId);
-
-	if (!settings) {
-		return c.json({
-			success: true,
-			data: null,
-		});
-	}
+	// Auto-create with defaults if settings don't exist yet
+	// This ensures settings are always available for all orgs (Stripe and license-based)
+	const settings = await service.getOrCreateOrganizationSettings(orgId);
 
 	return c.json({
 		success: true,

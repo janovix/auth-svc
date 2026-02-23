@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import { sendOrgNotification } from "../utils/notifications";
 
 type InternalBindings = {
 	Bindings: Bindings;
@@ -50,9 +51,7 @@ type OrganizationApiMethods = {
  * Returns the auth instance with organization plugin methods properly typed
  */
 async function getAuth(c: InternalContext) {
-	const executionContext = (c as unknown as { executionCtx?: ExecutionContext })
-		.executionCtx;
-	const { auth } = await getBetterAuthContext(c.env, executionContext);
+	const { auth } = await getBetterAuthContext(c.env);
 	// Cast to include organization plugin methods which are added dynamically
 	return auth as typeof auth & {
 		api: typeof auth.api & OrganizationApiMethods;
@@ -512,6 +511,20 @@ internalOrganizationsRoutes.patch("/:id", async (c) => {
 		)
 			.bind(id)
 			.first<OrganizationRow & { member_count: number }>();
+
+		// Dispatch notification to all organization members
+		// Use absolute URL so it works across all apps (auth, aml, watchlist, etc.)
+		const authAppUrl =
+			c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+		await sendOrgNotification(c.env.NOTIFICATIONS_SERVICE, id, {
+			channelSlug: "system",
+			type: "organization.updated",
+			title: "Organization Settings Updated",
+			body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
+			callbackUrl: `${authAppUrl}/settings/organization`,
+			sourceService: "auth-svc",
+			sourceEvent: "internal_organizations.patch",
+		});
 
 		return c.json({
 			success: true,

@@ -137,7 +137,7 @@ describe("PricingRepository", () => {
 				reports_per_month: 0,
 				notices_per_month: 3,
 				alerts_per_month: 50,
-				transactions_per_month: 250,
+				operations_per_month: 250,
 				clients_per_month: 50,
 				metadata: null,
 				created_at: "2024-01-01T00:00:00Z",
@@ -216,18 +216,20 @@ describe("PricingRepository", () => {
 				id: "lic_1",
 				key: "ENT-XXXX-XXXX-XXXX",
 				organization_name: "Acme Corp",
-				plan_id: "plan_pro",
 				user_id: null,
+				issued_by: null,
 				status: "active",
 				expires_at: null,
 				activated_at: null,
+				notes: null,
 				max_organizations: 5,
 				max_users: 50,
-				reports_included: 100,
-				notices_included: null,
-				alerts_included: null,
-				transactions_included: null,
-				clients_included: null,
+				reports_per_month: 100,
+				notices_per_month: 0,
+				alerts_per_month: 0,
+				operations_per_month: 0,
+				clients_per_month: 0,
+				watchlist_queries_per_day: 0,
 				metadata: null,
 				created_at: "2024-01-01T00:00:00Z",
 				updated_at: "2024-01-01T00:00:00Z",
@@ -242,7 +244,7 @@ describe("PricingRepository", () => {
 			expect(license?.organizationName).toBe("Acme Corp");
 			expect(license?.maxOrganizations).toBe(5);
 			expect(license?.maxUsers).toBe(50);
-			expect(license?.reportsIncluded).toBe(100);
+			expect(license?.reportsPerMonth).toBe(100);
 		});
 
 		it("should return null when license not found", async () => {
@@ -270,7 +272,7 @@ describe("PricingRepository", () => {
 				reports_included: null,
 				notices_included: null,
 				alerts_included: null,
-				transactions_included: null,
+				operations_included: null,
 				clients_included: null,
 				metadata: null,
 				created_at: "2024-01-01T00:00:00Z",
@@ -284,6 +286,34 @@ describe("PricingRepository", () => {
 			expect(license).not.toBeNull();
 			expect(license?.userId).toBe("user_123");
 			expect(license?.status).toBe("active");
+		});
+	});
+
+	describe("supersedeLicense", () => {
+		it("should update license status to superseded", async () => {
+			mockDb._mock.run.mockResolvedValue({ success: true });
+
+			await repository.supersedeLicense("lic_old");
+
+			expect(mockDb._mock.prepare).toHaveBeenCalledWith(
+				expect.stringContaining("status = 'superseded'"),
+			);
+			expect(mockDb._mock.bind).toHaveBeenCalledWith("lic_old");
+			expect(mockDb._mock.run).toHaveBeenCalled();
+		});
+	});
+
+	describe("revokeLicense", () => {
+		it("should update license status to revoked", async () => {
+			mockDb._mock.run.mockResolvedValue({ success: true });
+
+			await repository.revokeLicense("lic_bad");
+
+			expect(mockDb._mock.prepare).toHaveBeenCalledWith(
+				expect.stringContaining("status = 'revoked'"),
+			);
+			expect(mockDb._mock.bind).toHaveBeenCalledWith("lic_bad");
+			expect(mockDb._mock.run).toHaveBeenCalled();
 		});
 	});
 

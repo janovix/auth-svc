@@ -40,6 +40,7 @@ export interface UserSubscription {
 	referenceId: string; // User ID
 	stripeCustomerId: string | null;
 	stripeSubscriptionId: string | null;
+	licenseId: string | null; // Reference to enterprise_licenses
 	status: SubscriptionStatus | null;
 	periodStart: Date | null;
 	periodEnd: Date | null;
@@ -63,7 +64,7 @@ export interface PlanLimits {
 	reportsPerMonth: number; // Metered: overage billed via Stripe
 	noticesPerMonth: number; // Metered: overage billed via Stripe
 	alertsPerMonth: number; // Metered: overage billed via Stripe
-	transactionsPerMonth: number; // Metered: overage billed via Stripe
+	operationsPerMonth: number; // Metered: overage billed via Stripe
 	clientsPerMonth: number; // Metered: overage billed via Stripe
 }
 
@@ -77,7 +78,7 @@ export interface OrganizationUsage {
 	reportsUsed: number;
 	noticesUsed: number;
 	alertsUsed: number;
-	transactionsUsed: number;
+	operationsUsed: number;
 	clientsUsed: number;
 	usersCount: number;
 	periodStart: Date;
@@ -125,9 +126,14 @@ export interface UserSubscriptionStatus {
 	currentPeriodStart: string | null;
 	currentPeriodEnd: string | null;
 	cancelAtPeriodEnd: boolean;
+	// License info (enterprise licenses)
+	isLicenseBased: boolean;
+	licenseExpiresAt: string | null;
 	// Organization stats
 	organizationsOwned: number;
 	organizationsLimit: number;
+	// Raw Stripe subscription ID (used for Stripe verification) — null when no subscription
+	stripeSubscriptionId: string | null;
 }
 
 /**
@@ -163,6 +169,16 @@ export const PLAN_FEATURES: Record<PlanName, Feature[]> = {
 		"report_templates",
 		"priority_support",
 	],
+	enterprise: [
+		"data_capture",
+		"compliance_validation",
+		"report_generation",
+		"acknowledgment_tracking",
+		"advanced_roles",
+		"approval_flows",
+		"report_templates",
+		"priority_support",
+	],
 };
 
 /**
@@ -172,7 +188,7 @@ export type UsageMetric =
 	| "reports"
 	| "notices"
 	| "alerts"
-	| "transactions"
+	| "operations"
 	| "clients"
 	| "users";
 

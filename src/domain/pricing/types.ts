@@ -30,7 +30,7 @@ export type PriceType =
 	| "overage_report" // Per report overage
 	| "overage_notice" // Per notice overage
 	| "overage_alert" // Per alert overage
-	| "overage_transaction" // Per transaction overage
+	| "overage_operation" // Per operation overage
 	| "overage_client"; // Per client overage
 
 /**
@@ -63,7 +63,7 @@ export interface PlanLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
 	watchlistQueriesPerDay: number;
 	metadata: Record<string, unknown> | null;
@@ -78,19 +78,21 @@ export interface EnterpriseLicense {
 	id: string;
 	key: string;
 	organizationName: string;
-	planId: string;
 	userId: string | null;
-	status: "active" | "revoked" | "expired";
+	issuedBy: string | null;
+	status: "active" | "revoked" | "expired" | "suspended" | "superseded";
 	expiresAt: Date | null;
 	activatedAt: Date | null;
-	// Optional limit overrides (null = use plan defaults)
-	maxOrganizations: number | null;
-	maxUsers: number | null;
-	reportsIncluded: number | null;
-	noticesIncluded: number | null;
-	alertsIncluded: number | null;
-	transactionsIncluded: number | null;
-	clientsIncluded: number | null;
+	notes: string | null;
+	// All limits explicit, no plan inheritance. 0 = unlimited.
+	maxOrganizations: number;
+	maxUsers: number;
+	reportsPerMonth: number;
+	noticesPerMonth: number;
+	alertsPerMonth: number;
+	operationsPerMonth: number;
+	clientsPerMonth: number;
+	watchlistQueriesPerDay: number;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -120,7 +122,7 @@ export interface PublicPlanInfo {
 		reportsPerMonth: number;
 		noticesPerMonth: number;
 		alertsPerMonth: number;
-		transactionsPerMonth: number;
+		operationsPerMonth: number;
 		clientsPerMonth: number;
 		watchlistQueriesPerDay: number;
 	} | null;
@@ -142,8 +144,9 @@ export interface EffectiveLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
+	watchlistQueriesPerDay: number;
 	source: "plan" | "license";
 	planName: string;
 }
@@ -170,7 +173,7 @@ export interface CreatePlanLimitsInput {
 	reportsPerMonth?: number;
 	noticesPerMonth?: number;
 	alertsPerMonth?: number;
-	transactionsPerMonth?: number;
+	operationsPerMonth?: number;
 	clientsPerMonth?: number;
 	watchlistQueriesPerDay?: number;
 }
@@ -195,13 +198,16 @@ export interface CreatePlanPriceInput {
 export interface CreateLicenseInput {
 	key: string;
 	organizationName: string;
-	planId: string;
+	issuedBy?: string;
+	notes?: string;
 	expiresAt?: Date;
+	// All limits default to 0 (unlimited) if not provided
 	maxOrganizations?: number;
 	maxUsers?: number;
-	reportsIncluded?: number;
-	noticesIncluded?: number;
-	alertsIncluded?: number;
-	transactionsIncluded?: number;
-	clientsIncluded?: number;
+	reportsPerMonth?: number;
+	noticesPerMonth?: number;
+	alertsPerMonth?: number;
+	operationsPerMonth?: number;
+	clientsPerMonth?: number;
+	watchlistQueriesPerDay?: number;
 }

@@ -528,4 +528,334 @@ describe("buildResolvedAuthConfig", () => {
 		consoleLogSpy.mockRestore();
 		consoleErrorSpy.mockRestore();
 	});
+
+	describe("rate limit configuration", () => {
+		it("configures custom rate limit rules for OTP endpoints in production", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit).toBeDefined();
+			expect(rateLimit.enabled).toBe(true);
+			expect(rateLimit.customRules).toBeDefined();
+
+			expect(rateLimit.customRules["/email-otp/send-verification-otp"]).toEqual(
+				{
+					window: 60,
+					max: 3,
+				},
+			);
+
+			expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
+				window: 60,
+				max: 3,
+			});
+		});
+
+		it("uses customStorage for rate limits in production environments (when KV is provided)", () => {
+			const mockKV = {
+				get: vi.fn(),
+				put: vi.fn(),
+				delete: vi.fn(),
+				list: vi.fn(),
+				getWithMetadata: vi.fn(),
+			} as unknown as KVNamespace;
+
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					KV: mockKV,
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.customStorage).toBeDefined();
+			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.enabled).toBe(true);
+		});
+
+		it("uses customStorage for rate limits in dev environment (when KV is provided)", () => {
+			const mockKV = {
+				get: vi.fn(),
+				put: vi.fn(),
+				delete: vi.fn(),
+				list: vi.fn(),
+				getWithMetadata: vi.fn(),
+			} as unknown as KVNamespace;
+
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "dev",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+					KV: mockKV,
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.customStorage).toBeDefined();
+			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.enabled).toBe(true);
+		});
+
+		it("uses memory storage for rate limits in local environment", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnvWithoutInternalToken({
+					ENVIRONMENT: "local",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("memory");
+			expect(rateLimit.enabled).toBe(false);
+		});
+
+		it("uses memory storage for rate limits in test environment", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnvWithoutInternalToken({
+					ENVIRONMENT: "test",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rateLimit = (config.options as any).rateLimit;
+			expect(rateLimit.storage).toBe("memory");
+			expect(rateLimit.enabled).toBe(false);
+		});
+
+		it("configures consistent OTP rate limit rules across all environments", () => {
+			const environments = [
+				"dev",
+				"qa",
+				"preview",
+				"production",
+				"local",
+				"test",
+			];
+
+			for (const env of environments) {
+				const config = buildResolvedAuthConfig(
+					buildEnv({
+						ENVIRONMENT: env,
+						BETTER_AUTH_URL:
+							env === "local" || env === "test"
+								? undefined
+								: "https://auth-core.janovix.workers.dev",
+					}),
+				);
+
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const rateLimit = (config.options as any).rateLimit;
+				expect(rateLimit.customRules).toBeDefined();
+
+				expect(
+					rateLimit.customRules["/email-otp/send-verification-otp"],
+				).toEqual({
+					window: 60,
+					max: 3,
+				});
+				expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
+					window: 60,
+					max: 3,
+				});
+			}
+		});
+
+		it("configures IP address headers for Cloudflare Workers", () => {
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "production",
+					BETTER_AUTH_URL: "https://auth-core.janovix.workers.dev",
+				}),
+			);
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const advanced = (config.options as any).advanced;
+			expect(advanced.ipAddress).toBeDefined();
+			expect(advanced.ipAddress.ipAddressHeaders).toContain("cf-connecting-ip");
+		});
+	});
+
+	describe("database hooks", () => {
+		it("auto-promotes new user from visitor to user when pending invitation exists", async () => {
+			const mockPrepare = vi.fn();
+			const mockBind = vi.fn();
+			const mockFirst = vi.fn();
+			const mockRun = vi.fn();
+
+			// Mock the SELECT query chain
+			mockFirst.mockResolvedValue({ id: "invitation-123" });
+			mockBind.mockReturnValue({ first: mockFirst, run: mockRun });
+			mockPrepare.mockReturnValue({ bind: mockBind });
+
+			// Mock the UPDATE query chain
+			mockRun.mockResolvedValue({ success: true });
+
+			const mockDB = {
+				prepare: mockPrepare,
+			} as unknown as D1Database;
+
+			const consoleLogSpy = vi
+				.spyOn(console, "log")
+				.mockImplementation(() => {});
+
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "test",
+					DB: mockDB,
+				}),
+			);
+
+			// Extract the user.create.after hook
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const databaseHooks = (config.options as any).databaseHooks;
+			expect(databaseHooks?.user?.create?.after).toBeDefined();
+
+			const userCreateHook = databaseHooks.user.create.after;
+
+			// Simulate a new user being created with pending invitation
+			await userCreateHook({
+				id: "user-123",
+				email: "newuser@example.com",
+				role: "visitor",
+			});
+
+			// Verify SELECT query was called to check for pending invitations
+			expect(mockPrepare).toHaveBeenCalledWith(
+				expect.stringContaining("SELECT id FROM invitations"),
+			);
+			expect(mockBind).toHaveBeenCalledWith("newuser@example.com");
+			expect(mockFirst).toHaveBeenCalled();
+
+			// Verify UPDATE query was called to promote user
+			expect(mockPrepare).toHaveBeenCalledWith(
+				"UPDATE users SET role = 'user' WHERE id = ? AND role = 'visitor'",
+			);
+			expect(mockBind).toHaveBeenCalledWith("user-123");
+			expect(mockRun).toHaveBeenCalled();
+
+			// Verify console log
+			expect(consoleLogSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Auto-promoted user user-123"),
+			);
+			expect(consoleLogSpy).toHaveBeenCalledWith(
+				expect.stringContaining("invitation-123"),
+			);
+
+			consoleLogSpy.mockRestore();
+		});
+
+		it("does not promote new user when no pending invitation exists", async () => {
+			const mockPrepare = vi.fn();
+			const mockBind = vi.fn();
+			const mockFirst = vi.fn();
+			const mockRun = vi.fn();
+
+			// Mock the SELECT query chain - no pending invitation
+			mockFirst.mockResolvedValue(null);
+			mockBind.mockReturnValue({ first: mockFirst, run: mockRun });
+			mockPrepare.mockReturnValue({ bind: mockBind });
+
+			const mockDB = {
+				prepare: mockPrepare,
+			} as unknown as D1Database;
+
+			const consoleLogSpy = vi
+				.spyOn(console, "log")
+				.mockImplementation(() => {});
+
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "test",
+					DB: mockDB,
+				}),
+			);
+
+			// Extract the user.create.after hook
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const databaseHooks = (config.options as any).databaseHooks;
+			const userCreateHook = databaseHooks.user.create.after;
+
+			// Simulate a new user being created without pending invitation
+			await userCreateHook({
+				id: "user-456",
+				email: "anotheruser@example.com",
+				role: "visitor",
+			});
+
+			// Verify SELECT query was called
+			expect(mockPrepare).toHaveBeenCalledWith(
+				expect.stringContaining("SELECT id FROM invitations"),
+			);
+			expect(mockBind).toHaveBeenCalledWith("anotheruser@example.com");
+			expect(mockFirst).toHaveBeenCalled();
+
+			// Verify UPDATE query was NOT called (only one prepare call for SELECT)
+			expect(mockPrepare).toHaveBeenCalledTimes(1);
+			expect(mockRun).not.toHaveBeenCalled();
+
+			// Verify no promotion log
+			expect(consoleLogSpy).not.toHaveBeenCalledWith(
+				expect.stringContaining("Auto-promoted user"),
+			);
+
+			consoleLogSpy.mockRestore();
+		});
+
+		it("handles errors gracefully during pending invitation check", async () => {
+			const mockPrepare = vi.fn();
+			const mockBind = vi.fn();
+			const mockFirst = vi.fn();
+
+			// Mock query chain to throw error
+			mockFirst.mockRejectedValue(new Error("Database error"));
+			mockBind.mockReturnValue({ first: mockFirst });
+			mockPrepare.mockReturnValue({ bind: mockBind });
+
+			const mockDB = {
+				prepare: mockPrepare,
+			} as unknown as D1Database;
+
+			const consoleErrorSpy = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			const config = buildResolvedAuthConfig(
+				buildEnv({
+					ENVIRONMENT: "test",
+					DB: mockDB,
+				}),
+			);
+
+			// Extract the user.create.after hook
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const databaseHooks = (config.options as any).databaseHooks;
+			const userCreateHook = databaseHooks.user.create.after;
+
+			// Should not throw error
+			await expect(
+				userCreateHook({
+					id: "user-789",
+					email: "erroruser@example.com",
+					role: "visitor",
+				}),
+			).resolves.not.toThrow();
+
+			// Verify error was logged
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Error checking pending invitations"),
+				expect.any(Error),
+			);
+
+			consoleErrorSpy.mockRestore();
+		});
+	});
 });

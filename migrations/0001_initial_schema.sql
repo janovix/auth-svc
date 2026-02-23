@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS tasks;
 
 -- Drop all existing tables to ensure clean state
 -- Old billing tables (organization-based - deprecated)
+DROP TABLE IF EXISTS passkey;
 DROP TABLE IF EXISTS usage_records;
 DROP TABLE IF EXISTS organization_subscriptions;
 -- New billing tables (user-based)
@@ -129,6 +130,25 @@ CREATE TABLE jwks (
 
 CREATE INDEX IF NOT EXISTS idx_jwks_createdAt ON jwks(createdAt);
 CREATE INDEX IF NOT EXISTS idx_jwks_expiresAt ON jwks(expiresAt);
+
+-- Passkey table (Better Auth passkey plugin managed - camelCase columns)
+CREATE TABLE passkey (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT,
+    publicKey TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    credentialID TEXT NOT NULL UNIQUE,
+    counter INTEGER NOT NULL,
+    deviceType TEXT NOT NULL,
+    backedUp INTEGER NOT NULL,
+    transports TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    aaguid TEXT,
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_userId ON passkey(userId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_passkey_credentialID ON passkey(credentialID);
 
 -- ============================================================================
 -- Better Auth Organizations Plugin Tables (camelCase columns - required by Better Auth)

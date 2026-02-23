@@ -27,7 +27,7 @@ export interface LegacyPlanLimits {
 	reportsPerMonth: number;
 	noticesPerMonth: number;
 	alertsPerMonth: number;
-	transactionsPerMonth: number;
+	operationsPerMonth: number;
 	clientsPerMonth: number;
 	watchlistQueriesPerDay: number;
 }
@@ -137,7 +137,7 @@ export class PricingService {
 							reportsPerMonth: limits.reportsPerMonth,
 							noticesPerMonth: limits.noticesPerMonth,
 							alertsPerMonth: limits.alertsPerMonth,
-							transactionsPerMonth: limits.transactionsPerMonth,
+							operationsPerMonth: limits.operationsPerMonth,
 							clientsPerMonth: limits.clientsPerMonth,
 							watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 						}
@@ -178,7 +178,7 @@ export class PricingService {
 						reportsPerMonth: limits.reportsPerMonth,
 						noticesPerMonth: limits.noticesPerMonth,
 						alertsPerMonth: limits.alertsPerMonth,
-						transactionsPerMonth: limits.transactionsPerMonth,
+						operationsPerMonth: limits.operationsPerMonth,
 						clientsPerMonth: limits.clientsPerMonth,
 						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 					}
@@ -213,7 +213,7 @@ export class PricingService {
 			reportsPerMonth: limits.reportsPerMonth,
 			noticesPerMonth: limits.noticesPerMonth,
 			alertsPerMonth: limits.alertsPerMonth,
-			transactionsPerMonth: limits.transactionsPerMonth,
+			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
 			watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 		};
@@ -247,19 +247,46 @@ export class PricingService {
 	}
 
 	/**
-	 * Get subscription (base) price for a plan
+	 * Get subscription (base) price for a plan by plan name (e.g., "business", "pro")
 	 */
-	async getSubscriptionPriceForPlan(planId: string): Promise<PlanPrice | null> {
-		const prices = await this.repository.getPricesForPlan(planId);
+	async getSubscriptionPriceForPlan(
+		planName: string,
+	): Promise<PlanPrice | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+		const prices = await this.repository.getPricesForPlan(plan.id);
 		return prices.find((p) => p.priceType === "subscription") ?? null;
 	}
 
 	/**
-	 * Get seat price for a plan
+	 * Get seat price for a plan by plan name (e.g., "business", "pro")
 	 */
-	async getSeatPriceForPlan(planId: string): Promise<PlanPrice | null> {
-		const prices = await this.repository.getPricesForPlan(planId);
+	async getSeatPriceForPlan(planName: string): Promise<PlanPrice | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+		const prices = await this.repository.getPricesForPlan(plan.id);
 		return prices.find((p) => p.priceType === "seat") ?? null;
+	}
+
+	/**
+	 * Get the overage Stripe price ID for a given plan and usage metric.
+	 * Returns null if no overage price is configured for the metric.
+	 */
+	async getOveragePriceIdForMetric(
+		planName: string,
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
+	): Promise<string | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+
+		const prices = await this.repository.getPricesForPlan(plan.id);
+		const overagePriceType =
+			`overage_${metric === "reports" ? "report" : metric.replace(/s$/, "")}` as string;
+		const overagePrice = prices.find(
+			(p) => p.priceType === overagePriceType && p.isActive,
+		);
+
+		return overagePrice?.stripePriceId ?? null;
 	}
 
 	/**
@@ -303,10 +330,7 @@ export class PricingService {
 	async getSubscriptionPriceIdByPlanName(
 		planName: string,
 	): Promise<string | null> {
-		const plan = await this.repository.getPlanByName(planName);
-		if (!plan) return null;
-
-		const price = await this.getSubscriptionPriceForPlan(plan.id);
+		const price = await this.getSubscriptionPriceForPlan(planName);
 		return price?.stripePriceId ?? null;
 	}
 
@@ -374,6 +398,14 @@ export class PricingService {
 			return { success: false, error: "License is already in use" };
 		}
 
+		// Check if already activated by this user
+		if (license.userId === userId && license.activatedAt) {
+			return {
+				success: false,
+				error: "This license is already activated on your account",
+			};
+		}
+
 		// Activate the license
 		await this.repository.activateLicense(license.id, userId);
 
@@ -388,7 +420,7 @@ export class PricingService {
 
 	/**
 	 * Get effective limits for a user
-	 * Checks for license first (with optional overrides), then falls back to plan limits
+	 * Checks for license first (self-contained limits), then falls back to plan limits
 	 */
 	async getEffectiveLimitsForUser(
 		userId: string,
@@ -398,37 +430,22 @@ export class PricingService {
 		const license = await this.repository.getLicenseByUserId(userId);
 
 		if (license) {
-			// Get the plan associated with the license
-			const plan = await this.repository.getPlanById(license.planId);
-			const planLimits = await this.repository.getLimitsForPlan(license.planId);
-
-			if (!plan || !planLimits) {
-				// License references invalid plan, fall back to subscription plan
-				console.warn(
-					`[Pricing] License ${license.id} references invalid plan ${license.planId}`,
-				);
-			} else {
-				// Apply license overrides (if any) on top of plan limits
-				return {
-					maxOrganizations:
-						license.maxOrganizations ?? planLimits.maxOrganizations,
-					usersPerOrg: license.maxUsers ?? planLimits.usersPerOrg,
-					reportsPerMonth:
-						license.reportsIncluded ?? planLimits.reportsPerMonth,
-					noticesPerMonth:
-						license.noticesIncluded ?? planLimits.noticesPerMonth,
-					alertsPerMonth: license.alertsIncluded ?? planLimits.alertsPerMonth,
-					transactionsPerMonth:
-						license.transactionsIncluded ?? planLimits.transactionsPerMonth,
-					clientsPerMonth:
-						license.clientsIncluded ?? planLimits.clientsPerMonth,
-					source: "license",
-					planName: plan.name,
-				};
-			}
+			// License is self-contained -- all limits come directly from it (no plan lookup)
+			return {
+				maxOrganizations: license.maxOrganizations,
+				usersPerOrg: license.maxUsers,
+				reportsPerMonth: license.reportsPerMonth,
+				noticesPerMonth: license.noticesPerMonth,
+				alertsPerMonth: license.alertsPerMonth,
+				operationsPerMonth: license.operationsPerMonth,
+				clientsPerMonth: license.clientsPerMonth,
+				watchlistQueriesPerDay: license.watchlistQueriesPerDay,
+				source: "license",
+				planName: "enterprise",
+			};
 		}
 
-		// No license or invalid license, use plan limits
+		// No license, use plan limits
 		const plan = await this.repository.getPlanByName(planName);
 		if (!plan) return null;
 
@@ -441,8 +458,9 @@ export class PricingService {
 			reportsPerMonth: limits.reportsPerMonth,
 			noticesPerMonth: limits.noticesPerMonth,
 			alertsPerMonth: limits.alertsPerMonth,
-			transactionsPerMonth: limits.transactionsPerMonth,
+			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
+			watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
 			source: "plan",
 			planName: plan.name,
 		};
@@ -450,6 +468,7 @@ export class PricingService {
 
 	/**
 	 * Get effective limits by license ID (for license-activated users)
+	 * License is self-contained -- all limits come directly from the license
 	 */
 	async getEffectiveLimitsForLicense(
 		licenseId: string,
@@ -457,22 +476,17 @@ export class PricingService {
 		const license = await this.repository.getLicenseById(licenseId);
 		if (!license) return null;
 
-		const plan = await this.repository.getPlanById(license.planId);
-		const planLimits = await this.repository.getLimitsForPlan(license.planId);
-
-		if (!plan || !planLimits) return null;
-
 		return {
-			maxOrganizations: license.maxOrganizations ?? planLimits.maxOrganizations,
-			usersPerOrg: license.maxUsers ?? planLimits.usersPerOrg,
-			reportsPerMonth: license.reportsIncluded ?? planLimits.reportsPerMonth,
-			noticesPerMonth: license.noticesIncluded ?? planLimits.noticesPerMonth,
-			alertsPerMonth: license.alertsIncluded ?? planLimits.alertsPerMonth,
-			transactionsPerMonth:
-				license.transactionsIncluded ?? planLimits.transactionsPerMonth,
-			clientsPerMonth: license.clientsIncluded ?? planLimits.clientsPerMonth,
+			maxOrganizations: license.maxOrganizations,
+			usersPerOrg: license.maxUsers,
+			reportsPerMonth: license.reportsPerMonth,
+			noticesPerMonth: license.noticesPerMonth,
+			alertsPerMonth: license.alertsPerMonth,
+			operationsPerMonth: license.operationsPerMonth,
+			clientsPerMonth: license.clientsPerMonth,
+			watchlistQueriesPerDay: license.watchlistQueriesPerDay,
 			source: "license",
-			planName: plan.name,
+			planName: "enterprise",
 		};
 	}
 }
