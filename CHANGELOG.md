@@ -1,3 +1,58 @@
+# [1.5.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.4.0...v1.5.0-rc.1) (2026-02-23)
+
+
+### Bug Fixes
+
+* **api-keys:** correct eligibility check for business plan in tests ([969c068](https://github.com/janovix/auth-svc/commit/969c06894f75e0c617eda976314ae98a6a77d165))
+* **auth:** add cleanup for execution context on validation and auth failures ([be3d58e](https://github.com/janovix/auth-svc/commit/be3d58ea7f9864c5289c883cfd3122e570896d44))
+* **auth:** enhance cache management for Stripe integration ([249122d](https://github.com/janovix/auth-svc/commit/249122d21caf3a2d0d413a521892399d7c3cafa6))
+* **auth:** improve email OTP handling and cleanup timing ([ae5cec4](https://github.com/janovix/auth-svc/commit/ae5cec4a862f323a7e9423b96217c32724742c9f))
+* **auth:** refine cookieCache settings and enhance CORS header handling ([ba0229e](https://github.com/janovix/auth-svc/commit/ba0229e9e43fcaef00415a61f0c36282c3a8eb74))
+* **auth:** update cookieCache maxAge for improved session handling ([07726e4](https://github.com/janovix/auth-svc/commit/07726e4169193c66da4e3a105b5db1321cc12096))
+* **auth:** update cookieCache maxAge to enhance session management ([884e0bb](https://github.com/janovix/auth-svc/commit/884e0bbb5f00c34070a0424b670fa3c090913768))
+* **auth:** update rate limits for various environments ([e14d369](https://github.com/janovix/auth-svc/commit/e14d369d904f5a41635dc6ad879c239992656b0b))
+* **notifications:** enhance notification dispatch logging and error handling for organization updates ([475266c](https://github.com/janovix/auth-svc/commit/475266c08be1b8961ba0e777c2ff673663761ced))
+* **subscription:** query user role directly from database to avoid stale session data ([75bf58a](https://github.com/janovix/auth-svc/commit/75bf58a9b1ed4b243ba7f8a1c90655efc801ee44))
+
+
+### Features
+
+* **admin:** add admin statistics and KV management endpoints ([11bb19e](https://github.com/janovix/auth-svc/commit/11bb19e39e3683f3ce2d244bc6d7a178234020dc))
+* **admin:** implement admin organizations routes and replace internal organizations access ([81f3ca0](https://github.com/janovix/auth-svc/commit/81f3ca09a76ada214f90282e63e8ec570f621090))
+* **aml-settings:** add AML Compliance Settings proxy routes and OpenAPI documentation ([d246f4d](https://github.com/janovix/auth-svc/commit/d246f4d3ff9c8c8a0918feb5c5fa5e9e4b4aaa29))
+* **api-keys:** add enterprise plan to API access validation ([f4d1153](https://github.com/janovix/auth-svc/commit/f4d1153c784aec0afe0d22912ed02506736f6390))
+* **api-keys:** implement API keys management for organization-scoped access ([32a42db](https://github.com/janovix/auth-svc/commit/32a42dbe1b9c0534012ab84607f694b1500be299))
+* **api-keys:** integrate jose for JWT signing and enhance ephemeral JWT creation ([ef27550](https://github.com/janovix/auth-svc/commit/ef275509e30a332c8c98d3dc49c526e8da3ba4e9))
+* **api-keys:** update API_ENABLED_PLANS to include 'business' plan ([6932cee](https://github.com/janovix/auth-svc/commit/6932ceee84ca63275c307dd7496b5e989ea040ed))
+* **auth:** add error handling configuration for API errors and update public route list ([2053704](https://github.com/janovix/auth-svc/commit/205370437ac45fb59db5b3f5c6a2df26da6ba2e5))
+* **auth:** add Google OAuth configuration for social login ([9c44357](https://github.com/janovix/auth-svc/commit/9c443570856c5045b5018ed7f50b9c905f6a1ec9))
+* **auth:** add OAuth provider callback routes to public access list ([f272e07](https://github.com/janovix/auth-svc/commit/f272e0716997abfa2516c30f98d0d4e7c82aac63))
+* **auth:** enhance organization limit checks with enterprise license support ([977e650](https://github.com/janovix/auth-svc/commit/977e6503bdb94e3ad41fd0ef8a2106cd34d52b7b))
+* **auth:** enhance rate limiting with custom storage for KV environments ([459cc8b](https://github.com/janovix/auth-svc/commit/459cc8b2df58d127a9fc6a64083d560c2115d3d1)), closes [hi#frequency](https://github.com/hi/issues/frequency)
+* **auth:** enhance Stripe integration by conditionally fetching prices ([77a2e2c](https://github.com/janovix/auth-svc/commit/77a2e2c1641049eb1cd019b10910e9fb39649cb5))
+* **auth:** establish execution context for all routes ([b49c269](https://github.com/janovix/auth-svc/commit/b49c2697ced8112ffb624c464b3a210e1ff31b28))
+* **auth:** implement custom rate limit rules for OTP endpoints and configure storage options across environments ([e68b486](https://github.com/janovix/auth-svc/commit/e68b486a2afe9ffa6c448d20025eded68876c4f8))
+* **auth:** implement dedicated JWKS endpoint handler ([351f240](https://github.com/janovix/auth-svc/commit/351f240084c2c9168bc20e920da8890abda59d0a))
+* **auth:** implement user promotion from visitor to user based on pending invitations ([26efe7c](https://github.com/janovix/auth-svc/commit/26efe7c199d0e09211c8c2f6732bc47dabf97888))
+* **auth:** implement visitor role and promote endpoint for beta access ([0059eff](https://github.com/janovix/auth-svc/commit/0059eff8fa6eb13f80768ff209a7b44ecc1f6ea4))
+* **auth:** integrate captcha plugin for enhanced bot protection ([cbf3853](https://github.com/janovix/auth-svc/commit/cbf3853ac9e0e5123cd05fb6152419dbbac5077f))
+* **auth:** integrate Sentry for enhanced error tracking ([39dc5e7](https://github.com/janovix/auth-svc/commit/39dc5e7683be17d43de736b2b54a8aad85eeeb12))
+* **cors:** consistently expose X-Retry-After header in CORS responses ([e4ce4c2](https://github.com/janovix/auth-svc/commit/e4ce4c2f37e52f94f4510b76505d017123c71e6c))
+* **cors:** expose X-Retry-After header in CORS middleware ([374db60](https://github.com/janovix/auth-svc/commit/374db606ed523441ae468f818071c8621ce64bc9))
+* **logging:** integrate Sentry for error tracking and remove excessive logging ([160bb60](https://github.com/janovix/auth-svc/commit/160bb60cbcc5c0dd983dc55994a316e65071f3ea))
+* **notifications:** add absolute callbackUrl to org settings notification ([30bbf07](https://github.com/janovix/auth-svc/commit/30bbf079520760916137b609c32f36b70d915531))
+* **notifications:** add notifications service binding and dispatch logic for organization updates ([1f78692](https://github.com/janovix/auth-svc/commit/1f786920d41f14076596804f2ed38d51d3774cb6))
+* **passkey:** add support for Better Auth passkey plugin ([a3dd710](https://github.com/janovix/auth-svc/commit/a3dd710e7996e3146abf569ba0b9c07a9cac8001))
+* **pricing, subscription:** enhance license activation and subscription organization limit checks ([08dd7d3](https://github.com/janovix/auth-svc/commit/08dd7d3fc97f38a2e7f0f78c513483bb2c9732a0))
+* **pricing:** add license management features for superseding and revoking licenses ([0c53f69](https://github.com/janovix/auth-svc/commit/0c53f69864b827b55b96f3aae2bc6ad68284f3a5))
+* **routes:** add internal organizations route for member enumeration ([8bb897e](https://github.com/janovix/auth-svc/commit/8bb897e6d77c4ccba06d9b5d13d6d94d317e353f))
+* **subscription-admin:** add subscription management routes for admin ([be0789e](https://github.com/janovix/auth-svc/commit/be0789e883e702b8bf76a5162f1ce5864a0525cf))
+* **subscription:** add stripeSubscriptionId to user subscription status ([0d83177](https://github.com/janovix/auth-svc/commit/0d8317786ac3471d5021b4d4e4a14f4ce01e21a0))
+* **subscription:** enhance organization creation logic in SubscriptionService tests ([164cde5](https://github.com/janovix/auth-svc/commit/164cde5b480aa00d993eceeebc6685a47c8b24ca))
+* **subscription:** enhance subscription status retrieval with organization owner resolution ([7444e02](https://github.com/janovix/auth-svc/commit/7444e028482967b8f1c60e3ffd5c30e49c9c729c))
+* **subscription:** implement license-based subscription handling and enhance user subscription queries ([63d60c3](https://github.com/janovix/auth-svc/commit/63d60c3466fc0830c6cfbc135e67b377f70d2b9c))
+* **usage-rights:** implement usage rights and licensing system ([0a404f7](https://github.com/janovix/auth-svc/commit/0a404f762300413912665f8ad235c34596c098bd))
+
 # [1.4.0-rc.62](https://github.com/janovix/auth-svc/compare/v1.4.0-rc.61...v1.4.0-rc.62) (2026-02-20)
 
 
