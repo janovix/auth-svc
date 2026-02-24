@@ -41,10 +41,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   // Better Auth admin plugin fields
-  role          String    @default("user")
-  banned        Boolean   @default(false)
-  banReason     String?
-  banExpires    DateTime?
+  role             String    @default("user")
+  banned           Boolean   @default(false)
+  banReason        String?
+  banExpires       DateTime?
+  // Better Auth Stripe plugin field (camelCase - managed by Better Auth)
+  stripeCustomerId String?
 
   sessions        Session[]
   accounts        Account[]

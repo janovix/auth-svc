@@ -1,3 +1,10 @@
+# [1.6.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.5.0...v1.6.0-rc.1) (2026-02-24)
+
+
+### Features
+
+* **migrations:** add stripeCustomerId column to users table for Better Auth integration ([1c59977](https://github.com/janovix/auth-svc/commit/1c5997749e56b0798d4d412ffc14efce1f192505))
+
 # [1.5.0](https://github.com/janovix/auth-svc/compare/v1.4.0...v1.5.0) (2026-02-23)
 
 
@@ -17,6 +24,7 @@
 
 ### Features
 
+* **migrations:** add stripeCustomerId column to users table for Better Auth integration ([1c59977](https://github.com/janovix/auth-svc/commit/1c5997749e56b0798d4d412ffc14efce1f192505))
 * **admin:** add admin statistics and KV management endpoints ([11bb19e](https://github.com/janovix/auth-svc/commit/11bb19e39e3683f3ce2d244bc6d7a178234020dc))
 * **admin:** implement admin organizations routes and replace internal organizations access ([81f3ca0](https://github.com/janovix/auth-svc/commit/81f3ca09a76ada214f90282e63e8ec570f621090))
 * **aml-settings:** add AML Compliance Settings proxy routes and OpenAPI documentation ([d246f4d](https://github.com/janovix/auth-svc/commit/d246f4d3ff9c8c8a0918feb5c5fa5e9e4b4aaa29))
@@ -52,6 +60,12 @@
 * **subscription:** enhance subscription status retrieval with organization owner resolution ([7444e02](https://github.com/janovix/auth-svc/commit/7444e028482967b8f1c60e3ffd5c30e49c9c729c))
 * **subscription:** implement license-based subscription handling and enhance user subscription queries ([63d60c3](https://github.com/janovix/auth-svc/commit/63d60c3466fc0830c6cfbc135e67b377f70d2b9c))
 * **usage-rights:** implement usage rights and licensing system ([0a404f7](https://github.com/janovix/auth-svc/commit/0a404f762300413912665f8ad235c34596c098bd))
+
+# [1.5.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.5.0-rc.1...v1.5.0-rc.2) (2026-02-24)
+
+### Features
+
+* **migrations:** add stripeCustomerId column to users table for Better Auth integration ([1c59977](https://github.com/janovix/auth-svc/commit/1c5997749e56b0798d4d412ffc14efce1f192505))
 
 # [1.5.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.4.0...v1.5.0-rc.1) (2026-02-23)
 
