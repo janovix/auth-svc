@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/janovix/auth-svc/compare/v1.6.0...v1.6.1) (2026-02-24)
+
+
+### Bug Fixes
+
+* stripe pricing IDs in seed-plans script for production environment ([6462a5f](https://github.com/janovix/auth-svc/commit/6462a5fb7624ec8bdefcb3147ad11eac7055f6c0))
+
 # [1.6.0](https://github.com/janovix/auth-svc/compare/v1.5.0...v1.6.0) (2026-02-24)
 
 
