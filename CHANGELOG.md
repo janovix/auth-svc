@@ -1,3 +1,11 @@
+# [1.6.0](https://github.com/janovix/auth-svc/compare/v1.5.0...v1.6.0) (2026-02-24)
+
+
+### Features
+
+* **migrations:** add stripeCustomerId column to users table for Better Auth integration ([1c59977](https://github.com/janovix/auth-svc/commit/1c5997749e56b0798d4d412ffc14efce1f192505))
+
+
 # [1.6.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.6.0-rc.1...v1.6.0-rc.2) (2026-02-24)
 
 
