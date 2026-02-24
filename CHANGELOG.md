@@ -5,6 +5,14 @@
 
 * **migrations:** add stripeCustomerId column to users table for Better Auth integration ([1c59977](https://github.com/janovix/auth-svc/commit/1c5997749e56b0798d4d412ffc14efce1f192505))
 
+
+# [1.6.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.6.0-rc.1...v1.6.0-rc.2) (2026-02-24)
+
+
+### Bug Fixes
+
+* stripe pricing IDs in seed-plans script for production environment ([6462a5f](https://github.com/janovix/auth-svc/commit/6462a5fb7624ec8bdefcb3147ad11eac7055f6c0))
+
 # [1.6.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.5.0...v1.6.0-rc.1) (2026-02-24)
 
 
