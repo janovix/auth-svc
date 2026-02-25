@@ -1,3 +1,10 @@
+## [1.6.2](https://github.com/janovix/auth-svc/compare/v1.6.1...v1.6.2) (2026-02-25)
+
+
+### Bug Fixes
+
+* **prisma:** add engineType to Prisma client configuration ([60d9881](https://github.com/janovix/auth-svc/commit/60d9881d3da893419b5cfa9b3987a4ad6c1033a1))
+
 ## [1.6.2-rc.1](https://github.com/janovix/auth-svc/compare/v1.6.1...v1.6.2-rc.1) (2026-02-25)
 
 
