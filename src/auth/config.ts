@@ -14,7 +14,6 @@ import {
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
 import { executeInBackground, getExecutionContext } from "./execution-context";
-import { createKVRateLimitStorage } from "../utils/kv-storage";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -119,14 +118,14 @@ type BaseRateLimitConfig = {
  * legitimate users and causes KV 429 write-contention that hangs requests.
  */
 const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
-	// Limit OTP send requests: 3 per 60 seconds per IP
+	// Limit OTP send requests: 3 per 10 seconds per IP
 	"/email-otp/send-verification-otp": {
-		window: 60,
+		window: 10,
 		max: 3,
 	},
 	// Limit OTP verification attempts per IP
 	"/sign-in/email-otp": {
-		window: 60,
+		window: 10,
 		max: 3,
 	},
 	// Disable rate limiting for get-session — read-only, high-frequency, already
@@ -137,38 +136,38 @@ const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
 
 const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
 	local: {
-		window: 60,
+		window: 10,
 		max: 300,
 		enabled: false,
 		storage: "memory",
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	preview: {
-		window: 60,
+		window: 10,
 		max: 200,
 		enabled: true,
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	dev: {
-		window: 60,
-		max: 300,
+		window: 10,
+		max: 1000,
 		enabled: true,
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	qa: {
-		window: 60,
-		max: 300,
+		window: 10,
+		max: 1000,
 		enabled: true,
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	production: {
-		window: 60,
-		max: 300,
+		window: 10,
+		max: 1000,
 		enabled: true,
 		customRules: OTP_RATE_LIMIT_RULES,
 	},
 	test: {
-		window: 60,
+		window: 10,
 		max: 60,
 		enabled: false,
 		storage: "memory",
@@ -178,8 +177,13 @@ const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
 
 /**
  * Builds the final rate limit config for the given environment.
- * For KV-backed environments, attaches `customStorage` which handles JSON
- * serialisation and hard-codes the 60-second minimum KV TTL.
+ *
+ * For KV-backed environments (dev/qa/preview/production) we use
+ * `storage: "secondary-storage"`, which is the Better Auth-recommended approach
+ * for serverless runtimes. The `secondaryStorage` (KV) is already wired into
+ * `betterAuth()` at the call site, and its `set()` implementation already clamps
+ * any TTL to the 60-second KV minimum — so Better Auth passing the rate-limit
+ * window (e.g. 10 s) as the TTL is handled correctly without any custom wrapper.
  */
 function buildRateLimitConfig(
 	resolvedEnv: JanovixEnvironment,
@@ -187,7 +191,7 @@ function buildRateLimitConfig(
 ): BetterAuthOptions["rateLimit"] {
 	const base = RATE_LIMITS[resolvedEnv];
 	if (kv && base.enabled && !base.storage) {
-		return { ...base, customStorage: createKVRateLimitStorage(kv) };
+		return { ...base, storage: "secondary-storage" };
 	}
 	return base;
 }

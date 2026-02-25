@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import {
 	createKVSecondaryStorage,
-	createKVRateLimitStorage,
 	type BetterAuthSecondaryStorage,
 } from "../../src/utils/kv-storage";
 
@@ -163,75 +162,6 @@ describe("KV Secondary Storage", () => {
 			await storage.set("key", "value2");
 			const result = await storage.get("key");
 			expect(result).toBe("value2");
-		});
-	});
-});
-
-describe("KV Rate Limit Storage", () => {
-	let mockKV: MockKV;
-	let rlStorage: ReturnType<typeof createKVRateLimitStorage>;
-
-	beforeEach(() => {
-		mockKV = createMockKV();
-		rlStorage = createKVRateLimitStorage(mockKV as unknown as KVNamespace);
-	});
-
-	describe("get", () => {
-		it("returns undefined for non-existent keys", async () => {
-			const result = await rlStorage.get("ip:1.2.3.4");
-			expect(result).toBeUndefined();
-		});
-
-		it("returns parsed JSON object for existing keys", async () => {
-			const entry = { key: "ip:1.2.3.4", count: 5, lastRequest: 9999999 };
-			await mockKV.put("ba:rl:ip:1.2.3.4", JSON.stringify(entry));
-			const result = await rlStorage.get("ip:1.2.3.4");
-			expect(result).toEqual(entry);
-		});
-
-		it("uses ba:rl: key prefix", async () => {
-			await rlStorage.get("test-key");
-			expect(mockKV.get).toHaveBeenCalledWith("ba:rl:test-key");
-		});
-	});
-
-	describe("set", () => {
-		it("serialises value as JSON and uses 60s TTL", async () => {
-			const entry = { key: "ip:1.2.3.4", count: 1, lastRequest: 12345 };
-			await rlStorage.set("ip:1.2.3.4", entry);
-			expect(mockKV.put).toHaveBeenCalledWith(
-				"ba:rl:ip:1.2.3.4",
-				JSON.stringify(entry),
-				{ expirationTtl: 60 },
-			);
-		});
-	});
-
-	describe("delete", () => {
-		it("deletes with ba:rl: prefix", async () => {
-			await rlStorage.delete("ip:1.2.3.4");
-			expect(mockKV.delete).toHaveBeenCalledWith("ba:rl:ip:1.2.3.4");
-		});
-	});
-
-	describe("error resilience", () => {
-		it("get returns undefined when KV throws", async () => {
-			mockKV.get.mockRejectedValueOnce(new Error("KV error"));
-			const result = await rlStorage.get("ip:broken");
-			expect(result).toBeUndefined();
-		});
-
-		it("set does not throw when KV returns 429", async () => {
-			mockKV.put.mockRejectedValueOnce(
-				new Error("KV PUT failed: 429 Too Many Requests"),
-			);
-			const entry = { key: "ip:1.2.3.4", count: 1, lastRequest: Date.now() };
-			await expect(rlStorage.set("ip:1.2.3.4", entry)).resolves.toBeUndefined();
-		});
-
-		it("delete does not throw when KV fails", async () => {
-			mockKV.delete.mockRejectedValueOnce(new Error("KV unavailable"));
-			await expect(rlStorage.delete("ip:1.2.3.4")).resolves.toBeUndefined();
 		});
 	});
 });

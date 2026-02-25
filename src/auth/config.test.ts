@@ -546,18 +546,18 @@ describe("buildResolvedAuthConfig", () => {
 
 			expect(rateLimit.customRules["/email-otp/send-verification-otp"]).toEqual(
 				{
-					window: 60,
+					window: 10,
 					max: 3,
 				},
 			);
 
 			expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
-				window: 60,
+				window: 10,
 				max: 3,
 			});
 		});
 
-		it("uses customStorage for rate limits in production environments (when KV is provided)", () => {
+		it("uses secondary-storage for rate limits in production environments (when KV is provided)", () => {
 			const mockKV = {
 				get: vi.fn(),
 				put: vi.fn(),
@@ -576,12 +576,12 @@ describe("buildResolvedAuthConfig", () => {
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.customStorage).toBeDefined();
-			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 
-		it("uses customStorage for rate limits in dev environment (when KV is provided)", () => {
+		it("uses secondary-storage for rate limits in dev environment (when KV is provided)", () => {
 			const mockKV = {
 				get: vi.fn(),
 				put: vi.fn(),
@@ -600,8 +600,8 @@ describe("buildResolvedAuthConfig", () => {
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.customStorage).toBeDefined();
-			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 
@@ -659,11 +659,11 @@ describe("buildResolvedAuthConfig", () => {
 				expect(
 					rateLimit.customRules["/email-otp/send-verification-otp"],
 				).toEqual({
-					window: 60,
+					window: 10,
 					max: 3,
 				});
 				expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
-					window: 60,
+					window: 10,
 					max: 3,
 				});
 			}
