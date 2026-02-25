@@ -7,6 +7,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { buildResolvedAuthConfig, type StripePriceIds } from "./config";
 import type { Bindings } from "../types/bindings";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
+import { withD1Session } from "../utils/d1-session";
 import { PricingRepository, PricingService } from "../domain/pricing";
 
 /**
@@ -38,7 +39,7 @@ let priceIdsCacheTime = 0;
 const PRICE_IDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function createPrismaClient(db: D1Database) {
-	const adapter = new PrismaD1(db);
+	const adapter = new PrismaD1(withD1Session(db));
 	return new PrismaClient({ adapter });
 }
 
