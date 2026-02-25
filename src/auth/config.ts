@@ -108,11 +108,18 @@ type BaseRateLimitConfig = {
 };
 
 /**
- * Custom rate limit rules for OTP endpoints.
- * These stricter limits prevent email abuse by limiting OTP requests.
+ * Custom rate limit rules per endpoint.
+ *
+ * OTP endpoints: strict limits to prevent email abuse.
+ *
+ * get-session: explicitly disabled. This endpoint is called on every page load
+ * and the cookie cache (60 s JWE) already absorbs most of the load. Better Auth
+ * groups IPv6 addresses by /48 prefix, so all traffic from the same Cloudflare
+ * PoP shares one KV counter key — a rate limit here would incorrectly throttle
+ * legitimate users and causes KV 429 write-contention that hangs requests.
  */
 const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
-	// Limit OTP send requests: 1 per 60 seconds per IP
+	// Limit OTP send requests: 3 per 60 seconds per IP
 	"/email-otp/send-verification-otp": {
 		window: 60,
 		max: 3,
@@ -122,6 +129,10 @@ const OTP_RATE_LIMIT_RULES: BaseRateLimitConfig["customRules"] = {
 		window: 60,
 		max: 3,
 	},
+	// Disable rate limiting for get-session — read-only, high-frequency, already
+	// protected by the 60 s JWE cookie cache. Exempting it eliminates KV write
+	// contention that was causing request hangs under concurrent load.
+	"/get-session": false,
 };
 
 const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
@@ -152,7 +163,7 @@ const RATE_LIMITS: Record<JanovixEnvironment, BaseRateLimitConfig> = {
 	},
 	production: {
 		window: 60,
-		max: 100,
+		max: 300,
 		enabled: true,
 		customRules: OTP_RATE_LIMIT_RULES,
 	},

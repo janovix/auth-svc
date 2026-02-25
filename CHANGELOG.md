@@ -1,5 +1,7 @@
 ## [1.6.1](https://github.com/janovix/auth-svc/compare/v1.6.0...v1.6.1) (2026-02-24)
 
+## [1.6.1-rc.1](https://github.com/janovix/auth-svc/compare/v1.6.0...v1.6.1-rc.1) (2026-02-24)
+
 
 ### Bug Fixes
 
