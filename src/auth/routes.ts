@@ -94,17 +94,56 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 	});
 }
 
+// Safety-net timeout for auth.handler(). On the Workers paid plan I/O waits have
+// no wall-clock limit, so a stuck D1 query or KV op can hang forever without this.
+// 25 s leaves 5 s headroom before Cloudflare's own 30 s response deadline.
+const AUTH_HANDLER_TIMEOUT_MS = 25_000;
+
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
 	auth: { handler: (request: Request) => Promise<Response> },
 ) {
 	const pathname = c.req.path;
+	const startTime = Date.now();
 
 	try {
 		// Pass the original request directly to Better Auth.
 		// Better Auth uses APIError with a statusCode for redirects (302); catch
 		// those and convert them to proper Response objects.
-		const response = await auth.handler(c.req.raw).catch((error) => {
+		//
+		// Wrapped in Promise.race so that any D1/KV hang (infrastructure issue,
+		// residual lock contention, etc.) resolves with a 504 instead of blocking
+		// the Worker indefinitely.
+		let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+		const timeoutPromise = new Promise<Response>((resolve) => {
+			timeoutHandle = setTimeout(() => {
+				Sentry.captureMessage("Auth handler timeout", {
+					level: "error",
+					tags: { context: "auth-handler-timeout", pathname },
+					extra: { pathname, elapsed_ms: Date.now() - startTime },
+				});
+				resolve(
+					new Response(
+						JSON.stringify({
+							success: false,
+							errors: [
+								{
+									code: 5003,
+									message: "Request timed out. Please try again.",
+								},
+							],
+						}),
+						{
+							status: 504,
+							headers: { "Content-Type": "application/json" },
+						},
+					),
+				);
+			}, AUTH_HANDLER_TIMEOUT_MS);
+		});
+
+		const handlerPromise = auth.handler(c.req.raw).catch((error) => {
 			if (isBetterAuthRedirectError(error)) {
 				const headers = new Headers();
 				const errorHeaders = error.headers;
@@ -132,6 +171,14 @@ async function handleAuthRequest(
 				{ status: 500, headers: { "Content-Type": "application/json" } },
 			);
 		});
+
+		const response = await Promise.race([
+			handlerPromise.then((r) => {
+				clearTimeout(timeoutHandle);
+				return r;
+			}),
+			timeoutPromise,
+		]);
 
 		const shouldAttemptRecovery =
 			await responseIndicatesJwksDecryptError(response);

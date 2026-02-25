@@ -10,18 +10,27 @@ import { createKVSecondaryStorage } from "../utils/kv-storage";
 import { PricingRepository, PricingService } from "../domain/pricing";
 
 /**
- * Cache for Better Auth instances.
- * We cache the full auth instance to preserve internal state needed for
- * redirect handling, session management, etc.
+ * Module-level cache for Better Auth instances, keyed by resolved config hash.
  *
- * NOTE: We use a WeakMap keyed by the DB instance to ensure that when
- * the DB binding changes (new request context), we create a fresh instance.
- * This helps avoid stale connection issues in Cloudflare Workers.
+ * Root cause of infinite hangs (fixed here):
+ * Cloudflare Workers give each request invocation a fresh `env` object, so
+ * `env.DB` is a NEW proxy object on every request. A WeakMap keyed by `env.DB`
+ * therefore NEVER produces a cache hit — every request created a brand-new
+ * `betterAuth()` + `PrismaClient` and triggered a lazy JWKS D1 read/write on
+ * the first `auth.handler()` call. When concurrent requests arrived, multiple
+ * instances simultaneously tried to INSERT JWKS into D1. D1 is SQLite with a
+ * single-writer lock; the second INSERT waited for the lock indefinitely because
+ * `@prisma/adapter-d1` has no query timeout — causing the infinite "pending" hang.
+ *
+ * Fix: module-level `Map` keyed by the stable config hash (`cacheKey`).
+ * Module-level state persists across requests within the same Worker isolate.
+ * The D1 binding is a stateless HTTP proxy; there are no persistent connections
+ * to go stale between requests.
+ *
+ * The cache differentiates between instances with and without the Stripe plugin
+ * to prevent a non-Stripe instance from handling subscription endpoints.
  */
-const authCacheByDb = new WeakMap<
-	D1Database,
-	Map<string, { auth: ReturnType<typeof betterAuth> }>
->();
+const authCache = new Map<string, { auth: ReturnType<typeof betterAuth> }>();
 
 // Cache for Stripe price IDs fetched from database
 let cachedPriceIds: StripePriceIds | null = null;
@@ -34,11 +43,10 @@ function createPrismaClient(db: D1Database) {
 }
 
 /**
- * Fetch Stripe price IDs from the database
- * Throws error if database configuration is incomplete
+ * Fetch Stripe price IDs from the database.
+ * Throws if required price configuration is missing.
  */
 async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
-	// Return cached prices if still valid
 	const now = Date.now();
 	if (cachedPriceIds && now - priceIdsCacheTime < PRICE_IDS_CACHE_TTL) {
 		return cachedPriceIds;
@@ -48,7 +56,6 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 	const pricingService = new PricingService(pricingRepository);
 	const priceMap = await pricingService.getAllSubscriptionPrices();
 
-	// Validate all required price IDs are present
 	const missingPlans: string[] = [];
 	const requiredPlans = ["watchlist", "business", "pro", "ultra"];
 
@@ -75,7 +82,6 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 
 	console.log("[Auth] Loaded Stripe price IDs from database:", priceIds);
 
-	// Cache the price IDs
 	cachedPriceIds = priceIds;
 	priceIdsCacheTime = now;
 
@@ -84,31 +90,24 @@ async function fetchStripePriceIds(env: Bindings): Promise<StripePriceIds> {
 
 export function invalidateBetterAuthCache(env: Bindings) {
 	const resolved = buildResolvedAuthConfig(env);
-	// Get the cache for this DB instance
-	const dbCache = authCacheByDb.get(env.DB);
-	if (dbCache) {
-		// Delete both cache variants (with and without Stripe)
-		dbCache.delete(`${resolved.cacheKey}-with-stripe`);
-		dbCache.delete(`${resolved.cacheKey}-no-stripe`);
-	}
+	authCache.delete(`${resolved.cacheKey}-with-stripe`);
+	authCache.delete(`${resolved.cacheKey}-no-stripe`);
 	// Also invalidate price cache
 	cachedPriceIds = null;
 }
 
 /**
- * Get Better Auth context for handling requests.
+ * Returns a cached (or newly created) Better Auth instance for this Worker isolate.
  *
- * This function uses a WeakMap keyed by D1Database instance to cache auth
- * instances. This ensures that:
- * 1. Within the same Worker isolate with the same DB binding, we reuse the instance
- * 2. When a new request comes with a potentially different DB context, we detect it
+ * The auth instance is cached in a module-level Map keyed by the resolved config
+ * hash so that JWKS initialization, Prisma setup, and plugin wiring happen at most
+ * once per isolate lifetime rather than on every request.
  *
- * Execution context management (waitUntil) is now handled externally by the
- * route handler via `runWithExecutionContext` (AsyncLocalStorage). This function
- * no longer needs to set or clean up any execution context.
+ * Stripe is only loaded for subscription endpoints — all other endpoints get a
+ * lighter instance without the Stripe plugin.
  *
- * @param env - Cloudflare Worker bindings
- * @param pathname - Optional request pathname to determine if Stripe plugin is needed
+ * @param env      - Cloudflare Worker bindings for this request
+ * @param pathname - Request pathname, used to decide whether Stripe is needed
  */
 export async function getBetterAuthContext(
 	env: Bindings,
@@ -117,14 +116,11 @@ export async function getBetterAuthContext(
 	auth: ReturnType<typeof betterAuth>;
 	accessPolicy: { enforceInternal: boolean; token?: string };
 }> {
-	// Only fetch Stripe prices for subscription endpoints that need them
-	// Public endpoints (JWKS, sign-in, verify-email, etc.) don't need Stripe
 	const needsStripe = pathname?.startsWith("/api/auth/subscription/");
 
 	let stripePriceIds: StripePriceIds | undefined;
 
 	if (needsStripe) {
-		// Fetch prices from database (with caching) - use timeout to prevent hanging
 		try {
 			stripePriceIds = await Promise.race([
 				fetchStripePriceIds(env),
@@ -141,32 +137,18 @@ export async function getBetterAuthContext(
 				tags: { context: "stripe-price-fetch-timeout" },
 				extra: { pathname },
 			});
-			// Continue without price IDs - Better Auth Stripe plugin won't load
 		}
-	} else {
-		// Skip price fetch for non-subscription endpoints (JWKS, auth, etc.)
-		// Better Auth will initialize without Stripe plugin, which is fine
-		console.log(
-			`[Auth] Skipping Stripe price fetch for ${pathname || "unknown endpoint"}`,
-		);
 	}
 
 	const resolved = buildResolvedAuthConfig(env, undefined, stripePriceIds);
 
-	// Get or create cache for this specific DB instance
-	let dbCache = authCacheByDb.get(env.DB);
-	if (!dbCache) {
-		dbCache = new Map();
-		authCacheByDb.set(env.DB, dbCache);
-	}
-
-	// Cache key must differentiate between instances with/without Stripe
-	// to prevent using a non-Stripe instance for subscription endpoints
+	// Differentiate cache key by Stripe presence so subscription endpoints
+	// always get an instance with the Stripe plugin loaded.
 	const cacheKey = stripePriceIds
 		? `${resolved.cacheKey}-with-stripe`
 		: `${resolved.cacheKey}-no-stripe`;
 
-	const cached = dbCache.get(cacheKey);
+	const cached = authCache.get(cacheKey);
 	if (cached) {
 		return {
 			auth: cached.auth,
@@ -183,7 +165,7 @@ export async function getBetterAuthContext(
 		secondaryStorage,
 	});
 
-	dbCache.set(cacheKey, { auth });
+	authCache.set(cacheKey, { auth });
 
 	return {
 		auth,

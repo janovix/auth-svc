@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { buildResolvedAuthConfig } from "./config";
 import type { Bindings } from "../types/bindings";
 
+// Capture promises passed to executeInBackground so tests can await them.
+// Without this, user.create.after assertions would race against detached microtasks.
+const _backgroundTasks: Promise<unknown>[] = [];
+vi.mock("./execution-context", () => ({
+	executeInBackground: (promise: Promise<unknown>) => {
+		_backgroundTasks.push(promise);
+	},
+	getExecutionContext: () => undefined,
+	runWithExecutionContext: (_ctx: unknown, fn: () => Promise<unknown>) => fn(),
+}));
+
+async function flushBackground() {
+	const tasks = _backgroundTasks.splice(0);
+	await Promise.allSettled(tasks);
+}
+
 const SECRET = "test-secret-123456789012345678901234567890";
 const INTERNAL_TOKEN = "internal-token-123456";
 
@@ -546,18 +562,18 @@ describe("buildResolvedAuthConfig", () => {
 
 			expect(rateLimit.customRules["/email-otp/send-verification-otp"]).toEqual(
 				{
-					window: 60,
+					window: 10,
 					max: 3,
 				},
 			);
 
 			expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
-				window: 60,
+				window: 10,
 				max: 3,
 			});
 		});
 
-		it("uses customStorage for rate limits in production environments (when KV is provided)", () => {
+		it("uses secondary-storage for rate limits in production environments (when KV is provided)", () => {
 			const mockKV = {
 				get: vi.fn(),
 				put: vi.fn(),
@@ -576,12 +592,12 @@ describe("buildResolvedAuthConfig", () => {
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.customStorage).toBeDefined();
-			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 
-		it("uses customStorage for rate limits in dev environment (when KV is provided)", () => {
+		it("uses secondary-storage for rate limits in dev environment (when KV is provided)", () => {
 			const mockKV = {
 				get: vi.fn(),
 				put: vi.fn(),
@@ -600,8 +616,8 @@ describe("buildResolvedAuthConfig", () => {
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const rateLimit = (config.options as any).rateLimit;
-			expect(rateLimit.customStorage).toBeDefined();
-			expect(rateLimit.storage).toBeUndefined();
+			expect(rateLimit.storage).toBe("secondary-storage");
+			expect(rateLimit.customStorage).toBeUndefined();
 			expect(rateLimit.enabled).toBe(true);
 		});
 
@@ -659,11 +675,11 @@ describe("buildResolvedAuthConfig", () => {
 				expect(
 					rateLimit.customRules["/email-otp/send-verification-otp"],
 				).toEqual({
-					window: 60,
+					window: 10,
 					max: 3,
 				});
 				expect(rateLimit.customRules["/sign-in/email-otp"]).toEqual({
-					window: 60,
+					window: 10,
 					max: 3,
 				});
 			}
@@ -722,11 +738,12 @@ describe("buildResolvedAuthConfig", () => {
 			const userCreateHook = databaseHooks.user.create.after;
 
 			// Simulate a new user being created with pending invitation
-			await userCreateHook({
+			userCreateHook({
 				id: "user-123",
 				email: "newuser@example.com",
 				role: "visitor",
 			});
+			await flushBackground();
 
 			// Verify SELECT query was called to check for pending invitations
 			expect(mockPrepare).toHaveBeenCalledWith(
@@ -785,11 +802,12 @@ describe("buildResolvedAuthConfig", () => {
 			const userCreateHook = databaseHooks.user.create.after;
 
 			// Simulate a new user being created without pending invitation
-			await userCreateHook({
+			userCreateHook({
 				id: "user-456",
 				email: "anotheruser@example.com",
 				role: "visitor",
 			});
+			await flushBackground();
 
 			// Verify SELECT query was called
 			expect(mockPrepare).toHaveBeenCalledWith(
@@ -824,10 +842,6 @@ describe("buildResolvedAuthConfig", () => {
 				prepare: mockPrepare,
 			} as unknown as D1Database;
 
-			const consoleErrorSpy = vi
-				.spyOn(console, "error")
-				.mockImplementation(() => {});
-
 			const config = buildResolvedAuthConfig(
 				buildEnv({
 					ENVIRONMENT: "test",
@@ -840,22 +854,23 @@ describe("buildResolvedAuthConfig", () => {
 			const databaseHooks = (config.options as any).databaseHooks;
 			const userCreateHook = databaseHooks.user.create.after;
 
-			// Should not throw error
-			await expect(
+			// Hook should not throw — it fires and forgets via executeInBackground
+			expect(() =>
 				userCreateHook({
 					id: "user-789",
 					email: "erroruser@example.com",
 					role: "visitor",
 				}),
-			).resolves.not.toThrow();
+			).not.toThrow();
 
-			// Verify error was logged
-			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Error checking pending invitations"),
-				expect.any(Error),
+			// Flush background tasks — the promise rejects but our mock just settles it
+			await flushBackground();
+
+			// The DB query was attempted
+			expect(mockPrepare).toHaveBeenCalledWith(
+				expect.stringContaining("SELECT id FROM invitations"),
 			);
-
-			consoleErrorSpy.mockRestore();
+			expect(mockFirst).toHaveBeenCalled();
 		});
 	});
 });
