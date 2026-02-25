@@ -416,101 +416,124 @@ export function buildResolvedAuthConfig(
 				adminRoles: ["admin"],
 			}),
 			organization({
-				// Organization creation is controlled by subscription limits
-				// The actual limit check happens in databaseHooks.organization.create.before
+				// Organization creation is controlled by subscription limits.
+				// The actual limit check happens in databaseHooks.organization.create.before.
 				allowUserToCreateOrganization: async (user) => {
-					// Check if user has an active subscription with available org slots
-					// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders
-					// Then by active/trialing status, then by most recent
-					const subscription = await env.DB.prepare(
-						`SELECT plan, status, stripeSubscriptionId, licenseId FROM subscription 
+					// 5 s timeout guards against slow/locked D1 queries stalling the request.
+					// On timeout we deny creation (false) — the user can simply retry.
+					const checkAllowed = async () => {
+						// Check if user has an active subscription with available org slots.
+						// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders,
+						// then by active/trialing status, then by most recent.
+						const subscription = await env.DB.prepare(
+							`SELECT plan, status, stripeSubscriptionId, licenseId FROM subscription 
 					 WHERE referenceId = ? 
 					 ORDER BY 
 					   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
 					   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
 					   createdAt DESC 
 					 LIMIT 1`,
-					)
-						.bind(user.id)
-						.first<{
-							plan: string;
-							status: string;
-							stripeSubscriptionId: string | null;
-							licenseId: string | null;
-						}>();
-
-					// Debug: log what we found
-					console.log(
-						`[Org Guard] User ${user.id} subscription lookup:`,
-						subscription,
-					);
-
-					if (!subscription) {
-						console.log(
-							`[Org Guard] User ${user.id} has no subscription, denying org creation`,
-						);
-						return false;
-					}
-
-					if (
-						subscription.status !== "active" &&
-						subscription.status !== "trialing"
-					) {
-						console.log(
-							`[Org Guard] User ${user.id} subscription is ${subscription.status} (stripeSubId: ${subscription.stripeSubscriptionId}), denying org creation`,
-						);
-						return false;
-					}
-
-					// Resolve organization limit based on plan type
-					let maxOrganizations: number;
-
-					if (subscription.plan === "enterprise" && subscription.licenseId) {
-						// Enterprise license: fetch limits from the license record
-						const license = await env.DB.prepare(
-							`SELECT max_organizations FROM enterprise_licenses WHERE id = ? AND status = 'active'`,
 						)
-							.bind(subscription.licenseId)
-							.first<{ max_organizations: number }>();
+							.bind(user.id)
+							.first<{
+								plan: string;
+								status: string;
+								stripeSubscriptionId: string | null;
+								licenseId: string | null;
+							}>();
 
-						// 0 means unlimited
-						maxOrganizations = license?.max_organizations ?? 0;
 						console.log(
-							`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
+							`[Org Guard] User ${user.id} subscription lookup:`,
+							subscription,
 						);
-					} else {
-						// Stripe plan: use hardcoded PLAN_LIMITS
-						const limits = PLAN_LIMITS[subscription.plan as PlanName];
-						if (!limits) {
+
+						if (!subscription) {
 							console.log(
-								`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+								`[Org Guard] User ${user.id} has no subscription, denying org creation`,
 							);
 							return false;
 						}
-						maxOrganizations = limits.maxOrganizations;
-					}
 
-					// Count organizations owned by user
-					const orgsResult = await env.DB.prepare(
-						`SELECT COUNT(*) as count FROM members WHERE userId = ? AND role = 'owner'`,
-					)
-						.bind(user.id)
-						.first<{ count: number }>();
+						if (
+							subscription.status !== "active" &&
+							subscription.status !== "trialing"
+						) {
+							console.log(
+								`[Org Guard] User ${user.id} subscription is ${subscription.status} (stripeSubId: ${subscription.stripeSubscriptionId}), denying org creation`,
+							);
+							return false;
+						}
 
-					const orgsOwned = orgsResult?.count ?? 0;
+						// Resolve organization limit based on plan type
+						let maxOrganizations: number;
 
-					// 0 means unlimited -- skip limit check
-					if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
+						if (subscription.plan === "enterprise" && subscription.licenseId) {
+							// Enterprise license: fetch limits from the license record
+							const license = await env.DB.prepare(
+								`SELECT max_organizations FROM enterprise_licenses WHERE id = ? AND status = 'active'`,
+							)
+								.bind(subscription.licenseId)
+								.first<{ max_organizations: number }>();
+
+							// 0 means unlimited
+							maxOrganizations = license?.max_organizations ?? 0;
+							console.log(
+								`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
+							);
+						} else {
+							// Stripe plan: use hardcoded PLAN_LIMITS
+							const limits = PLAN_LIMITS[subscription.plan as PlanName];
+							if (!limits) {
+								console.log(
+									`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+								);
+								return false;
+							}
+							maxOrganizations = limits.maxOrganizations;
+						}
+
+						// Count organizations owned by user
+						const orgsResult = await env.DB.prepare(
+							`SELECT COUNT(*) as count FROM members WHERE userId = ? AND role = 'owner'`,
+						)
+							.bind(user.id)
+							.first<{ count: number }>();
+
+						const orgsOwned = orgsResult?.count ?? 0;
+
+						// 0 means unlimited -- skip limit check
+						if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
+							console.log(
+								`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
+							);
+							return false;
+						}
+
 						console.log(
-							`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
+							`[Org Guard] User ${user.id} can create org (${orgsOwned}/${maxOrganizations === 0 ? "unlimited" : maxOrganizations} used)`,
 						);
+						return true;
+					};
+
+					try {
+						return await Promise.race([
+							checkAllowed(),
+							new Promise<false>((resolve) =>
+								setTimeout(() => {
+									console.error(
+										`[Org Guard] Subscription check timed out for user ${user.id}, denying org creation`,
+									);
+									resolve(false);
+								}, 5_000),
+							),
+						]);
+					} catch (error) {
+						Sentry.captureException(error, {
+							tags: { context: "allow-user-create-org" },
+							extra: { userId: user.id },
+						});
 						return false;
 					}
-
-					console.log(
-						`[Org Guard] User ${user.id} can create org (${orgsOwned}/${maxOrganizations === 0 ? "unlimited" : maxOrganizations} used)`,
-					);
-					return true;
 				},
 				// Organization creator gets "owner" role by default
 				creatorRole: "owner",
@@ -764,9 +787,18 @@ export function buildResolvedAuthConfig(
 			expiresIn:
 				resolvedEnv === "production" ? 60 * 60 * 24 * 7 : 60 * 60 * 24 * 14,
 			freshAge: 60 * 15,
+			// Keep D1 as the source of truth for sessions.
+			// When secondaryStorage (KV) is present, Better Auth defaults to storing
+			// sessions ONLY in KV. Setting storeSessionInDatabase: true ensures
+			// sessions are written to both — KV acts as a fast read cache while D1
+			// remains authoritative (important for databaseHooks consistency and for
+			// avoiding KV eventual-consistency misses on get-session).
+			storeSessionInDatabase: true,
 			cookieCache: {
 				enabled: true,
-				strategy: "jwe",
+				// "compact" performs a lightweight HMAC verification on each cached
+				// session read, significantly cheaper than JWE decryption on the Edge.
+				strategy: "compact",
 				// maxAge of 60 seconds ensures:
 				// - Cookie cache expires regularly, forcing DB validation and session refresh
 				// - updateAge (30 min) session refresh logic runs properly
@@ -788,9 +820,9 @@ export function buildResolvedAuthConfig(
 		databaseHooks: {
 			session: {
 				create: {
-					// Auto-select user's first organization when session is created
+					// Auto-select user's first organization when session is created.
 					// This handles existing users who login without going through onboarding
-					// (which would have called setActiveOrganization after org creation)
+					// (which would have called setActiveOrganization after org creation).
 					before: async (session) => {
 						// Skip if session already has an active organization
 						if (session.activeOrganizationId) {
@@ -798,12 +830,19 @@ export function buildResolvedAuthConfig(
 						}
 
 						try {
-							// Find user's first organization membership
-							const memberResult = await env.DB.prepare(
-								`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
-							)
-								.bind(session.userId)
-								.first<{ organizationId: string }>();
+							// 3 s timeout guards against a slow/locked D1 query blocking sign-in.
+							// On timeout we return the session unchanged — the user lands without
+							// an active org set; subsequent navigation handles org selection.
+							const memberResult = await Promise.race([
+								env.DB.prepare(
+									`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
+								)
+									.bind(session.userId)
+									.first<{ organizationId: string }>(),
+								new Promise<null>((resolve) =>
+									setTimeout(() => resolve(null), 3_000),
+								),
+							]);
 
 							if (memberResult?.organizationId) {
 								console.log(
@@ -827,7 +866,7 @@ export function buildResolvedAuthConfig(
 							});
 						}
 
-						// No organization found or error occurred - return session unchanged
+						// No organization found, timeout, or error — return session unchanged
 						return { data: session };
 					},
 				},
@@ -835,38 +874,35 @@ export function buildResolvedAuthConfig(
 			user: {
 				create: {
 					after: async (user: { id: string; email: string; role?: string }) => {
-						// Check if the newly registered user has pending org invitations
-						// If so, promote them from "visitor" to "user" so they can onboard
-						try {
-							const pendingInvite = await env.DB.prepare(
-								`SELECT id FROM invitations
+						// Defer to background so the sign-up response is not blocked by
+						// these D1 queries. Promotion isn't needed in the immediate response —
+						// the user lands on onboarding where org membership is established.
+						executeInBackground(
+							(async () => {
+								// Check if the newly registered user has pending org invitations.
+								// If so, promote them from "visitor" to "user" so they can onboard.
+								const pendingInvite = await env.DB.prepare(
+									`SELECT id FROM invitations
 							 WHERE email = ? AND status = 'pending'
 							 AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))
 							 LIMIT 1`,
-							)
-								.bind(user.email)
-								.first<{ id: string }>();
-
-							if (pendingInvite) {
-								await env.DB.prepare(
-									`UPDATE users SET role = 'user' WHERE id = ? AND role = 'visitor'`,
 								)
-									.bind(user.id)
-									.run();
-								console.log(
-									`[User Create] Auto-promoted user ${user.id} (${user.email}) from visitor to user due to pending invitation ${pendingInvite.id}`,
-								);
-							}
-						} catch (error) {
-							console.error(
-								`[User Create] Error checking pending invitations for ${user.id}:`,
-								error,
-							);
-							Sentry.captureException(error, {
-								tags: { context: "user-create-hook-pending-invite" },
-								extra: { userId: user.id, email: user.email },
-							});
-						}
+									.bind(user.email)
+									.first<{ id: string }>();
+
+								if (pendingInvite) {
+									await env.DB.prepare(
+										`UPDATE users SET role = 'user' WHERE id = ? AND role = 'visitor'`,
+									)
+										.bind(user.id)
+										.run();
+									console.log(
+										`[User Create] Auto-promoted user ${user.id} (${user.email}) from visitor to user due to pending invitation ${pendingInvite.id}`,
+									);
+								}
+							})(),
+							"user-create-pending-invite-check",
+						);
 					},
 				},
 				update: {

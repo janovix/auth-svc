@@ -38,14 +38,19 @@ describe("getBetterAuthContext", () => {
 		expect(context1.auth).toBe(context2.auth);
 	});
 
-	it("creates different instances for different DB instances", async () => {
+	it("reuses the same instance for different DB proxy objects with identical config", async () => {
+		// With the module-level Map keyed by config hash (not by DB object identity),
+		// two requests that arrive with different env.DB proxy objects but the same
+		// configuration share the same cached auth instance. This is the desired
+		// behaviour — it eliminates per-request betterAuth() reconstruction and the
+		// JWKS D1 write-lock contention that caused infinite hangs.
 		const env1 = buildEnv({ DB: {} as D1Database });
 		const env2 = buildEnv({ DB: {} as D1Database });
 
 		const context1 = await getBetterAuthContext(env1);
 		const context2 = await getBetterAuthContext(env2);
 
-		expect(context1.auth).not.toBe(context2.auth);
+		expect(context1.auth).toBe(context2.auth);
 	});
 
 	it("creates different instances for different environments", async () => {
