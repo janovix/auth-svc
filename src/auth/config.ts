@@ -419,9 +419,7 @@ export function buildResolvedAuthConfig(
 				// Organization creation is controlled by subscription limits.
 				// The actual limit check happens in databaseHooks.organization.create.before.
 				allowUserToCreateOrganization: async (user) => {
-					// 5 s timeout guards against slow/locked D1 queries stalling the request.
-					// On timeout we deny creation (false) — the user can simply retry.
-					const checkAllowed = async () => {
+					try {
 						// Check if user has an active subscription with available org slots.
 						// Priority: subscriptions with stripeSubscriptionId (real subs) over placeholders,
 						// then by active/trialing status, then by most recent.
@@ -513,20 +511,6 @@ export function buildResolvedAuthConfig(
 							`[Org Guard] User ${user.id} can create org (${orgsOwned}/${maxOrganizations === 0 ? "unlimited" : maxOrganizations} used)`,
 						);
 						return true;
-					};
-
-					try {
-						return await Promise.race([
-							checkAllowed(),
-							new Promise<false>((resolve) =>
-								setTimeout(() => {
-									console.error(
-										`[Org Guard] Subscription check timed out for user ${user.id}, denying org creation`,
-									);
-									resolve(false);
-								}, 5_000),
-							),
-						]);
 					} catch (error) {
 						Sentry.captureException(error, {
 							tags: { context: "allow-user-create-org" },
@@ -787,13 +771,6 @@ export function buildResolvedAuthConfig(
 			expiresIn:
 				resolvedEnv === "production" ? 60 * 60 * 24 * 7 : 60 * 60 * 24 * 14,
 			freshAge: 60 * 15,
-			// Keep D1 as the source of truth for sessions.
-			// When secondaryStorage (KV) is present, Better Auth defaults to storing
-			// sessions ONLY in KV. Setting storeSessionInDatabase: true ensures
-			// sessions are written to both — KV acts as a fast read cache while D1
-			// remains authoritative (important for databaseHooks consistency and for
-			// avoiding KV eventual-consistency misses on get-session).
-			storeSessionInDatabase: true,
 			cookieCache: {
 				enabled: true,
 				// "compact" performs a lightweight HMAC verification on each cached
@@ -830,19 +807,12 @@ export function buildResolvedAuthConfig(
 						}
 
 						try {
-							// 3 s timeout guards against a slow/locked D1 query blocking sign-in.
-							// On timeout we return the session unchanged — the user lands without
-							// an active org set; subsequent navigation handles org selection.
-							const memberResult = await Promise.race([
-								env.DB.prepare(
-									`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
-								)
-									.bind(session.userId)
-									.first<{ organizationId: string }>(),
-								new Promise<null>((resolve) =>
-									setTimeout(() => resolve(null), 3_000),
-								),
-							]);
+							// Find user's first organization membership
+							const memberResult = await env.DB.prepare(
+								`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
+							)
+								.bind(session.userId)
+								.first<{ organizationId: string }>();
 
 							if (memberResult?.organizationId) {
 								console.log(
@@ -866,7 +836,7 @@ export function buildResolvedAuthConfig(
 							});
 						}
 
-						// No organization found, timeout, or error — return session unchanged
+						// No organization found or error — return session unchanged
 						return { data: session };
 					},
 				},
