@@ -95,9 +95,12 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 }
 
 // Safety-net timeout for auth.handler(). On the Workers paid plan I/O waits have
-// no wall-clock limit, so a stuck D1 query or KV op can hang forever without this.
-// 25 s leaves 5 s headroom before Cloudflare's own 30 s response deadline.
-const AUTH_HANDLER_TIMEOUT_MS = 25_000;
+// no wall-clock limit, so a stuck D1 query can hang forever without this.
+// KV operations have their own 3s internal timeout (kv-storage.ts), so the
+// worst-case scenario is a slow D1 query. 10s gives D1 sufficient headroom
+// while keeping the user-visible hang short. The frontend middleware uses an
+// 8s fetchWithTimeout anyway, so anything over 8s only affects direct API callers.
+const AUTH_HANDLER_TIMEOUT_MS = 10_000;
 
 async function handleAuthRequest(
 	c: Context<{ Bindings: Bindings }>,
