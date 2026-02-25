@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import {
 	createKVSecondaryStorage,
@@ -115,6 +115,75 @@ describe("KV Secondary Storage", () => {
 
 			await storage.delete("temp:key");
 			expect(await storage.get("temp:key")).toBeNull();
+		});
+	});
+
+	describe("timeout resilience", () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("get returns null when KV hangs past the 3s timeout", async () => {
+			vi.useFakeTimers();
+			// kv.get never resolves
+			mockKV.get.mockReturnValueOnce(new Promise(() => {}));
+
+			const resultPromise = storage.get("session:hanging");
+			// Advance past the 3s KV timeout
+			await vi.advanceTimersByTimeAsync(3_001);
+			const result = await resultPromise;
+
+			expect(result).toBeNull();
+		});
+
+		it("set resolves without throwing when KV hangs past the 3s timeout", async () => {
+			vi.useFakeTimers();
+			// kv.put never resolves
+			mockKV.put.mockReturnValueOnce(new Promise(() => {}));
+
+			const setPromise = storage.set("rate-limit:ip", "1", 60);
+			await vi.advanceTimersByTimeAsync(3_001);
+
+			await expect(setPromise).resolves.toBeUndefined();
+		});
+
+		it("delete resolves without throwing when KV hangs past the 3s timeout", async () => {
+			vi.useFakeTimers();
+			// kv.delete never resolves
+			mockKV.delete.mockReturnValueOnce(new Promise(() => {}));
+
+			const deletePromise = storage.delete("session:stale");
+			await vi.advanceTimersByTimeAsync(3_001);
+
+			await expect(deletePromise).resolves.toBeUndefined();
+		});
+
+		it("get resolves immediately when KV responds before the timeout", async () => {
+			vi.useFakeTimers();
+			// kv.get resolves quickly (within 3s)
+			mockKV.get.mockResolvedValueOnce("fast-value" as string | null);
+
+			const resultPromise = storage.get("session:fast");
+			// Advance only 100ms — well under the 3s timeout
+			await vi.advanceTimersByTimeAsync(100);
+			const result = await resultPromise;
+
+			expect(result).toBe("fast-value");
+		});
+
+		it("subsequent operations succeed normally after a previous KV timeout", async () => {
+			vi.useFakeTimers();
+
+			// First get: KV hangs — times out after 3s
+			mockKV.get.mockReturnValueOnce(new Promise(() => {}));
+			const firstPromise = storage.get("session:slow");
+			await vi.advanceTimersByTimeAsync(3_001);
+			expect(await firstPromise).toBeNull();
+
+			// Second get: KV responds normally
+			vi.useRealTimers();
+			mockKV.get.mockResolvedValueOnce("healthy-value" as string | null);
+			expect(await storage.get("session:healthy")).toBe("healthy-value");
 		});
 	});
 
