@@ -40,10 +40,11 @@ export function withD1Session(db: D1Database): D1Database {
 
 	return new Proxy(db, {
 		get(target, prop: string | symbol) {
+			// D1DatabaseSession only exposes prepare() and batch().
+			// exec(), dump(), withSession() and any future additions fall through
+			// to the original db so they reach the primary as intended.
 			if (prop === "prepare") return session.prepare.bind(session);
 			if (prop === "batch") return session.batch.bind(session);
-			if (prop === "exec") return session.exec.bind(session);
-			// dump/withSession/toString and any future additions fall through
 			return target[prop as keyof D1Database];
 		},
 	});
