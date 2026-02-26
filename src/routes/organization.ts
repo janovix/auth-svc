@@ -2,6 +2,7 @@
  * Organization routes - Organization-related endpoints
  *
  * These routes handle:
+ * - List organizations with current user's role (single query, no N+1)
  * - Invitation lookup by ID (for email links)
  * - Seat count updates after member changes
  */
@@ -20,6 +21,82 @@ type OrganizationBindings = {
 };
 
 const organizationRoutes = new Hono<OrganizationBindings>();
+
+/**
+ * GET /api/organization/list-with-role
+ * Returns all organizations the authenticated user belongs to, each enriched
+ * with the user's membership role. Uses a single indexed JOIN instead of the
+ * N+1 pattern of calling /api/auth/organization/list + list-members per org.
+ *
+ * Response: { success: true, data: Array<OrgWithRole> }
+ */
+organizationRoutes.get("/list-with-role", async (c) => {
+	try {
+		const { auth } = await getBetterAuthContext(c.env);
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+
+		if (!session?.user) {
+			return c.json({ success: false, error: "Unauthorized" }, 401);
+		}
+
+		const rows = await c.env.DB.prepare(
+			`SELECT
+				o.id,
+				o.name,
+				o.slug,
+				o.logo,
+				o.metadata,
+				o.createdAt,
+				o.updatedAt,
+				m.id        AS memberId,
+				m.role      AS role,
+				m.createdAt AS memberSince
+			FROM members m
+			JOIN organizations o ON m.organizationId = o.id
+			WHERE m.userId = ?
+			ORDER BY o.createdAt DESC`,
+		)
+			.bind(session.user.id)
+			.all<{
+				id: string;
+				name: string;
+				slug: string;
+				logo: string | null;
+				metadata: string | null;
+				createdAt: string;
+				updatedAt: string;
+				memberId: string;
+				role: string;
+				memberSince: string;
+			}>();
+
+		const data = rows.results.map((row) => ({
+			id: row.id,
+			name: row.name,
+			slug: row.slug,
+			logo: row.logo ?? null,
+			metadata: row.metadata ? JSON.parse(row.metadata) : null,
+			createdAt: row.createdAt,
+			updatedAt: row.updatedAt,
+			memberId: row.memberId,
+			role: row.role,
+			memberSince: row.memberSince,
+		}));
+
+		return c.json({ success: true, data });
+	} catch (error) {
+		console.error(
+			"[Organization] Error fetching organizations with role:",
+			error,
+		);
+		return c.json(
+			{ success: false, error: "Failed to fetch organizations" },
+			500,
+		);
+	}
+});
 
 /**
  * GET /api/organization/invitation/:invitationId
