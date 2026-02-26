@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/janovix/auth-svc/compare/v1.6.2...v1.7.0) (2026-02-26)
+
+
+### Features
+
+* **organization:** add endpoint to list organizations with user roles ([2dd6886](https://github.com/janovix/auth-svc/commit/2dd688689bba2572d9794e6fdf368090f7f99fb3))
+
 # [1.7.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.6.2-rc.1...v1.7.0-rc.1) (2026-02-26)
 
 
