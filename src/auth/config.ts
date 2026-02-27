@@ -29,18 +29,18 @@ import { executeInBackground, getExecutionContext } from "./execution-context";
 // - All per-month metrics: Metered billing via Stripe Usage Records
 // - usersPerOrg: Seat-based billing via Stripe subscription quantity
 // - Seats are aggregated across all owned organizations (per-org calculation)
-// - watchlistQueriesPerDay: Per user per day limit for watchlist queries
+// - watchlistQueriesPerMonth: Per-organization monthly limit for watchlist queries
 
 export const PLAN_LIMITS = {
 	watchlist: {
 		maxOrganizations: 1,
-		usersPerOrg: 3,
+		usersPerOrg: 1,
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,
 		operationsPerMonth: 0,
 		clientsPerMonth: 0,
-		watchlistQueriesPerDay: 50,
+		watchlistQueriesPerMonth: 50,
 	},
 	business: {
 		maxOrganizations: 1,
@@ -50,7 +50,7 @@ export const PLAN_LIMITS = {
 		alertsPerMonth: 20,
 		operationsPerMonth: 50,
 		clientsPerMonth: 25,
-		watchlistQueriesPerDay: 50,
+		watchlistQueriesPerMonth: 100,
 	},
 	pro: {
 		maxOrganizations: 3,
@@ -60,7 +60,7 @@ export const PLAN_LIMITS = {
 		alertsPerMonth: 100,
 		operationsPerMonth: 500,
 		clientsPerMonth: 250,
-		watchlistQueriesPerDay: 200,
+		watchlistQueriesPerMonth: 600,
 	},
 	ultra: {
 		maxOrganizations: 10,
@@ -70,7 +70,7 @@ export const PLAN_LIMITS = {
 		alertsPerMonth: 500,
 		operationsPerMonth: 2000,
 		clientsPerMonth: 1000,
-		watchlistQueriesPerDay: 500,
+		watchlistQueriesPerMonth: 1000,
 	},
 } as const;
 

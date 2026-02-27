@@ -37,7 +37,7 @@ export interface UsageRightsLimits {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
-	watchlistQueriesPerDay: number;
+	watchlistQueriesPerMonth: number;
 }
 
 /**
@@ -55,6 +55,9 @@ export type Entitlement =
 			type: "stripe";
 			ownerUserId: string;
 			subscriptionPlan: string;
+			/** Stripe billing period dates for monthly usage aggregation */
+			periodStart: Date | null;
+			periodEnd: Date | null;
 			limits: UsageRightsLimits;
 	  }
 	| {
@@ -101,6 +104,6 @@ export interface EntitlementResponse {
 		operationsUsed: number;
 		clientsUsed: number;
 		usersCount: number;
-		watchlistQueriesUsedToday: number;
+		watchlistQueriesUsedThisMonth: number;
 	} | null;
 }

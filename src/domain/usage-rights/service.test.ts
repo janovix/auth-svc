@@ -32,7 +32,7 @@ const mockLicense: EnterpriseLicense = {
 	alertsPerMonth: 100,
 	operationsPerMonth: 500,
 	clientsPerMonth: 200,
-	watchlistQueriesPerDay: 1000,
+	watchlistQueriesPerMonth: 1000,
 	metadata: null,
 	createdAt: new Date("2024-01-01"),
 	updatedAt: new Date("2024-01-01"),
@@ -46,7 +46,7 @@ const mockStripeLimits = {
 	alertsPerMonth: 250,
 	operationsPerMonth: 1500,
 	clientsPerMonth: 300,
-	watchlistQueriesPerDay: 200,
+	watchlistQueriesPerMonth: 200,
 };
 
 const mockPlan = {
@@ -79,6 +79,7 @@ describe("UsageRightsService", () => {
 		getUserSubscription: ReturnType<typeof vi.fn>;
 		getOrganizationUsage: ReturnType<typeof vi.fn>;
 		getDailyUsage: ReturnType<typeof vi.fn>;
+		getMonthlyWatchlistQueriesUsed: ReturnType<typeof vi.fn>;
 		incrementMonthlyUsage: ReturnType<typeof vi.fn>;
 		incrementDailyWatchlistQueries: ReturnType<typeof vi.fn>;
 		countOrganizationsOwned: ReturnType<typeof vi.fn>;
@@ -114,6 +115,7 @@ describe("UsageRightsService", () => {
 			getUserSubscription: vi.fn(),
 			getOrganizationUsage: vi.fn(),
 			getDailyUsage: vi.fn(),
+			getMonthlyWatchlistQueriesUsed: vi.fn().mockResolvedValue(0),
 			incrementMonthlyUsage: vi.fn(),
 			incrementDailyWatchlistQueries: vi.fn(),
 			countOrganizationsOwned: vi.fn(),
@@ -174,7 +176,7 @@ describe("UsageRightsService", () => {
 					usersPerOrg: 10,
 					reportsPerMonth: 50,
 					noticesPerMonth: 20,
-					watchlistQueriesPerDay: 1000,
+					watchlistQueriesPerMonth: 1000,
 				},
 			});
 			expect(mockUsageRightsRepo.getUserSubscription).not.toHaveBeenCalled();
@@ -366,14 +368,12 @@ describe("UsageRightsService", () => {
 			});
 		});
 
-		it("returns allowed=true for watchlistQueries when within daily limit", async () => {
+		it("returns allowed=true for watchlistQueries when within monthly limit", async () => {
 			mockUsageRightsRepo.getOrganizationOwnerUserId.mockResolvedValue(
 				OWNER_ID,
 			);
 			mockUsageRightsRepo.getLicenseByUserId.mockResolvedValue(mockLicense);
-			mockUsageRightsRepo.getDailyUsage.mockResolvedValue({
-				watchlistQueriesUsed: 500,
-			});
+			mockUsageRightsRepo.getMonthlyWatchlistQueriesUsed.mockResolvedValue(500);
 
 			const result = await service.checkRight(ORG_ID, "watchlistQueries");
 
@@ -527,20 +527,19 @@ describe("UsageRightsService", () => {
 			);
 		});
 
-		it("does NOT call ensureOrganizationUsage for watchlistQueries", async () => {
+		it("calls ensureOrganizationUsage for watchlistQueries and increments daily row", async () => {
 			mockUsageRightsRepo.getOrganizationOwnerUserId.mockResolvedValue(
 				OWNER_ID,
 			);
 			mockUsageRightsRepo.getLicenseByUserId.mockResolvedValue(mockLicense);
-			mockUsageRightsRepo.getDailyUsage.mockResolvedValue({
-				watchlistQueriesUsed: 100,
-			});
+			mockUsageRightsRepo.getMonthlyWatchlistQueriesUsed.mockResolvedValue(100);
 
 			await service.gateAndMeter(ORG_ID, "watchlistQueries", 1);
 
-			expect(
-				mockUsageRightsRepo.ensureOrganizationUsage,
-			).not.toHaveBeenCalled();
+			expect(mockUsageRightsRepo.ensureOrganizationUsage).toHaveBeenCalledWith(
+				ORG_ID,
+				OWNER_ID,
+			);
 			expect(
 				mockUsageRightsRepo.incrementDailyWatchlistQueries,
 			).toHaveBeenCalledWith(ORG_ID, TODAY, 1);
@@ -676,9 +675,7 @@ describe("UsageRightsService", () => {
 				clientsUsed: 50,
 				usersCount: 3,
 			});
-			mockUsageRightsRepo.getDailyUsage.mockResolvedValue({
-				watchlistQueriesUsed: 250,
-			});
+			mockUsageRightsRepo.getMonthlyWatchlistQueriesUsed.mockResolvedValue(250);
 
 			const result = await service.getEntitlementDetails(ORG_ID);
 
@@ -691,7 +688,7 @@ describe("UsageRightsService", () => {
 				alertsPerMonth: 100,
 				operationsPerMonth: 500,
 				clientsPerMonth: 200,
-				watchlistQueriesPerDay: 1000,
+				watchlistQueriesPerMonth: 1000,
 			});
 			expect(result.usage).toMatchObject({
 				reportsUsed: 10,
@@ -700,7 +697,7 @@ describe("UsageRightsService", () => {
 				operationsUsed: 100,
 				clientsUsed: 50,
 				usersCount: 3,
-				watchlistQueriesUsedToday: 250,
+				watchlistQueriesUsedThisMonth: 250,
 			});
 		});
 

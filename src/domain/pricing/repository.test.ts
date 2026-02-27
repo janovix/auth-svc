@@ -229,7 +229,7 @@ describe("PricingRepository", () => {
 				alerts_per_month: 0,
 				operations_per_month: 0,
 				clients_per_month: 0,
-				watchlist_queries_per_day: 0,
+				watchlist_queries_per_month: 0,
 				metadata: null,
 				created_at: "2024-01-01T00:00:00Z",
 				updated_at: "2024-01-01T00:00:00Z",

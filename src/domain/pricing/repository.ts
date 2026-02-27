@@ -517,7 +517,7 @@ export class PricingRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -548,7 +548,7 @@ export class PricingRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -567,7 +567,7 @@ export class PricingRepository {
 
 		await this.db
 			.prepare(
-				`INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+				`INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_month, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(plan_id) DO UPDATE SET
 				   max_organizations = excluded.max_organizations,
@@ -577,7 +577,7 @@ export class PricingRepository {
 				   alerts_per_month = excluded.alerts_per_month,
 				   operations_per_month = excluded.operations_per_month,
 				   clients_per_month = excluded.clients_per_month,
-				   watchlist_queries_per_day = excluded.watchlist_queries_per_day,
+				   watchlist_queries_per_month = excluded.watchlist_queries_per_month,
 				   updated_at = excluded.updated_at`,
 			)
 			.bind(
@@ -590,7 +590,7 @@ export class PricingRepository {
 				input.alertsPerMonth ?? 50,
 				input.operationsPerMonth ?? 250,
 				input.clientsPerMonth ?? 50,
-				input.watchlistQueriesPerDay ?? 0,
+				input.watchlistQueriesPerMonth ?? 0,
 				now,
 				now,
 			)
@@ -629,7 +629,7 @@ export class PricingRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -663,7 +663,7 @@ export class PricingRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -702,7 +702,7 @@ export class PricingRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -721,7 +721,7 @@ export class PricingRepository {
 
 		await this.db
 			.prepare(
-				`INSERT INTO enterprise_licenses (id, key, organization_name, issued_by, notes, status, expires_at, max_organizations, max_users, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+				`INSERT INTO enterprise_licenses (id, key, organization_name, issued_by, notes, status, expires_at, max_organizations, max_users, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_month, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
@@ -738,7 +738,7 @@ export class PricingRepository {
 				input.alertsPerMonth ?? 0,
 				input.operationsPerMonth ?? 0,
 				input.clientsPerMonth ?? 0,
-				input.watchlistQueriesPerDay ?? 0,
+				input.watchlistQueriesPerMonth ?? 0,
 				now,
 				now,
 			)
@@ -863,7 +863,7 @@ export class PricingRepository {
 		alerts_per_month: number;
 		operations_per_month: number;
 		clients_per_month: number;
-		watchlist_queries_per_day: number;
+		watchlist_queries_per_month: number;
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
@@ -878,7 +878,7 @@ export class PricingRepository {
 			alertsPerMonth: result.alerts_per_month,
 			operationsPerMonth: result.operations_per_month,
 			clientsPerMonth: result.clients_per_month,
-			watchlistQueriesPerDay: result.watchlist_queries_per_day,
+			watchlistQueriesPerMonth: result.watchlist_queries_per_month,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
 			createdAt: new Date(result.created_at),
 			updatedAt: new Date(result.updated_at),
@@ -902,7 +902,7 @@ export class PricingRepository {
 		alerts_per_month: number;
 		operations_per_month: number;
 		clients_per_month: number;
-		watchlist_queries_per_day: number;
+		watchlist_queries_per_month: number;
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
@@ -929,7 +929,7 @@ export class PricingRepository {
 			alertsPerMonth: result.alerts_per_month,
 			operationsPerMonth: result.operations_per_month,
 			clientsPerMonth: result.clients_per_month,
-			watchlistQueriesPerDay: result.watchlist_queries_per_day,
+			watchlistQueriesPerMonth: result.watchlist_queries_per_month,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
 			createdAt: new Date(result.created_at),
 			updatedAt: new Date(result.updated_at),

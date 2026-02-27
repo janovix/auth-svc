@@ -384,7 +384,7 @@ model PlanLimit {
   alertsPerMonth   Int      @default(50) @map("alerts_per_month")
   operationsPerMonth Int  @default(250) @map("operations_per_month")
   clientsPerMonth  Int      @default(50) @map("clients_per_month")
-  watchlistQueriesPerDay Int @default(0) @map("watchlist_queries_per_day")
+  watchlistQueriesPerMonth Int @default(0) @map("watchlist_queries_per_month")
   metadata         String? // JSON for additional limits
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -438,7 +438,7 @@ model EnterpriseLicense {
   alertsPerMonth         Int       @default(0) @map("alerts_per_month")
   operationsPerMonth     Int       @default(0) @map("operations_per_month")
   clientsPerMonth        Int       @default(0) @map("clients_per_month")
-  watchlistQueriesPerDay Int       @default(0) @map("watchlist_queries_per_day")
+  watchlistQueriesPerMonth Int     @default(0) @map("watchlist_queries_per_month")
   metadata               String? // JSON for extensibility
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
