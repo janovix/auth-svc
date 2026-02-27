@@ -1,9 +1,18 @@
-# [1.7.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.7.0-rc.1...v1.7.0-rc.2) (2026-02-27)
+# [1.7.0](https://github.com/janovix/auth-svc/compare/v1.6.2...v1.7.0) (2026-02-26)
 
 
 ### Features
 
 * **pricing:** transition from daily to monthly tracking for watchlist queries ([01ffcac](https://github.com/janovix/auth-svc/commit/01ffcac893d7e5d19a22cb1847fbb4f88d3c3691))
+
+
+# [1.7.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.7.0-rc.1...v1.7.0-rc.2) (2026-02-27)
+
+
+### Features
+
+* **organization:** add endpoint to list organizations with user roles ([2dd6886](https://github.com/janovix/auth-svc/commit/2dd688689bba2572d9794e6fdf368090f7f99fb3))
+
 
 # [1.7.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.6.2-rc.1...v1.7.0-rc.1) (2026-02-26)
 
