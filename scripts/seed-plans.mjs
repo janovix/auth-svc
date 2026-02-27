@@ -68,7 +68,7 @@ const STRIPE_IDS = {
 	// Development environment
 	dev: {
 		watchlist: {
-			subscription: "price_placeholder_dev_watchlist_subscription",
+			subscription: "price_1SpaSPA9qUPmowPeyC25PZwM",
 			seat: "price_1SpHLEA9qUPmowPe7eb7yxwP",
 		},
 		business: {
@@ -256,19 +256,19 @@ const PLANS = [
 // PLAN LIMITS (shared across all environments)
 // =============================================================================
 
-// Plan limits aligned with business pricing model (January 2026)
-// See pricing documentation for details on upgrade incentives
-// - watchlistQueriesPerDay: Per user per day limit for watchlist queries
+// Plan limits aligned with business pricing model (February 2026)
+// - watchlistQueriesPerMonth: Per-organization monthly limit for watchlist queries
+//   Monthly total is computed by SUMming organization_daily_usage within the billing period.
 const PLAN_LIMITS = {
 	watchlist: {
 		maxOrganizations: 1,
-		usersPerOrg: 3,
+		usersPerOrg: 1,
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,
 		operationsPerMonth: 0,
 		clientsPerMonth: 0,
-		watchlistQueriesPerDay: 50,
+		watchlistQueriesPerMonth: 50,
 	},
 	business: {
 		maxOrganizations: 1,
@@ -278,7 +278,7 @@ const PLAN_LIMITS = {
 		alertsPerMonth: 20,
 		operationsPerMonth: 50,
 		clientsPerMonth: 25,
-		watchlistQueriesPerDay: 50,
+		watchlistQueriesPerMonth: 100,
 	},
 	pro: {
 		maxOrganizations: 3,
@@ -288,7 +288,7 @@ const PLAN_LIMITS = {
 		alertsPerMonth: 100,
 		operationsPerMonth: 500,
 		clientsPerMonth: 250,
-		watchlistQueriesPerDay: 200,
+		watchlistQueriesPerMonth: 600,
 	},
 	ultra: {
 		maxOrganizations: 10,
@@ -298,7 +298,7 @@ const PLAN_LIMITS = {
 		alertsPerMonth: 500,
 		operationsPerMonth: 2000,
 		clientsPerMonth: 1000,
-		watchlistQueriesPerDay: 500,
+		watchlistQueriesPerMonth: 1000,
 	},
 };
 
@@ -634,7 +634,7 @@ ON CONFLICT(id) DO UPDATE SET
 	for (const plan of PLANS) {
 		const limits = PLAN_LIMITS[plan.name];
 		// Using simple INSERT since we DELETE first (avoids UNIQUE constraint issues)
-		sql += `INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_day, created_at, updated_at)
+		sql += `INSERT INTO plan_limits (id, plan_id, max_organizations, users_per_org, reports_per_month, notices_per_month, alerts_per_month, operations_per_month, clients_per_month, watchlist_queries_per_month, created_at, updated_at)
 VALUES (
     ${escapeSqlString(`limit_${plan.name}`)},
     ${escapeSqlString(plan.id)},
@@ -645,7 +645,7 @@ VALUES (
     ${limits.alertsPerMonth},
     ${limits.operationsPerMonth},
     ${limits.clientsPerMonth},
-    ${limits.watchlistQueriesPerDay},
+    ${limits.watchlistQueriesPerMonth},
     datetime('now'),
     datetime('now')
 );
@@ -784,7 +784,7 @@ Plans created/updated:`);
 				);
 				console.log(`     - Clients/mo: ${limits.clientsPerMonth}`);
 				console.log(
-					`     - Watchlist queries/day: ${limits.watchlistQueriesPerDay}`,
+					`     - Watchlist queries/mo: ${limits.watchlistQueriesPerMonth}`,
 				);
 			}
 

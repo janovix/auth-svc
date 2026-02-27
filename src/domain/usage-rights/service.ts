@@ -37,7 +37,7 @@ function licenseToPlanLimits(license: EnterpriseLicense): UsageRightsLimits {
 		alertsPerMonth: license.alertsPerMonth,
 		operationsPerMonth: license.operationsPerMonth,
 		clientsPerMonth: license.clientsPerMonth,
-		watchlistQueriesPerDay: license.watchlistQueriesPerDay,
+		watchlistQueriesPerMonth: license.watchlistQueriesPerMonth,
 	};
 }
 
@@ -89,7 +89,7 @@ function metricToLimitField(
 		operations: "operationsPerMonth",
 		clients: "clientsPerMonth",
 		users: "usersPerOrg",
-		watchlistQueries: "watchlistQueriesPerDay",
+		watchlistQueries: "watchlistQueriesPerMonth",
 		organizations: "maxOrganizations",
 	};
 	return mapping[metric] ?? null;
@@ -148,6 +148,8 @@ export class UsageRightsService {
 					type: "stripe",
 					subscriptionPlan: subscription.plan,
 					ownerUserId,
+					periodStart: subscription.periodStart,
+					periodEnd: subscription.periodEnd,
 					limits: {
 						maxOrganizations: effectiveLimits.maxOrganizations,
 						usersPerOrg: effectiveLimits.usersPerOrg,
@@ -156,7 +158,7 @@ export class UsageRightsService {
 						alertsPerMonth: effectiveLimits.alertsPerMonth,
 						operationsPerMonth: effectiveLimits.operationsPerMonth,
 						clientsPerMonth: effectiveLimits.clientsPerMonth,
-						watchlistQueriesPerDay: effectiveLimits.watchlistQueriesPerDay,
+						watchlistQueriesPerMonth: effectiveLimits.watchlistQueriesPerMonth,
 					},
 				};
 			}
@@ -200,7 +202,9 @@ export class UsageRightsService {
 		}
 
 		const limit = entitlement.limits[limitField];
-		const used = await this.getUsedForMetric(orgId, metric);
+		const billingPeriod =
+			metric === "watchlistQueries" ? this.getBillingPeriod(entitlement) : null;
+		const used = await this.getUsedForMetric(orgId, metric, billingPeriod);
 
 		const allowed = isWithinLimit(used, limit);
 		const remaining = limit === 0 ? -1 : Math.max(0, limit - used);
@@ -218,6 +222,9 @@ export class UsageRightsService {
 	/**
 	 * Post-action: increment the usage meter for a metric.
 	 * Does NOT check limits.
+	 *
+	 * Watchlist queries are stored as daily rows in organization_daily_usage.
+	 * Monthly totals are computed by SUMming within the billing period.
 	 */
 	async recordUsage(
 		orgId: string,
@@ -225,6 +232,7 @@ export class UsageRightsService {
 		count: number = 1,
 	): Promise<void> {
 		if (metric === "watchlistQueries") {
+			// Store daily for granularity; monthly total is computed via SUM
 			const today = getTodayDateString();
 			await this.repository.incrementDailyWatchlistQueries(orgId, today, count);
 		} else if (metric !== "organizations") {
@@ -270,15 +278,19 @@ export class UsageRightsService {
 
 		const limit = entitlement.limits[limitField];
 
-		// Ensure organization_usage record exists for monthly metrics
-		if (metric !== "watchlistQueries" && metric !== "organizations") {
+		// Ensure organization_usage record exists for all metered metrics
+		if (metric !== "organizations") {
 			await this.repository.ensureOrganizationUsage(
 				orgId,
 				entitlement.ownerUserId,
 			);
 		}
 
-		const used = await this.getUsedForMetric(orgId, metric);
+		// Resolve billing period for watchlist monthly SUM
+		const billingPeriod =
+			metric === "watchlistQueries" ? this.getBillingPeriod(entitlement) : null;
+
+		const used = await this.getUsedForMetric(orgId, metric, billingPeriod);
 
 		if (!isWithinLimit(used, limit)) {
 			return {
@@ -336,8 +348,13 @@ export class UsageRightsService {
 		const entitlement = await this.resolveEntitlement(orgId);
 
 		const usage = await this.repository.getOrganizationUsage(orgId);
-		const today = getTodayDateString();
-		const dailyUsage = await this.repository.getDailyUsage(orgId, today);
+		const billingPeriod = this.getBillingPeriod(entitlement);
+		const watchlistQueriesUsedThisMonth =
+			await this.repository.getMonthlyWatchlistQueriesUsed(
+				orgId,
+				billingPeriod.start,
+				billingPeriod.end,
+			);
 
 		return {
 			type: entitlement.type,
@@ -345,7 +362,7 @@ export class UsageRightsService {
 			usage: usage
 				? {
 						...usage,
-						watchlistQueriesUsedToday: dailyUsage?.watchlistQueriesUsed ?? 0,
+						watchlistQueriesUsedThisMonth,
 					}
 				: null,
 		};
@@ -394,16 +411,56 @@ export class UsageRightsService {
 	// =========================================================================
 
 	/**
-	 * Get current usage for a metric
+	 * Derive the billing period (YYYY-MM-DD strings) from the entitlement.
+	 * For Stripe subscriptions, uses the subscription's period start/end.
+	 * For licenses and fallback, uses the current calendar month.
+	 */
+	private getBillingPeriod(entitlement: {
+		type: string;
+		periodStart?: Date | null;
+		periodEnd?: Date | null;
+	}): { start: string; end: string } {
+		if (
+			entitlement.type === "stripe" &&
+			entitlement.periodStart &&
+			entitlement.periodEnd
+		) {
+			return {
+				start: entitlement.periodStart.toISOString().split("T")[0],
+				end: entitlement.periodEnd.toISOString().split("T")[0],
+			};
+		}
+		// License or unknown: use current calendar month
+		const now = new Date();
+		const year = now.getUTCFullYear();
+		const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+		const lastDay = new Date(Date.UTC(year, now.getUTCMonth() + 1, 0))
+			.getUTCDate()
+			.toString()
+			.padStart(2, "0");
+		return {
+			start: `${year}-${month}-01`,
+			end: `${year}-${month}-${lastDay}`,
+		};
+	}
+
+	/**
+	 * Get current usage for a metric.
+	 * billingPeriod is required for watchlistQueries to SUM within the period.
 	 */
 	private async getUsedForMetric(
 		orgId: string,
 		metric: UsageMetric,
+		billingPeriod?: { start: string; end: string } | null,
 	): Promise<number> {
 		if (metric === "watchlistQueries") {
-			const today = getTodayDateString();
-			const daily = await this.repository.getDailyUsage(orgId, today);
-			return daily?.watchlistQueriesUsed ?? 0;
+			// Sum all daily rows within the billing period
+			const period = billingPeriod ?? this.getBillingPeriod({ type: "none" });
+			return this.repository.getMonthlyWatchlistQueriesUsed(
+				orgId,
+				period.start,
+				period.end,
+			);
 		}
 
 		if (metric === "organizations") {

@@ -29,7 +29,7 @@ export interface LegacyPlanLimits {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
-	watchlistQueriesPerDay: number;
+	watchlistQueriesPerMonth: number;
 }
 
 export class PricingService {
@@ -139,7 +139,7 @@ export class PricingService {
 							alertsPerMonth: limits.alertsPerMonth,
 							operationsPerMonth: limits.operationsPerMonth,
 							clientsPerMonth: limits.clientsPerMonth,
-							watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+							watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 						}
 					: null,
 				prices: prices.map((price) => ({
@@ -180,7 +180,7 @@ export class PricingService {
 						alertsPerMonth: limits.alertsPerMonth,
 						operationsPerMonth: limits.operationsPerMonth,
 						clientsPerMonth: limits.clientsPerMonth,
-						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+						watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 					}
 				: null,
 			prices: prices.map((price) => ({
@@ -215,7 +215,7 @@ export class PricingService {
 			alertsPerMonth: limits.alertsPerMonth,
 			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
-			watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+			watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 		};
 	}
 
@@ -439,7 +439,7 @@ export class PricingService {
 				alertsPerMonth: license.alertsPerMonth,
 				operationsPerMonth: license.operationsPerMonth,
 				clientsPerMonth: license.clientsPerMonth,
-				watchlistQueriesPerDay: license.watchlistQueriesPerDay,
+				watchlistQueriesPerMonth: license.watchlistQueriesPerMonth,
 				source: "license",
 				planName: "enterprise",
 			};
@@ -460,7 +460,7 @@ export class PricingService {
 			alertsPerMonth: limits.alertsPerMonth,
 			operationsPerMonth: limits.operationsPerMonth,
 			clientsPerMonth: limits.clientsPerMonth,
-			watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+			watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 			source: "plan",
 			planName: plan.name,
 		};
@@ -484,7 +484,7 @@ export class PricingService {
 			alertsPerMonth: license.alertsPerMonth,
 			operationsPerMonth: license.operationsPerMonth,
 			clientsPerMonth: license.clientsPerMonth,
-			watchlistQueriesPerDay: license.watchlistQueriesPerDay,
+			watchlistQueriesPerMonth: license.watchlistQueriesPerMonth,
 			source: "license",
 			planName: "enterprise",
 		};

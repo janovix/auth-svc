@@ -65,7 +65,7 @@ export interface PlanLimits {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
-	watchlistQueriesPerDay: number;
+	watchlistQueriesPerMonth: number;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -92,7 +92,7 @@ export interface EnterpriseLicense {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
-	watchlistQueriesPerDay: number;
+	watchlistQueriesPerMonth: number;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -124,7 +124,7 @@ export interface PublicPlanInfo {
 		alertsPerMonth: number;
 		operationsPerMonth: number;
 		clientsPerMonth: number;
-		watchlistQueriesPerDay: number;
+		watchlistQueriesPerMonth: number;
 	} | null;
 	prices: Array<{
 		priceType: PriceType;
@@ -146,7 +146,7 @@ export interface EffectiveLimits {
 	alertsPerMonth: number;
 	operationsPerMonth: number;
 	clientsPerMonth: number;
-	watchlistQueriesPerDay: number;
+	watchlistQueriesPerMonth: number;
 	source: "plan" | "license";
 	planName: string;
 }
@@ -175,7 +175,7 @@ export interface CreatePlanLimitsInput {
 	alertsPerMonth?: number;
 	operationsPerMonth?: number;
 	clientsPerMonth?: number;
-	watchlistQueriesPerDay?: number;
+	watchlistQueriesPerMonth?: number;
 }
 
 /**
@@ -209,5 +209,5 @@ export interface CreateLicenseInput {
 	alertsPerMonth?: number;
 	operationsPerMonth?: number;
 	clientsPerMonth?: number;
-	watchlistQueriesPerDay?: number;
+	watchlistQueriesPerMonth?: number;
 }

@@ -638,7 +638,7 @@ subscriptionRoutes.post("/license/validate", async (c) => {
 						alertsPerMonth: limits.alertsPerMonth,
 						operationsPerMonth: limits.operationsPerMonth,
 						clientsPerMonth: limits.clientsPerMonth,
-						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+						watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 					}
 				: null,
 			isActive: license.status === "active",
@@ -793,7 +793,7 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 						alertsPerMonth: limits.alertsPerMonth,
 						operationsPerMonth: limits.operationsPerMonth,
 						clientsPerMonth: limits.clientsPerMonth,
-						watchlistQueriesPerDay: limits.watchlistQueriesPerDay,
+						watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 					}
 				: null,
 		},

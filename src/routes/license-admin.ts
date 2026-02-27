@@ -42,7 +42,7 @@ const LIMIT_FIELDS = [
 	"alertsPerMonth",
 	"operationsPerMonth",
 	"clientsPerMonth",
-	"watchlistQueriesPerDay",
+	"watchlistQueriesPerMonth",
 ] as const;
 
 type LimitField = (typeof LIMIT_FIELDS)[number];
@@ -95,7 +95,7 @@ licenseAdminRoutes.post("/", async (c) => {
 		alertsPerMonth?: number;
 		operationsPerMonth?: number;
 		clientsPerMonth?: number;
-		watchlistQueriesPerDay?: number;
+		watchlistQueriesPerMonth?: number;
 	}>();
 
 	if (!body.organizationName) {
@@ -121,7 +121,7 @@ licenseAdminRoutes.post("/", async (c) => {
 		alertsPerMonth: body.alertsPerMonth ?? 0,
 		operationsPerMonth: body.operationsPerMonth ?? 0,
 		clientsPerMonth: body.clientsPerMonth ?? 0,
-		watchlistQueriesPerDay: body.watchlistQueriesPerDay ?? 0,
+		watchlistQueriesPerMonth: body.watchlistQueriesPerMonth ?? 0,
 	};
 
 	const license = await repository.createLicense(input);
@@ -198,7 +198,7 @@ licenseAdminRoutes.get("/", async (c) => {
 		alerts_per_month: number;
 		operations_per_month: number;
 		clients_per_month: number;
-		watchlist_queries_per_day: number;
+		watchlist_queries_per_month: number;
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
@@ -223,7 +223,7 @@ licenseAdminRoutes.get("/", async (c) => {
 		alertsPerMonth: r.alerts_per_month,
 		operationsPerMonth: r.operations_per_month,
 		clientsPerMonth: r.clients_per_month,
-		watchlistQueriesPerDay: r.watchlist_queries_per_day,
+		watchlistQueriesPerMonth: r.watchlist_queries_per_month,
 		metadata: r.metadata ? JSON.parse(r.metadata) : null,
 		createdAt: r.created_at,
 		updatedAt: r.updated_at,
@@ -275,7 +275,7 @@ licenseAdminRoutes.get("/:id", async (c) => {
 			alerts_per_month: number;
 			operations_per_month: number;
 			clients_per_month: number;
-			watchlist_queries_per_day: number;
+			watchlist_queries_per_month: number;
 			metadata: string | null;
 			created_at: string;
 			updated_at: string;
@@ -304,7 +304,7 @@ licenseAdminRoutes.get("/:id", async (c) => {
 		alertsPerMonth: row.alerts_per_month,
 		operationsPerMonth: row.operations_per_month,
 		clientsPerMonth: row.clients_per_month,
-		watchlistQueriesPerDay: row.watchlist_queries_per_day,
+		watchlistQueriesPerMonth: row.watchlist_queries_per_month,
 		metadata: row.metadata ? JSON.parse(row.metadata) : null,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
@@ -345,7 +345,7 @@ licenseAdminRoutes.put("/:id", async (c) => {
 		alertsPerMonth?: number;
 		operationsPerMonth?: number;
 		clientsPerMonth?: number;
-		watchlistQueriesPerDay?: number;
+		watchlistQueriesPerMonth?: number;
 	}>();
 
 	// Validate ratchet rule for limit changes
@@ -398,7 +398,7 @@ licenseAdminRoutes.put("/:id", async (c) => {
 				alertsPerMonth: "alerts_per_month",
 				operationsPerMonth: "operations_per_month",
 				clientsPerMonth: "clients_per_month",
-				watchlistQueriesPerDay: "watchlist_queries_per_day",
+				watchlistQueriesPerMonth: "watchlist_queries_per_month",
 			};
 			fields.push(`${columnMap[field]} = ?`);
 			values.push(body[field]!);

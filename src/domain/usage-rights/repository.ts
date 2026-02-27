@@ -60,7 +60,7 @@ export class UsageRightsRepository {
 				alerts_per_month: number;
 				operations_per_month: number;
 				clients_per_month: number;
-				watchlist_queries_per_day: number;
+				watchlist_queries_per_month: number;
 				metadata: string | null;
 				created_at: string;
 				updated_at: string;
@@ -152,7 +152,7 @@ export class UsageRightsRepository {
 	}
 
 	/**
-	 * Get daily usage for an organization (today)
+	 * Get daily usage for an organization on a specific date
 	 */
 	async getDailyUsage(
 		organizationId: string,
@@ -168,6 +168,27 @@ export class UsageRightsRepository {
 
 		if (!result) return null;
 		return { watchlistQueriesUsed: result.watchlist_queries_used };
+	}
+
+	/**
+	 * Get total watchlist queries used within a billing period.
+	 * SUMs daily rows from organization_daily_usage for the given date range (inclusive).
+	 */
+	async getMonthlyWatchlistQueriesUsed(
+		organizationId: string,
+		periodStart: string,
+		periodEnd: string,
+	): Promise<number> {
+		const result = await this.db
+			.prepare(
+				`SELECT COALESCE(SUM(watchlist_queries_used), 0) as total
+				 FROM organization_daily_usage
+				 WHERE organization_id = ? AND date >= ? AND date <= ?`,
+			)
+			.bind(organizationId, periodStart, periodEnd)
+			.first<{ total: number }>();
+
+		return result?.total ?? 0;
 	}
 
 	/**
@@ -299,7 +320,7 @@ export class UsageRightsRepository {
 		alerts_per_month: number;
 		operations_per_month: number;
 		clients_per_month: number;
-		watchlist_queries_per_day: number;
+		watchlist_queries_per_month: number;
 		metadata: string | null;
 		created_at: string;
 		updated_at: string;
@@ -321,7 +342,7 @@ export class UsageRightsRepository {
 			alertsPerMonth: result.alerts_per_month,
 			operationsPerMonth: result.operations_per_month,
 			clientsPerMonth: result.clients_per_month,
-			watchlistQueriesPerDay: result.watchlist_queries_per_day,
+			watchlistQueriesPerMonth: result.watchlist_queries_per_month,
 			metadata: result.metadata ? JSON.parse(result.metadata) : null,
 			createdAt: new Date(result.created_at),
 			updatedAt: new Date(result.updated_at),
