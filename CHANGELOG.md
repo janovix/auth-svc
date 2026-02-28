@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/janovix/auth-svc/compare/v1.8.0...v1.9.0) (2026-02-28)
+
+
+### Features
+
+* **subscription:** add watchlistQueriesPerMonth limit to subscription plans ([745753f](https://github.com/janovix/auth-svc/commit/745753f15d1aec1eeed2460bc3141d151b7f9017))
+
 # [1.8.0](https://github.com/janovix/auth-svc/compare/v1.7.0...v1.8.0) (2026-02-27)
 
 
