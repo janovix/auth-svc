@@ -47,6 +47,7 @@ import {
 	AdminPromoteUserEndpoint,
 } from "./endpoints/admin/openapi";
 import { runWithExecutionContext } from "./auth/execution-context";
+import { createMemberLimitGuard } from "./middleware/member-limit";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { auditRoutes } from "./routes/audit";
@@ -156,6 +157,10 @@ app.get("/docsz", (c) => {
 // for the JWKS endpoint, making it immune to intermittent D1 slowdowns.
 // See src/routes/jwks.ts for details.
 app.get("/api/auth/jwks", handleJwks);
+
+// Guard member invitations against plan usersPerOrg limits.
+// Must be registered BEFORE registerBetterAuthRoutes so the middleware runs first.
+app.use("/api/auth/organization/invite-member", createMemberLimitGuard());
 
 // Register Better Auth routes (actual implementation - handles requests)
 // Must be registered BEFORE OpenAPI documentation routes so they handle requests first

@@ -207,6 +207,7 @@ subscriptionRoutes.get("/usage", async (c) => {
 						operations: limits.operationsPerMonth,
 						clients: limits.clientsPerMonth,
 						users: limits.usersPerOrg,
+						watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
 					}
 				: null,
 			period: {

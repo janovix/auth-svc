@@ -66,6 +66,7 @@ export interface PlanLimits {
 	alertsPerMonth: number; // Metered: overage billed via Stripe
 	operationsPerMonth: number; // Metered: overage billed via Stripe
 	clientsPerMonth: number; // Metered: overage billed via Stripe
+	watchlistQueriesPerMonth: number; // Per-organization monthly limit
 }
 
 /**

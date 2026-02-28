@@ -89,6 +89,7 @@ const businessLimits: PlanLimits = {
 	alertsPerMonth: 25, // 75 used - 25 limit = 50 overage for test
 	operationsPerMonth: 50,
 	clientsPerMonth: 25,
+	watchlistQueriesPerMonth: 100,
 };
 
 // Mock PricingRepository for alert overage tests
@@ -118,6 +119,7 @@ const proLimits: PlanLimits = {
 	alertsPerMonth: 100,
 	operationsPerMonth: 500,
 	clientsPerMonth: 250,
+	watchlistQueriesPerMonth: 600,
 };
 
 // Pro subscription for multi-org tests
@@ -167,6 +169,7 @@ const _enterpriseLimits: PlanLimits = {
 	alertsPerMonth: 1000,
 	operationsPerMonth: 5000,
 	clientsPerMonth: 2000,
+	watchlistQueriesPerMonth: 0,
 };
 
 describe("SubscriptionService", () => {
