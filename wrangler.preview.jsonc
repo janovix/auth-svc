@@ -2,7 +2,7 @@
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_als"],
 	"main": "src/index.ts",
-	"name": "backend-template",
+	"name": "auth-svc-preview",
 	"upload_source_maps": true,
 	"workers_dev": true,
 	"version_metadata": {
