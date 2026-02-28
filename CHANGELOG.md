@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/janovix/auth-svc/compare/v1.7.0...v1.8.0) (2026-02-27)
+
+
+### Features
+
+* **pricing:** transition from daily to monthly tracking for watchlist queries ([01ffcac](https://github.com/janovix/auth-svc/commit/01ffcac893d7e5d19a22cb1847fbb4f88d3c3691))
+
 # [1.8.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.8.0-rc.1...v1.8.0-rc.2) (2026-02-28)
 
 
