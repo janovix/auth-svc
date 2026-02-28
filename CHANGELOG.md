@@ -5,6 +5,20 @@
 
 * **pricing:** transition from daily to monthly tracking for watchlist queries ([01ffcac](https://github.com/janovix/auth-svc/commit/01ffcac893d7e5d19a22cb1847fbb4f88d3c3691))
 
+# [1.8.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.8.0-rc.1...v1.8.0-rc.2) (2026-02-28)
+
+
+### Features
+
+* **subscription:** add watchlistQueriesPerMonth limit to subscription plans ([745753f](https://github.com/janovix/auth-svc/commit/745753f15d1aec1eeed2460bc3141d151b7f9017))
+
+# [1.8.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.7.0...v1.8.0-rc.1) (2026-02-27)
+
+
+### Features
+
+* **pricing:** transition from daily to monthly tracking for watchlist queries ([01ffcac](https://github.com/janovix/auth-svc/commit/01ffcac893d7e5d19a22cb1847fbb4f88d3c3691))
+
 # [1.7.0](https://github.com/janovix/auth-svc/compare/v1.6.2...v1.7.0) (2026-02-26)
 
 

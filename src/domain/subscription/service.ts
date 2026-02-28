@@ -173,6 +173,7 @@ export class SubscriptionService {
 					alertsPerMonth: effectiveLimits.alertsPerMonth,
 					operationsPerMonth: effectiveLimits.operationsPerMonth,
 					clientsPerMonth: effectiveLimits.clientsPerMonth,
+					watchlistQueriesPerMonth: effectiveLimits.watchlistQueriesPerMonth,
 				};
 			}
 		}

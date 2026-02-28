@@ -14,6 +14,8 @@ import {
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
 import { executeInBackground, getExecutionContext } from "./execution-context";
+import { PricingService } from "../domain/pricing/service";
+import { PricingRepository } from "../domain/pricing/repository";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -479,15 +481,29 @@ export function buildResolvedAuthConfig(
 								`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
 							);
 						} else {
-							// Stripe plan: use hardcoded PLAN_LIMITS
-							const limits = PLAN_LIMITS[subscription.plan as PlanName];
-							if (!limits) {
-								console.log(
-									`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
-								);
-								return false;
+							// Stripe plan: resolve limits from database (source of truth).
+							// Fall back to hardcoded PLAN_LIMITS only when the DB lookup fails.
+							const pricingService = new PricingService(
+								new PricingRepository(env.DB),
+							);
+							const dbLimits = await pricingService.getEffectiveLimitsForUser(
+								user.id,
+								subscription.plan,
+							);
+
+							if (dbLimits) {
+								maxOrganizations = dbLimits.maxOrganizations;
+							} else {
+								// DB lookup returned nothing — fall back to hardcoded constant
+								const fallback = PLAN_LIMITS[subscription.plan as PlanName];
+								if (!fallback) {
+									console.log(
+										`[Org Guard] Unknown plan ${subscription.plan} for user ${user.id}, denying org creation`,
+									);
+									return false;
+								}
+								maxOrganizations = fallback.maxOrganizations;
 							}
-							maxOrganizations = limits.maxOrganizations;
 						}
 
 						// Count organizations owned by user
