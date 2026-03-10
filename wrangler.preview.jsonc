@@ -28,10 +28,12 @@
 		{
 			"binding": "AML_SERVICE",
 			"service": "aml-svc",
+			"entrypoint": "AmlSvcEntrypoint",
 		},
 		{
 			"binding": "NOTIFICATIONS_SERVICE",
 			"service": "notifications-svc",
+			"entrypoint": "NotificationsEntrypoint",
 		},
 	],
 	"r2_buckets": [

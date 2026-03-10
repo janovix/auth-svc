@@ -1,21 +1,24 @@
 /**
- * Notifications utility - Reusable functions for sending notifications via notifications-svc
+ * Notifications utility — reusable functions for dispatching notifications
+ * via the notifications-svc RPC entrypoint (Cloudflare Service Binding).
  */
 
+import type { NotificationsRpc } from "../types/bindings";
+
 /**
- * Notification target - either organization-wide or specific user
+ * Notification target — either organization-wide or a specific user.
  */
 export type NotificationTarget =
 	| { kind: "org" }
 	| { kind: "user"; userId: string; email?: string; name?: string };
 
 /**
- * Notification severity levels
+ * Notification severity levels.
  */
 export type NotificationSeverity = "info" | "warn" | "error";
 
 /**
- * Input for sending a notification
+ * Input for sending a notification.
  */
 export interface SendNotificationInput {
 	tenantId: string;
@@ -33,7 +36,7 @@ export interface SendNotificationInput {
 }
 
 /**
- * Result of sending a notification
+ * Result of sending a notification.
  */
 export interface SendNotificationResult {
 	success: boolean;
@@ -42,9 +45,9 @@ export interface SendNotificationResult {
 }
 
 /**
- * Send a notification via the notifications service
+ * Send a notification via the notifications-svc RPC entrypoint.
  *
- * @param notificationsService - The NOTIFICATIONS_SERVICE binding from env
+ * @param notificationsService - The `NOTIFICATIONS_SERVICE` binding from env
  * @param input - Notification details
  * @returns Result with success status and notification ID or error
  *
@@ -63,7 +66,7 @@ export interface SendNotificationResult {
  * ```
  */
 export async function sendNotification(
-	notificationsService: Fetcher | undefined,
+	notificationsService: NotificationsRpc | undefined,
 	input: SendNotificationInput,
 ): Promise<SendNotificationResult> {
 	if (!notificationsService) {
@@ -79,49 +82,26 @@ export async function sendNotification(
 			`[Notifications] Sending notification: ${input.type} to ${input.target.kind} in tenant ${input.tenantId}`,
 		);
 
-		const response = await notificationsService.fetch(
-			new Request("https://notifications-svc/internal/notify", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: "Bearer service-token",
-				},
-				body: JSON.stringify({
-					tenantId: input.tenantId,
-					target: input.target,
-					channelSlug: input.channelSlug,
-					type: input.type,
-					title: input.title,
-					body: input.body,
-					payload: input.payload,
-					severity: input.severity || "info",
-					callbackUrl: input.callbackUrl,
-					sendEmail: input.sendEmail || false,
-					sourceService: input.sourceService,
-					sourceEvent: input.sourceEvent,
-				}),
-			}),
-		);
+		const result = await notificationsService.notify({
+			tenantId: input.tenantId,
+			target: input.target,
+			channelSlug: input.channelSlug,
+			type: input.type,
+			title: input.title,
+			body: input.body,
+			payload: input.payload,
+			severity: input.severity ?? "info",
+			callbackUrl: input.callbackUrl,
+			sendEmail: input.sendEmail ?? false,
+			sourceService: input.sourceService,
+			sourceEvent: input.sourceEvent,
+		});
 
-		const result = await response.json<{
-			success: boolean;
-			data?: { notificationId: string };
-			error?: string;
-		}>();
-
-		console.log(`[Notifications] Dispatch result:`, response.status, result);
-
-		if (!response.ok) {
-			console.error(`[Notifications] Dispatch failed:`, result);
-			return {
-				success: false,
-				error: result.error || "Failed to send notification",
-			};
-		}
+		console.log(`[Notifications] Dispatch result:`, result);
 
 		return {
 			success: true,
-			notificationId: result.data?.notificationId,
+			notificationId: result.notificationId,
 		};
 	} catch (error) {
 		console.error("[Notifications] Failed to send notification:", error);
@@ -152,7 +132,7 @@ export async function sendNotification(
  * ```
  */
 export async function sendOrgNotification(
-	notificationsService: Fetcher | undefined,
+	notificationsService: NotificationsRpc | undefined,
 	orgId: string,
 	notification: Omit<SendNotificationInput, "tenantId" | "target">,
 ): Promise<SendNotificationResult> {
@@ -192,7 +172,7 @@ export async function sendOrgNotification(
  * ```
  */
 export async function sendUserNotification(
-	notificationsService: Fetcher | undefined,
+	notificationsService: NotificationsRpc | undefined,
 	orgId: string,
 	userId: string,
 	notification: Omit<SendNotificationInput, "tenantId" | "target">,

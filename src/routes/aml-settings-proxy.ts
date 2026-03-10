@@ -165,45 +165,8 @@ amlSettingsProxyRoutes.get("/:orgId", async (c) => {
 	}
 
 	try {
-		const response = await c.env.AML_SERVICE.fetch(
-			new Request(`https://aml-svc.internal/organization-settings/${orgId}`, {
-				method: "GET",
-				headers: {
-					Accept: "application/json",
-				},
-			}),
-		);
-
-		// Handle 404 - organization settings not found (this is expected for new orgs)
-		if (response.status === 404) {
-			return c.json({ success: true, data: null }, 404);
-		}
-
-		// Handle other error statuses
-		if (!response.ok) {
-			const errorResult = (await response.json().catch(() => ({
-				success: false,
-				error: "Unknown error",
-				message: undefined,
-			}))) as {
-				success?: boolean;
-				error?: string;
-				message?: string;
-			};
-			const statusCode = (response.status as 400 | 500) || 500;
-			return c.json(
-				{
-					success: false,
-					error: errorResult.error || "Failed to fetch AML compliance settings",
-					message: errorResult.message,
-				},
-				statusCode,
-			);
-		}
-
-		// Success response - pass through the data
-		const result = await response.json();
-		return c.json(result, 200);
+		const result = await c.env.AML_SERVICE.getOrganizationSettings(orgId);
+		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error fetching AML settings:", error);
 		return c.json(
@@ -246,46 +209,11 @@ amlSettingsProxyRoutes.put("/:orgId", async (c) => {
 
 	try {
 		const body = await c.req.json();
-
-		const response = await c.env.AML_SERVICE.fetch(
-			new Request(`https://aml-svc.internal/organization-settings/${orgId}`, {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				body: JSON.stringify(body),
-			}),
+		const result = await c.env.AML_SERVICE.updateOrganizationSettings(
+			orgId,
+			body,
 		);
-
-		// Handle error responses
-		if (!response.ok) {
-			const errorResult = (await response.json().catch(() => ({
-				success: false,
-				error: "Unknown error",
-				message: undefined,
-				details: undefined,
-			}))) as {
-				success?: boolean;
-				error?: string;
-				message?: string;
-				details?: unknown;
-			};
-			const statusCode = (response.status as 400 | 500) || 500;
-			return c.json(
-				{
-					success: false,
-					error:
-						errorResult.error || "Failed to update AML compliance settings",
-					message: errorResult.message || (errorResult.details as string),
-				},
-				statusCode,
-			);
-		}
-
-		// Success response - pass through the data
-		const result = await response.json();
-		return c.json(result, 200);
+		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error updating AML settings:", error);
 		return c.json(
@@ -328,46 +256,11 @@ amlSettingsProxyRoutes.patch("/:orgId", async (c) => {
 
 	try {
 		const body = await c.req.json();
-
-		const response = await c.env.AML_SERVICE.fetch(
-			new Request(`https://aml-svc.internal/organization-settings/${orgId}`, {
-				method: "PATCH",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				body: JSON.stringify(body),
-			}),
+		const result = await c.env.AML_SERVICE.patchOrganizationSettings(
+			orgId,
+			body,
 		);
-
-		// Handle error responses
-		if (!response.ok) {
-			const errorResult = (await response.json().catch(() => ({
-				success: false,
-				error: "Unknown error",
-				message: undefined,
-				details: undefined,
-			}))) as {
-				success?: boolean;
-				error?: string;
-				message?: string;
-				details?: unknown;
-			};
-			const statusCode = (response.status as 400 | 500) || 500;
-			return c.json(
-				{
-					success: false,
-					error:
-						errorResult.error || "Failed to update AML compliance settings",
-					message: errorResult.message || (errorResult.details as string),
-				},
-				statusCode,
-			);
-		}
-
-		// Success response - pass through the data
-		const result = await response.json();
-		return c.json(result, 200);
+		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error patching AML settings:", error);
 		return c.json(
@@ -410,49 +303,11 @@ amlSettingsProxyRoutes.patch("/:orgId/self-service", async (c) => {
 
 	try {
 		const body = await c.req.json();
-
-		const response = await c.env.AML_SERVICE.fetch(
-			new Request(
-				`https://aml-svc.internal/organization-settings/${orgId}/self-service`,
-				{
-					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-						Accept: "application/json",
-					},
-					body: JSON.stringify(body),
-				},
-			),
+		const result = await c.env.AML_SERVICE.patchSelfServiceSettings(
+			orgId,
+			body,
 		);
-
-		// Handle error responses
-		if (!response.ok) {
-			const errorResult = (await response.json().catch(() => ({
-				success: false,
-				error: "Unknown error",
-				message: undefined,
-				details: undefined,
-			}))) as {
-				success?: boolean;
-				error?: string;
-				message?: string;
-				details?: unknown;
-			};
-			const statusCode = (response.status as 400 | 500) || 500;
-			return c.json(
-				{
-					success: false,
-					error:
-						errorResult.error || "Failed to update KYC self-service settings",
-					message: errorResult.message || (errorResult.details as string),
-				},
-				statusCode,
-			);
-		}
-
-		// Success response - pass through the data
-		const result = await response.json();
-		return c.json(result, 200);
+		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error(
 			"[AmlProxy] Error patching KYC self-service settings:",

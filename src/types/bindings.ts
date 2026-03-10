@@ -1,3 +1,84 @@
+// =============================================================================
+// LOCAL RPC INTERFACES
+// Mirrors entrypoint methods to enable typed RPC calls without a shared package.
+// =============================================================================
+
+/**
+ * RPC interface exposed by aml-svc via `AmlSvcEntrypoint`.
+ * Includes `fetch()` for backward-compatible HTTP calls (e.g., org settings proxy).
+ */
+export interface AmlSvcRpc {
+	fetch(request: Request): Promise<Response>;
+	getOrganizationSettings(
+		orgId: string,
+	): Promise<{ configured: boolean; settings: unknown }>;
+	updateOrganizationSettings(
+		orgId: string,
+		data: unknown,
+	): Promise<{ configured: boolean; settings: unknown }>;
+	patchOrganizationSettings(
+		orgId: string,
+		data: unknown,
+	): Promise<{ configured: boolean; settings: unknown }>;
+	patchSelfServiceSettings(
+		orgId: string,
+		data: unknown,
+	): Promise<{ configured: boolean; settings: unknown }>;
+}
+
+type NotificationsTarget =
+	| { kind: "org" }
+	| { kind: "user"; userId: string; email?: string; name?: string };
+
+type NotificationsSeverity = "info" | "warn" | "error";
+
+interface NotifyRpcInput {
+	tenantId: string;
+	target: NotificationsTarget;
+	channelSlug?: string;
+	type: string;
+	title: string;
+	body: string;
+	payload?: Record<string, unknown>;
+	severity?: NotificationsSeverity;
+	callbackUrl?: string;
+	sendEmail?: boolean;
+	sourceService: string;
+	sourceEvent?: string;
+}
+
+interface NotifyRpcResult {
+	notificationId: string;
+	delivered: { realtime: boolean; email: string };
+	recipientCount?: number;
+}
+
+interface EmailSendRpcInput {
+	to: { email: string; name?: string };
+	subject: string;
+	content: { title: string; body: string; callbackUrl?: string };
+	tags?: string[];
+	sourceService: string;
+	sourceEvent?: string;
+}
+
+interface EmailSendRpcResult {
+	success: boolean;
+	email: string;
+	status?: string;
+	mandrillId?: string;
+	error?: string;
+}
+
+/**
+ * RPC interface exposed by notifications-svc via `NotificationsEntrypoint`.
+ * Used to type the `NOTIFICATIONS_SERVICE` service binding in auth-svc.
+ */
+export interface NotificationsRpc {
+	notify(input: NotifyRpcInput): Promise<NotifyRpcResult>;
+	sendEmail(input: EmailSendRpcInput): Promise<EmailSendRpcResult>;
+}
+
 export type JanovixEnvironment =
 	| "local"
 	| "preview"
@@ -91,16 +172,20 @@ export type Bindings = Env & {
 	 */
 	SENTRY_DSN?: string;
 	/**
-	 * Service binding to aml-svc for worker-to-worker communication.
-	 * Used to proxy AML compliance settings requests securely.
+	 * Service binding to aml-svc via `AmlSvcEntrypoint`.
+	 * Used to proxy AML compliance settings requests securely via typed RPC.
+	 *
+	 * Caller wrangler config must include `"entrypoint": "AmlSvcEntrypoint"`.
 	 */
-	AML_SERVICE?: Fetcher;
+	AML_SERVICE?: AmlSvcRpc;
 
 	/**
-	 * Service binding to notifications-svc for worker-to-worker communication.
+	 * Service binding to notifications-svc via `NotificationsEntrypoint`.
 	 * Used to dispatch notifications for organization events.
+	 *
+	 * Caller wrangler config must include `"entrypoint": "NotificationsEntrypoint"`.
 	 */
-	NOTIFICATIONS_SERVICE?: Fetcher;
+	NOTIFICATIONS_SERVICE?: NotificationsRpc;
 
 	// =========================================================================
 	// STRIPE BILLING
