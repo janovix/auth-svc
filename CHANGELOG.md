@@ -1,3 +1,10 @@
+# [1.9.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.9.0-rc.2...v1.9.0-rc.3) (2026-03-10)
+
+
+### Features
+
+* **entrypoint:** enhance AuthSvcEntrypoint with organization and subscription methods ([dcf073f](https://github.com/janovix/auth-svc/commit/dcf073f56e2c79c9a2f1a905e04ed8e0cb9e8407))
+
 # [1.9.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.9.0-rc.1...v1.9.0-rc.2) (2026-03-10)
 
 
