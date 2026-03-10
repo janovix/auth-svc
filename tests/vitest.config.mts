@@ -26,6 +26,8 @@ export default defineWorkersConfig({
 				"**/endpoints/**/openapi.ts", // OpenAPI schema definitions don't need coverage
 				"src/routes/**/*.ts", // Routes depend on CF Workers runtime; covered via integration tests
 				"src/auth/routes.ts", // Better Auth routes; covered via integration tests
+				"src/entrypoint.ts", // WorkerEntrypoint — delegates to domain services; requires CF Workers runtime
+				"src/index.ts", // Worker default export — requires CF Workers runtime
 			],
 			thresholds: {
 				lines: 60,

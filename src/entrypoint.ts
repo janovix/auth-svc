@@ -7,8 +7,20 @@ import {
 	UsageRightsRepository,
 } from "./domain/usage-rights";
 import { PricingRepository } from "./domain/pricing";
+import {
+	SubscriptionService,
+	SubscriptionRepository,
+} from "./domain/subscription";
 import type { UsageMetric } from "./domain/usage-rights/types";
+import type {
+	Feature,
+	UsageMetric as SubUsageMetric,
+} from "./domain/subscription/types";
 import type { Bindings } from "./types/bindings";
+import {
+	validateApiKeyDirect,
+	type ApiKeyValidationResult,
+} from "./routes/internal-api-keys";
 
 // =============================================================================
 // RPC OUTPUT TYPES
@@ -49,6 +61,46 @@ export interface GateResult {
 	error?: string;
 	upgradeRequired?: boolean;
 }
+
+export interface OrgBranding {
+	id: string;
+	name: string;
+	slug: string;
+	logo: string | null;
+	metadata: Record<string, unknown> | null;
+}
+
+export interface OrgMember {
+	id: string;
+	userId: string;
+	role: string;
+	email: string;
+	name: string;
+}
+
+export interface OrgIdsPage {
+	organizationIds: string[];
+	total: number;
+}
+
+export interface OrgSubscriptionStatus {
+	hasSubscription: boolean;
+	isEnterprise: boolean;
+	status: string | null;
+	planTier: string | null;
+	planName: string | null;
+	features: string[];
+}
+
+export interface OrgUsageCheckResult {
+	allowed: boolean;
+	used: number;
+	included: number;
+	remaining: number;
+	overage: number;
+}
+
+export type { ApiKeyValidationResult } from "./routes/internal-api-keys";
 
 // JWKS KV cache key (kept in sync with routes/jwks.ts)
 const JWKS_KV_CACHE_KEY = "ba:jwks:public-keys";
@@ -230,5 +282,231 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		);
 		const result = await service.checkRight(orgId, metric);
 		return result as GateResult;
+	}
+
+	// ===========================================================================
+	// ORGANIZATION METHODS
+	// ===========================================================================
+
+	/**
+	 * Get branding fields for a single organization.
+	 * Used by aml-svc public KYC page to render org logo and name.
+	 */
+	async getOrganization(id: string): Promise<OrgBranding | null> {
+		const org = await this.env.DB.prepare(
+			`SELECT id, name, slug, logo, metadata FROM organizations WHERE id = ?`,
+		)
+			.bind(id)
+			.first<{
+				id: string;
+				name: string;
+				slug: string;
+				logo: string | null;
+				metadata: string | null;
+			}>();
+
+		if (!org) return null;
+
+		return {
+			id: org.id,
+			name: org.name,
+			slug: org.slug,
+			logo: org.logo,
+			metadata: org.metadata
+				? (JSON.parse(org.metadata) as Record<string, unknown>)
+				: null,
+		};
+	}
+
+	/**
+	 * Get all members (with user info) for an organization.
+	 * Used by notifications-svc to send org-scoped emails.
+	 */
+	async getOrganizationMembers(orgId: string): Promise<OrgMember[]> {
+		const result = await this.env.DB.prepare(
+			`SELECT m.id, m.userId, m.role, u.email, u.name
+			 FROM members m
+			 LEFT JOIN users u ON u.id = m.userId
+			 WHERE m.organizationId = ?
+			 ORDER BY m.createdAt ASC`,
+		)
+			.bind(orgId)
+			.all<{
+				id: string;
+				userId: string;
+				role: string;
+				email: string;
+				name: string | null;
+			}>();
+
+		return result.results.map((m) => ({
+			id: m.id,
+			userId: m.userId,
+			role: m.role,
+			email: m.email,
+			name: m.name ?? "",
+		}));
+	}
+
+	/**
+	 * Get a paginated list of all organization IDs.
+	 * Used by notifications-svc broadcast to iterate over all orgs.
+	 */
+	async getAllOrganizationIds(
+		limit: number = 100,
+		offset: number = 0,
+	): Promise<OrgIdsPage> {
+		const [countRow, rows] = await Promise.all([
+			this.env.DB.prepare(`SELECT COUNT(*) as total FROM organizations`).first<{
+				total: number;
+			}>(),
+			this.env.DB.prepare(
+				`SELECT id FROM organizations ORDER BY createdAt ASC LIMIT ? OFFSET ?`,
+			)
+				.bind(limit, offset)
+				.all<{ id: string }>(),
+		]);
+
+		return {
+			organizationIds: rows.results.map((r) => r.id),
+			total: countRow?.total ?? 0,
+		};
+	}
+
+	// ===========================================================================
+	// SUBSCRIPTION METHODS (org-scoped; resolve owner internally)
+	// ===========================================================================
+
+	/**
+	 * Get subscription status for an organization.
+	 * Resolves the org owner internally; returns null if owner not found.
+	 */
+	async getSubscriptionStatus(
+		organizationId: string,
+	): Promise<OrgSubscriptionStatus | null> {
+		const owner = await this.env.DB.prepare(
+			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+		)
+			.bind(organizationId)
+			.first<{ userId: string }>();
+
+		if (!owner) return null;
+
+		const service = new SubscriptionService(
+			new SubscriptionRepository(this.env.DB),
+			null,
+			new PricingRepository(this.env.DB),
+		);
+		const status = await service.getUserSubscriptionStatus(owner.userId);
+		const features = await service.getUserFeatures(owner.userId);
+
+		return {
+			hasSubscription: status.hasSubscription,
+			isEnterprise: status.plan === "enterprise",
+			status: status.status ?? null,
+			planTier: status.plan ?? null,
+			planName: status.plan ?? null,
+			features: features as string[],
+		};
+	}
+
+	/**
+	 * Increment usage counter for an organization metric.
+	 * Used by watchlist-svc after recording watchlist matches.
+	 */
+	async reportSubscriptionUsage(
+		organizationId: string,
+		metric: SubUsageMetric,
+		count: number = 1,
+	): Promise<void> {
+		const service = new SubscriptionService(
+			new SubscriptionRepository(this.env.DB),
+			null,
+			new PricingRepository(this.env.DB),
+		);
+		await service.reportUsage(
+			organizationId,
+			metric as "reports" | "notices" | "alerts" | "operations" | "clients",
+			count,
+		);
+	}
+
+	/**
+	 * Pre-flight usage check for an organization metric (no increment).
+	 * Resolves the org owner internally.
+	 */
+	async checkSubscriptionUsage(
+		organizationId: string,
+		metric: SubUsageMetric,
+	): Promise<OrgUsageCheckResult | null> {
+		const owner = await this.env.DB.prepare(
+			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+		)
+			.bind(organizationId)
+			.first<{ userId: string }>();
+
+		if (!owner) return null;
+
+		const service = new SubscriptionService(
+			new SubscriptionRepository(this.env.DB),
+			null,
+			new PricingRepository(this.env.DB),
+		);
+		const result = await service.checkUsage(
+			organizationId,
+			owner.userId,
+			metric,
+		);
+
+		return {
+			allowed: result.allowed,
+			used: result.used,
+			included: result.included,
+			remaining: result.remaining,
+			overage: result.overage,
+		};
+	}
+
+	/**
+	 * Check whether an organization's subscription includes a specific feature.
+	 * Resolves the org owner internally.
+	 */
+	async checkSubscriptionFeature(
+		organizationId: string,
+		feature: Feature,
+	): Promise<{ allowed: boolean; planTier: string | null }> {
+		const owner = await this.env.DB.prepare(
+			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+		)
+			.bind(organizationId)
+			.first<{ userId: string }>();
+
+		if (!owner) return { allowed: false, planTier: null };
+
+		const service = new SubscriptionService(
+			new SubscriptionRepository(this.env.DB),
+			null,
+			new PricingRepository(this.env.DB),
+		);
+		const [hasFeatureResult, status] = await Promise.all([
+			service.hasFeature(owner.userId, feature),
+			service.getUserSubscriptionStatus(owner.userId),
+		]);
+
+		return {
+			allowed: hasFeatureResult,
+			planTier: status.plan ?? null,
+		};
+	}
+
+	// ===========================================================================
+	// API KEY VALIDATION
+	// ===========================================================================
+
+	/**
+	 * Validate an API key and return an ephemeral JWT for proxying to aml-svc.
+	 */
+	async validateApiKey(key: string): Promise<ApiKeyValidationResult> {
+		return validateApiKeyDirect(this.env, this.ctx, key);
 	}
 }
