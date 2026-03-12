@@ -1,3 +1,10 @@
+# [1.9.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.9.0-rc.3...v1.9.0-rc.4) (2026-03-12)
+
+
+### Features
+
+* **entrypoint:** add image field to OrgMember interface and update query results ([c5660e9](https://github.com/janovix/auth-svc/commit/c5660e9e7992876ae6e8e8a3c038e506cc72c2dd))
+
 # [1.9.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.9.0-rc.2...v1.9.0-rc.3) (2026-03-10)
 
 
