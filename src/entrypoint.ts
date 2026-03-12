@@ -76,6 +76,7 @@ export interface OrgMember {
 	role: string;
 	email: string;
 	name: string;
+	image: string | null;
 }
 
 export interface OrgIdsPage {
@@ -324,7 +325,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 	 */
 	async getOrganizationMembers(orgId: string): Promise<OrgMember[]> {
 		const result = await this.env.DB.prepare(
-			`SELECT m.id, m.userId, m.role, u.email, u.name
+			`SELECT m.id, m.userId, m.role, u.email, u.name, u.image
 			 FROM members m
 			 LEFT JOIN users u ON u.id = m.userId
 			 WHERE m.organizationId = ?
@@ -337,6 +338,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 				role: string;
 				email: string;
 				name: string | null;
+				image: string | null;
 			}>();
 
 		return result.results.map((m) => ({
@@ -345,6 +347,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 			role: m.role,
 			email: m.email,
 			name: m.name ?? "",
+			image: m.image ?? null,
 		}));
 	}
 
