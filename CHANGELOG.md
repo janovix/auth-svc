@@ -19,7 +19,7 @@
 
 * **entrypoints:** add entrypoints for AML and Notifications services ([c7c161a](https://github.com/janovix/auth-svc/commit/c7c161ac9a73e510b53a08d8f8efb481e55eb857))
 
-# [1.9.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.8.0...v1.9.0-rc.1) (2026-02-28)
+# [1.9.0](https://github.com/janovix/auth-svc/compare/v1.8.0...v1.9.0) (2026-02-28)
 
 
 ### Features
