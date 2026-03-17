@@ -12,13 +12,14 @@ export const openAPISpec = {
 		title: "auth-svc",
 		version,
 		description:
-			"Complete backend API template using Hono + Chanfana + D1 + Vitest.",
+			"Authentication and authorization service providing sign-up/sign-in flows, session management, organization membership, subscription billing, API key management, and usage-rights enforcement for the Janovix platform.",
 		contact: {
 			name: "API Support",
 			email: "hostmaster@algenium.systems",
 		},
 	},
 	tags: [
+		{ name: "Health", description: "Liveness and readiness checks" },
 		{
 			name: "Authentication",
 			description: "Sign up, sign in, sign out, session",

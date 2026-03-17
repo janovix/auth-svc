@@ -316,7 +316,7 @@ const PRICES = {
 		{
 			id: "price_watchlist_monthly",
 			priceType: "subscription",
-			amount: 49999, // $499 MXN
+			amount: 49999, // $499.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -325,7 +325,7 @@ const PRICES = {
 		{
 			id: "price_watchlist_seat",
 			priceType: "seat",
-			amount: 59999, // $599 MXN
+			amount: 59999, // $599.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -336,7 +336,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_monthly",
 			priceType: "subscription",
-			amount: 299999, // $2,999 MXN
+			amount: 299999, // $2,999.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -345,7 +345,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_seat",
 			priceType: "seat",
-			amount: 59999, // $599 MXN
+			amount: 59999, // $599.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -354,7 +354,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_extra_org",
 			priceType: "extra_org",
-			amount: 149999, // $1,499 MXN
+			amount: 149999, // $1,499.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -363,7 +363,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_report_overage",
 			priceType: "overage_report",
-			amount: 49999, // $499 MXN
+			amount: 49999, // $499.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -372,7 +372,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_notice_overage",
 			priceType: "overage_notice",
-			amount: 39999, // $399 MXN
+			amount: 39999, // $399.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -381,7 +381,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_client_overage",
 			priceType: "overage_client",
-			amount: 2999, // $29 MXN
+			amount: 2999, // $29.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -390,7 +390,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_operation_overage",
 			priceType: "overage_operation",
-			amount: 1499, // $15 MXN
+			amount: 1499, // $14.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -399,7 +399,7 @@ const PRICES = {
 		{
 			id: "price_aml_business_alert_overage",
 			priceType: "overage_alert",
-			amount: 7999, // $79 MXN
+			amount: 7999, // $79.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -410,7 +410,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_monthly",
 			priceType: "subscription",
-			amount: 999999, // $9,999 MXN
+			amount: 999999, // $9,999.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -419,7 +419,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_seat",
 			priceType: "seat",
-			amount: 59999, // $599 MXN
+			amount: 59999, // $599.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -428,7 +428,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_extra_org",
 			priceType: "extra_org",
-			amount: 149999, // $1,499 MXN
+			amount: 149999, // $1,499.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -437,7 +437,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_report_overage",
 			priceType: "overage_report",
-			amount: 49999, // $499 MXN
+			amount: 49999, // $499.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -446,7 +446,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_notice_overage",
 			priceType: "overage_notice",
-			amount: 39999, // $399 MXN
+			amount: 39999, // $399.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -455,7 +455,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_client_overage",
 			priceType: "overage_client",
-			amount: 2999, // $29 MXN
+			amount: 2999, // $29.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -464,7 +464,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_operation_overage",
 			priceType: "overage_operation",
-			amount: 1499, // $15 MXN
+			amount: 1499, // $14.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -473,7 +473,7 @@ const PRICES = {
 		{
 			id: "price_aml_pro_alert_overage",
 			priceType: "overage_alert",
-			amount: 7999, // $79 MXN
+			amount: 7999, // $79.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -484,7 +484,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_monthly",
 			priceType: "subscription",
-			amount: 1999999, // $19,999 MXN
+			amount: 1999999, // $19,999.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -493,7 +493,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_seat",
 			priceType: "seat",
-			amount: 59999, // $599 MXN
+			amount: 59999, // $599.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -502,7 +502,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_extra_org",
 			priceType: "extra_org",
-			amount: 149999, // $1,499 MXN
+			amount: 149999, // $1,499.99 MXN
 			currency: "MXN",
 			interval: "month",
 			intervalCount: 1,
@@ -511,7 +511,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_report_overage",
 			priceType: "overage_report",
-			amount: 49999, // $499 MXN
+			amount: 49999, // $499.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -520,7 +520,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_notice_overage",
 			priceType: "overage_notice",
-			amount: 39999, // $399 MXN
+			amount: 39999, // $399.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -529,7 +529,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_client_overage",
 			priceType: "overage_client",
-			amount: 2999, // $29 MXN
+			amount: 2999, // $29.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -538,7 +538,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_operation_overage",
 			priceType: "overage_operation",
-			amount: 1499, // $15 MXN
+			amount: 1499, // $14.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,
@@ -547,7 +547,7 @@ const PRICES = {
 		{
 			id: "price_aml_ultra_alert_overage",
 			priceType: "overage_alert",
-			amount: 7999, // $79 MXN
+			amount: 7999, // $79.99 MXN
 			currency: "MXN",
 			interval: null,
 			intervalCount: null,

@@ -25,44 +25,14 @@
 import type { Context } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 import type { Bindings } from "../types/bindings";
+import {
+	JWKS_KV_CACHE_KEY,
+	JWKS_KV_TTL_SECONDS,
+	buildJwks,
+	type JwksRow,
+} from "../utils/jwks";
 
-/** KV key used to cache the serialised JWKS JSON. */
-export const JWKS_KV_CACHE_KEY = "ba:jwks:public-keys";
-
-/** Cache TTL in seconds (1 hour). Must be >= 60 (Cloudflare KV minimum). */
-const JWKS_KV_TTL_SECONDS = 3600;
-
-/** Grace period for expired keys (30 days in ms). Mirrors Better Auth's default. */
-const JWKS_GRACE_PERIOD_MS = 30 * 24 * 3600 * 1000;
-
-type JwksRow = {
-	id: string;
-	publicKey: string;
-	alg: string | null;
-	crv: string | null;
-	expiresAt: string | null;
-};
-
-/**
- * Builds the JWKS response object from raw D1 rows, applying the same
- * grace-period filter that Better Auth uses internally.
- */
-function buildJwks(rows: JwksRow[]): { keys: Record<string, unknown>[] } {
-	const now = Date.now();
-	const keys = rows
-		.filter((row) => {
-			if (!row.expiresAt) return true;
-			return new Date(row.expiresAt).getTime() + JWKS_GRACE_PERIOD_MS > now;
-		})
-		.map((row) => ({
-			alg: row.alg ?? "EdDSA",
-			...(row.crv ? { crv: row.crv } : {}),
-			...JSON.parse(row.publicKey),
-			kid: row.id,
-		}));
-
-	return { keys };
-}
+export { JWKS_KV_CACHE_KEY };
 
 /**
  * Hono handler for GET /api/auth/jwks.

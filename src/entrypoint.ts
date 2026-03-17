@@ -21,6 +21,31 @@ import {
 	validateApiKeyDirect,
 	type ApiKeyValidationResult,
 } from "./routes/internal-api-keys";
+import {
+	JWKS_KV_CACHE_KEY,
+	JWKS_KV_TTL_SECONDS,
+	buildJwks,
+	type JwksRow,
+} from "./utils/jwks";
+
+const REPORTABLE_USAGE_METRICS = [
+	"reports",
+	"notices",
+	"alerts",
+	"operations",
+	"clients",
+] as const;
+
+type ReportableUsageMetric = (typeof REPORTABLE_USAGE_METRICS)[number];
+
+function toReportableUsageMetric(
+	metric: SubUsageMetric,
+): ReportableUsageMetric {
+	if ((REPORTABLE_USAGE_METRICS as readonly string[]).includes(metric)) {
+		return metric as ReportableUsageMetric;
+	}
+	throw new Error(`Unsupported usage metric for reporting: ${metric}`);
+}
 
 // =============================================================================
 // RPC OUTPUT TYPES
@@ -102,35 +127,6 @@ export interface OrgUsageCheckResult {
 }
 
 export type { ApiKeyValidationResult } from "./routes/internal-api-keys";
-
-// JWKS KV cache key (kept in sync with routes/jwks.ts)
-const JWKS_KV_CACHE_KEY = "ba:jwks:public-keys";
-const JWKS_KV_TTL_SECONDS = 3600;
-const JWKS_GRACE_PERIOD_MS = 30 * 24 * 3600 * 1000;
-
-type JwksRow = {
-	id: string;
-	publicKey: string;
-	alg: string | null;
-	crv: string | null;
-	expiresAt: string | null;
-};
-
-function buildJwks(rows: JwksRow[]): JwksResult {
-	const now = Date.now();
-	const keys = rows
-		.filter((row) => {
-			if (!row.expiresAt) return true;
-			return new Date(row.expiresAt).getTime() + JWKS_GRACE_PERIOD_MS > now;
-		})
-		.map((row) => ({
-			alg: row.alg ?? "EdDSA",
-			...(row.crv ? { crv: row.crv } : {}),
-			...JSON.parse(row.publicKey),
-			kid: row.id,
-		}));
-	return { keys };
-}
 
 // =============================================================================
 // RPC ENTRYPOINT
@@ -327,7 +323,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		const result = await this.env.DB.prepare(
 			`SELECT m.id, m.userId, m.role, u.email, u.name, u.image
 			 FROM members m
-			 LEFT JOIN users u ON u.id = m.userId
+			 INNER JOIN users u ON u.id = m.userId
 			 WHERE m.organizationId = ?
 			 ORDER BY m.createdAt ASC`,
 		)
@@ -364,7 +360,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 				total: number;
 			}>(),
 			this.env.DB.prepare(
-				`SELECT id FROM organizations ORDER BY createdAt ASC LIMIT ? OFFSET ?`,
+				`SELECT id FROM organizations ORDER BY createdAt ASC, id ASC LIMIT ? OFFSET ?`,
 			)
 				.bind(limit, offset)
 				.all<{ id: string }>(),
@@ -422,16 +418,13 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		metric: SubUsageMetric,
 		count: number = 1,
 	): Promise<void> {
+		const reportable = toReportableUsageMetric(metric);
 		const service = new SubscriptionService(
 			new SubscriptionRepository(this.env.DB),
 			null,
 			new PricingRepository(this.env.DB),
 		);
-		await service.reportUsage(
-			organizationId,
-			metric as "reports" | "notices" | "alerts" | "operations" | "clients",
-			count,
-		);
+		await service.reportUsage(organizationId, reportable, count);
 	}
 
 	/**

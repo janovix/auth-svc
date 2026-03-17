@@ -97,7 +97,20 @@ export async function sendNotification(
 			sourceEvent: input.sourceEvent,
 		});
 
-		console.log(`[Notifications] Dispatch result:`, result);
+		if (
+			result == null ||
+			typeof result.notificationId !== "string" ||
+			result.notificationId === ""
+		) {
+			return {
+				success: false,
+				error: "Invalid RPC response",
+			};
+		}
+
+		console.log(
+			`[Notifications] Dispatch ok tenantId=${input.tenantId} channelSlug=${input.channelSlug ?? "(default)"} type=${input.type} notificationId=${result.notificationId}`,
+		);
 
 		return {
 			success: true,

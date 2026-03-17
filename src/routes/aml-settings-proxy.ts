@@ -6,6 +6,7 @@
  */
 import { Hono } from "hono";
 import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
 
@@ -16,6 +17,32 @@ type AmlProxyBindings = {
 type AmlProxyContext = Context<AmlProxyBindings>;
 
 const amlSettingsProxyRoutes = new Hono<AmlProxyBindings>();
+
+/**
+ * Map AML RPC errors to HTTP status and payload.
+ * Inspects error.message and error.code for not-found or validation patterns.
+ */
+function amlErrorToHttp(error: unknown): {
+	status: ContentfulStatusCode;
+	error: string;
+	message: string;
+} {
+	const message =
+		error instanceof Error ? error.message : String(error ?? "Unknown error");
+	const code =
+		error && typeof error === "object" && "code" in error
+			? (error as { code?: string }).code
+			: undefined;
+	const msgLower = message.toLowerCase();
+
+	if (code === "NOT_FOUND" || msgLower.includes("not found")) {
+		return { status: 404, error: "Not found", message };
+	}
+	if (msgLower.includes("invalid") || msgLower.includes("validation")) {
+		return { status: 400, error: "Bad request", message };
+	}
+	return { status: 500, error: "Internal server error", message };
+}
 
 /**
  * Helper to get authenticated user from session
@@ -169,14 +196,8 @@ amlSettingsProxyRoutes.get("/:orgId", async (c) => {
 		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error fetching AML settings:", error);
-		return c.json(
-			{
-				success: false,
-				error: "Failed to fetch AML compliance settings",
-				message: error instanceof Error ? error.message : "Unknown error",
-			},
-			500,
-		);
+		const { status, error: errMsg, message } = amlErrorToHttp(error);
+		return c.json({ success: false, error: errMsg, message }, status);
 	}
 });
 
@@ -216,14 +237,8 @@ amlSettingsProxyRoutes.put("/:orgId", async (c) => {
 		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error updating AML settings:", error);
-		return c.json(
-			{
-				success: false,
-				error: "Failed to update AML compliance settings",
-				message: error instanceof Error ? error.message : "Unknown error",
-			},
-			500,
-		);
+		const { status, error: errMsg, message } = amlErrorToHttp(error);
+		return c.json({ success: false, error: errMsg, message }, status);
 	}
 });
 
@@ -263,14 +278,8 @@ amlSettingsProxyRoutes.patch("/:orgId", async (c) => {
 		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
 		console.error("[AmlProxy] Error patching AML settings:", error);
-		return c.json(
-			{
-				success: false,
-				error: "Failed to update AML compliance settings",
-				message: error instanceof Error ? error.message : "Unknown error",
-			},
-			500,
-		);
+		const { status, error: errMsg, message } = amlErrorToHttp(error);
+		return c.json({ success: false, error: errMsg, message }, status);
 	}
 });
 
@@ -313,14 +322,8 @@ amlSettingsProxyRoutes.patch("/:orgId/self-service", async (c) => {
 			"[AmlProxy] Error patching KYC self-service settings:",
 			error,
 		);
-		return c.json(
-			{
-				success: false,
-				error: "Failed to update KYC self-service settings",
-				message: error instanceof Error ? error.message : "Unknown error",
-			},
-			500,
-		);
+		const { status, error: errMsg, message } = amlErrorToHttp(error);
+		return c.json({ success: false, error: errMsg, message }, status);
 	}
 });
 
