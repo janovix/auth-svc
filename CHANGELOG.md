@@ -1,3 +1,12 @@
+# [1.10.0](https://github.com/janovix/auth-svc/compare/v1.9.0...v1.10.0) (2026-03-26)
+
+
+### Features
+
+* **entrypoint:** add image field to OrgMember interface and update query results ([c5660e9](https://github.com/janovix/auth-svc/commit/c5660e9e7992876ae6e8e8a3c038e506cc72c2dd))
+* **entrypoint:** enhance AuthSvcEntrypoint with organization and subscription methods ([dcf073f](https://github.com/janovix/auth-svc/commit/dcf073f56e2c79c9a2f1a905e04ed8e0cb9e8407))
+* **entrypoints:** add entrypoints for AML and Notifications services ([c7c161a](https://github.com/janovix/auth-svc/commit/c7c161ac9a73e510b53a08d8f8efb481e55eb857))
+
 # [1.10.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.9.0...v1.10.0-rc.1) (2026-03-17)
 
 
