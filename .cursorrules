@@ -47,11 +47,7 @@ Options considered:
 
 ## Migration File Convention
 
-The single migration file `migrations/0001_initial_schema.sql` contains:
-- Better Auth tables with camelCase columns (top section)
-- Custom tables with snake_case columns (bottom section)
-
-Each section is clearly marked with comments explaining the convention.
+The single migration file `migrations/0001_initial.sql` is the full schema for D1 (regenerate from `prisma/schema.prisma` via `pnpm exec prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script -o migrations/0001_initial.sql`, then re-add the `DROP TABLE IF EXISTS` preamble). It contains Better Auth tables with camelCase columns and custom tables with snake_case columns.
 
 ## Testing After Schema Changes
 
