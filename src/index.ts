@@ -9,6 +9,9 @@ import * as Sentry from "@sentry/cloudflare";
 import { app } from "./app";
 import type { Bindings } from "./types/bindings";
 
+// Export RPC entrypoint for service binding callers
+export { AuthSvcEntrypoint } from "./entrypoint";
+
 // Export the Hono app wrapped with Sentry for production
 export default Sentry.withSentry((env: Bindings) => {
 	const { id: versionId } = env.CF_VERSION_METADATA;

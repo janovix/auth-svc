@@ -2,7 +2,7 @@
 	"compatibility_date": "2025-10-08",
 	"compatibility_flags": ["nodejs_als"],
 	"main": "src/index.ts",
-	"name": "backend-template-prod",
+	"name": "auth-svc-prod",
 	"upload_source_maps": true,
 	"version_metadata": {
 		"binding": "CF_VERSION_METADATA",
@@ -27,10 +27,12 @@
 		{
 			"binding": "AML_SERVICE",
 			"service": "aml-svc-prod",
+			"entrypoint": "AmlSvcEntrypoint",
 		},
 		{
 			"binding": "NOTIFICATIONS_SERVICE",
 			"service": "notifications-svc-prod",
+			"entrypoint": "NotificationsEntrypoint",
 		},
 	],
 	"r2_buckets": [

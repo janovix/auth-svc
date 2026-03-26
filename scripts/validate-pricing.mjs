@@ -50,34 +50,34 @@ const EXPECTED_LIMITS = {
 
 const EXPECTED_PRICES = {
 	business: {
-		subscription: 299900, // $2,999 MXN
-		seat: 59900, // $599 MXN
-		extra_org: 149900, // $1,499 MXN
-		overage_report: 49900, // $499 MXN
-		overage_notice: 39900, // $399 MXN
-		overage_alert: 7900, // $79 MXN
-		overage_operation: 1500, // $15 MXN
-		overage_client: 2900, // $29 MXN
+		subscription: 299999, // $2,999.99 MXN
+		seat: 59999, // $599.99 MXN
+		extra_org: 149999, // $1,499.99 MXN
+		overage_report: 49999, // $499.99 MXN
+		overage_notice: 39999, // $399.99 MXN
+		overage_alert: 7999, // $79.99 MXN
+		overage_operation: 1499, // $14.99 MXN
+		overage_client: 2999, // $29.99 MXN
 	},
 	pro: {
-		subscription: 999900, // $9,999 MXN
-		seat: 59900, // $599 MXN
-		extra_org: 149900, // $1,499 MXN
-		overage_report: 49900, // $499 MXN
-		overage_notice: 39900, // $399 MXN
-		overage_alert: 7900, // $79 MXN
-		overage_operation: 1500, // $15 MXN
-		overage_client: 2900, // $29 MXN
+		subscription: 999999, // $9,999.99 MXN
+		seat: 59999, // $599.99 MXN
+		extra_org: 149999, // $1,499.99 MXN
+		overage_report: 49999, // $499.99 MXN
+		overage_notice: 39999, // $399.99 MXN
+		overage_alert: 7999, // $79.99 MXN
+		overage_operation: 1499, // $14.99 MXN
+		overage_client: 2999, // $29.99 MXN
 	},
 	ultra: {
-		subscription: 1999900, // $19,999 MXN
-		seat: 59900, // $599 MXN
-		extra_org: 149900, // $1,499 MXN
-		overage_report: 49900, // $499 MXN
-		overage_notice: 39900, // $399 MXN
-		overage_alert: 7900, // $79 MXN
-		overage_operation: 1500, // $15 MXN
-		overage_client: 2900, // $29 MXN
+		subscription: 1999999, // $19,999.99 MXN
+		seat: 59999, // $599.99 MXN
+		extra_org: 149999, // $1,499.99 MXN
+		overage_report: 49999, // $499.99 MXN
+		overage_notice: 39999, // $399.99 MXN
+		overage_alert: 7999, // $79.99 MXN
+		overage_operation: 1499, // $14.99 MXN
+		overage_client: 2999, // $29.99 MXN
 	},
 };
 

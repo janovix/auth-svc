@@ -17,10 +17,7 @@ type InternalBindings = { Bindings: Bindings };
 const internalApiKeysRoutes = new Hono<InternalBindings>();
 
 /**
- * POST /internal/api-keys/validate
- *
- * Input: { key: "jnvx_..." }
- * Output: { valid, organizationId, jwt, plan } or { valid: false, error }
+ * Core API key validation logic — callable directly without HTTP overhead.
  *
  * Flow:
  * 1. Hash the key, look up in DB
@@ -29,36 +26,43 @@ const internalApiKeysRoutes = new Hono<InternalBindings>();
  * 4. Issue an ephemeral JWT (60s) using Better Auth's encrypted JWKS keys
  * 5. Update lastUsedAt in background (waitUntil)
  */
-internalApiKeysRoutes.post("/validate", async (c) => {
-	const body = await c.req.json<{ key?: string }>();
+export interface ApiKeyValidationResult {
+	valid: boolean;
+	organizationId?: string;
+	jwt?: string;
+	plan?: string | null;
+	error?: string;
+}
 
-	if (!body.key || typeof body.key !== "string") {
-		return c.json({ valid: false, error: "missing_key" }, 400);
+export async function validateApiKeyDirect(
+	env: Bindings,
+	ctx: ExecutionContext | undefined,
+	key: string,
+): Promise<ApiKeyValidationResult> {
+	if (!key || typeof key !== "string") {
+		return { valid: false, error: "missing_key" };
 	}
 
-	const service = new ApiKeyService(new ApiKeyRepository(c.env.DB));
+	const service = new ApiKeyService(new ApiKeyRepository(env.DB));
 
 	// Step 1-2: Validate the key (hash, lookup, check revoked/expired)
-	const validation = await service.validate(body.key);
+	const validation = await service.validate(key);
 	if (!validation.valid || !validation.organizationId) {
-		return c.json(
-			{ valid: false, error: validation.error ?? "invalid_key" },
-			401,
-		);
+		return { valid: false, error: validation.error ?? "invalid_key" };
 	}
 
 	// Step 3: Look up org owner and subscription plan
-	const owner = await c.env.DB.prepare(
+	const owner = await env.DB.prepare(
 		`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
 	)
 		.bind(validation.organizationId)
 		.first<{ userId: string }>();
 
 	if (!owner) {
-		return c.json({ valid: false, error: "organization_no_owner" }, 403);
+		return { valid: false, error: "organization_no_owner" };
 	}
 
-	const subscription = await c.env.DB.prepare(
+	const subscription = await env.DB.prepare(
 		`SELECT plan, status FROM subscription
 			 WHERE referenceId = ?
 			   AND status IN ('active', 'trialing')
@@ -72,18 +76,18 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 
 	const plan = subscription?.plan ?? null;
 	if (!ApiKeyService.isPlanEligible(plan)) {
-		return c.json({ valid: false, error: "plan_not_eligible" }, 403);
+		return { valid: false, error: "plan_not_eligible" };
 	}
 
 	// Step 4: Get the org owner's user details for JWT claims
-	const ownerUser = await c.env.DB.prepare(
+	const ownerUser = await env.DB.prepare(
 		`SELECT id, email, name, role FROM users WHERE id = ? LIMIT 1`,
 	)
 		.bind(owner.userId)
 		.first<{ id: string; email: string; name: string | null; role: string }>();
 
 	if (!ownerUser) {
-		return c.json({ valid: false, error: "owner_not_found" }, 500);
+		return { valid: false, error: "owner_not_found" };
 	}
 
 	// Issue an ephemeral JWT using the same JWKS keys Better Auth uses.
@@ -92,7 +96,7 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 	// by aml-svc's JWKS-based auth middleware.
 	let jwt: string;
 	try {
-		jwt = await createEphemeralJwt(c.env, {
+		jwt = await createEphemeralJwt(env, {
 			sub: ownerUser.id,
 			email: ownerUser.email,
 			name: ownerUser.name,
@@ -101,28 +105,52 @@ internalApiKeysRoutes.post("/validate", async (c) => {
 		});
 	} catch (err) {
 		console.error("[Internal API Keys] JWT creation failed:", err);
-		return c.json({ valid: false, error: "jwt_creation_failed" }, 500);
+		return { valid: false, error: "jwt_creation_failed" };
 	}
 
 	// Step 5: Update lastUsedAt in background
 	try {
-		const ctx = c.executionCtx;
 		if (ctx && "waitUntil" in ctx) {
-			ctx.waitUntil(service.touchLastUsed(body.key));
+			ctx.waitUntil(service.touchLastUsed(key));
 		} else {
-			// Fallback: fire and forget
-			service.touchLastUsed(body.key).catch(() => {});
+			service.touchLastUsed(key).catch(() => {});
 		}
 	} catch {
 		// Non-critical, ignore
 	}
 
-	return c.json({
+	return {
 		valid: true,
 		organizationId: validation.organizationId,
 		jwt,
 		plan,
-	});
+	};
+}
+
+/**
+ * POST /internal/api-keys/validate
+ *
+ * Input: { key: "jnvx_..." }
+ * Output: { valid, organizationId, jwt, plan } or { valid: false, error }
+ */
+internalApiKeysRoutes.post("/validate", async (c) => {
+	const body = await c.req.json<{ key?: string }>();
+	const result = await validateApiKeyDirect(
+		c.env,
+		c.executionCtx,
+		body.key ?? "",
+	);
+	const status = result.valid
+		? 200
+		: result.error === "missing_key"
+			? 400
+			: result.error === "plan_not_eligible" ||
+				  result.error === "organization_no_owner"
+				? 403
+				: result.error === "owner_not_found"
+					? 500
+					: 401;
+	return c.json(result, status);
 });
 
 /**
