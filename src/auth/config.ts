@@ -718,9 +718,6 @@ export function buildResolvedAuthConfig(
 										name: "watchlist",
 										priceId: stripePriceIds.watchlist,
 										limits: PLAN_LIMITS.watchlist,
-										freeTrial: {
-											days: 0,
-										},
 									},
 									{
 										name: "business",
