@@ -701,7 +701,7 @@ describe("buildResolvedAuthConfig", () => {
 	});
 
 	describe("database hooks", () => {
-		it("auto-promotes new user from visitor to user when pending invitation exists", async () => {
+		it("promotes visitor to user when pending invitation exists", async () => {
 			const mockPrepare = vi.fn();
 			const mockBind = vi.fn();
 			const mockFirst = vi.fn();
@@ -805,7 +805,7 @@ describe("buildResolvedAuthConfig", () => {
 			userCreateHook({
 				id: "user-456",
 				email: "anotheruser@example.com",
-				role: "visitor",
+				role: "user",
 			});
 			await flushBackground();
 
@@ -859,7 +859,7 @@ describe("buildResolvedAuthConfig", () => {
 				userCreateHook({
 					id: "user-789",
 					email: "erroruser@example.com",
-					role: "visitor",
+					role: "user",
 				}),
 			).not.toThrow();
 
