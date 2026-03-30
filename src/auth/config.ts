@@ -719,7 +719,7 @@ export function buildResolvedAuthConfig(
 										priceId: stripePriceIds.watchlist,
 										limits: PLAN_LIMITS.watchlist,
 										freeTrial: {
-											days: 14,
+											days: 0,
 										},
 									},
 									{
@@ -727,7 +727,7 @@ export function buildResolvedAuthConfig(
 										priceId: stripePriceIds.business,
 										limits: PLAN_LIMITS.business,
 										freeTrial: {
-											days: 14,
+											days: 30,
 										},
 									},
 									{
@@ -735,7 +735,7 @@ export function buildResolvedAuthConfig(
 										priceId: stripePriceIds.pro,
 										limits: PLAN_LIMITS.pro,
 										freeTrial: {
-											days: 14,
+											days: 30,
 										},
 									},
 									{
@@ -743,7 +743,7 @@ export function buildResolvedAuthConfig(
 										priceId: stripePriceIds.ultra,
 										limits: PLAN_LIMITS.ultra,
 										freeTrial: {
-											days: 14,
+											days: 30,
 										},
 									},
 								],
