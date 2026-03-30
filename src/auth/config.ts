@@ -412,9 +412,9 @@ export function buildResolvedAuthConfig(
 			admin({
 				// Admin users can manage all users, roles, and perform admin operations
 				// Users with "admin" role or in adminUserIds list get admin privileges
-				// New users start as "visitor" until manually promoted to "user" by an admin
-				// This enables a beta access flow where visitors see a waiting page
-				defaultRole: "visitor",
+				// New users default to "user". "visitor" remains a role for beta gating;
+				// admins can promote visitors via the admin API.
+				defaultRole: "user",
 				adminRoles: ["admin"],
 			}),
 			organization({
@@ -866,7 +866,7 @@ export function buildResolvedAuthConfig(
 						executeInBackground(
 							(async () => {
 								// Check if the newly registered user has pending org invitations.
-								// If so, promote them from "visitor" to "user" so they can onboard.
+								// If they are still a visitor, promote to "user" so they can onboard.
 								const pendingInvite = await env.DB.prepare(
 									`SELECT id FROM invitations
 							 WHERE email = ? AND status = 'pending'
