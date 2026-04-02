@@ -573,6 +573,13 @@ export const openAPISpec = {
 				tags: ["Subscription"],
 				summary: "Get feature flags",
 				operationId: "subscriptionFeatures",
+				parameters: [
+					{
+						name: "resolveFromOrg",
+						in: "query",
+						schema: { type: "string", enum: ["true", "false"] },
+					},
+				],
 				responses: {
 					"200": { description: "Feature flags" },
 					"401": { description: "Unauthorized" },

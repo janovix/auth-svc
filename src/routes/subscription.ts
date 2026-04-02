@@ -81,6 +81,22 @@ function createSubscriptionService(
 }
 
 /**
+ * When resolveFromOrg is true, return the active organization's owner user id;
+ * otherwise return the authenticated user's id. Falls back to userId if no owner row.
+ */
+async function resolveEffectiveUserId(
+	c: SubscriptionContext,
+	userId: string,
+	organizationId: string | null,
+	resolveFromOrg: boolean,
+): Promise<string> {
+	if (!resolveFromOrg || !organizationId) return userId;
+	const repo = new SubscriptionRepository(c.env.DB);
+	const ownerUserId = await repo.getOrganizationOwnerUserId(organizationId);
+	return ownerUserId ?? userId;
+}
+
+/**
  * GET /api/subscription/status
  * Get current user's subscription status.
  *
@@ -98,19 +114,12 @@ subscriptionRoutes.get("/status", async (c) => {
 	const service = createSubscriptionService(c);
 	const resolveFromOrg = c.req.query("resolveFromOrg") === "true";
 
-	let effectiveUserId = user.id;
-
-	if (resolveFromOrg && user.organizationId) {
-		const ownerResult = await c.env.DB.prepare(
-			`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
-		)
-			.bind(user.organizationId)
-			.first<{ userId: string }>();
-
-		if (ownerResult) {
-			effectiveUserId = ownerResult.userId;
-		}
-	}
+	const effectiveUserId = await resolveEffectiveUserId(
+		c,
+		user.id,
+		user.organizationId,
+		resolveFromOrg,
+	);
 
 	const status = await service.getUserSubscriptionStatus(effectiveUserId);
 
@@ -164,14 +173,12 @@ subscriptionRoutes.get("/usage", async (c) => {
 		return c.json({ success: false, error: "No active organization" }, 400);
 	}
 
-	// Get org owner
-	const ownerResult = await c.env.DB.prepare(
-		`SELECT userId FROM members WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
-	)
-		.bind(user.organizationId)
-		.first<{ userId: string }>();
+	const subscriptionRepo = new SubscriptionRepository(c.env.DB);
+	const ownerUserId = await subscriptionRepo.getOrganizationOwnerUserId(
+		user.organizationId,
+	);
 
-	if (!ownerResult) {
+	if (!ownerUserId) {
 		return c.json(
 			{ success: false, error: "Organization owner not found" },
 			404,
@@ -182,11 +189,11 @@ subscriptionRoutes.get("/usage", async (c) => {
 
 	const usage = await service.getOrCreateOrganizationUsage(
 		user.organizationId,
-		ownerResult.userId,
+		ownerUserId,
 	);
 
 	// Get limits from owner's subscription
-	const limits = await service.getUserPlanLimits(ownerResult.userId);
+	const limits = await service.getUserPlanLimits(ownerUserId);
 
 	return c.json({
 		success: true,
@@ -220,7 +227,11 @@ subscriptionRoutes.get("/usage", async (c) => {
 
 /**
  * GET /api/subscription/features
- * Get features available for the user's plan
+ * Get features available for the user's plan.
+ *
+ * Query params:
+ *   resolveFromOrg=true  – use the active organization's owner's plan features
+ *     (same semantics as GET /api/subscription/status?resolveFromOrg=true).
  */
 subscriptionRoutes.get("/features", async (c) => {
 	const user = await getAuthenticatedUser(c);
@@ -229,8 +240,15 @@ subscriptionRoutes.get("/features", async (c) => {
 	}
 
 	const service = createSubscriptionService(c);
+	const resolveFromOrg = c.req.query("resolveFromOrg") === "true";
+	const effectiveUserId = await resolveEffectiveUserId(
+		c,
+		user.id,
+		user.organizationId,
+		resolveFromOrg,
+	);
 
-	const features = await service.getUserFeatures(user.id);
+	const features = await service.getUserFeatures(effectiveUserId);
 
 	return c.json({
 		success: true,
