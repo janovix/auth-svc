@@ -1,3 +1,10 @@
+# [1.10.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.1...v1.10.0-rc.2) (2026-04-02)
+
+
+### Features
+
+* add resolveFromOrg parameter to subscription endpoints ([8fab3a4](https://github.com/janovix/auth-svc/commit/8fab3a4d839b050067e4606f1a1d2f4d07cb6cb5))
+
 # [1.10.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.9.0...v1.10.0-rc.1) (2026-03-17)
 
 
