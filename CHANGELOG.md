@@ -1,3 +1,10 @@
+# [1.10.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.2...v1.10.0-rc.3) (2026-04-02)
+
+
+### Features
+
+* enhance license revocation process and subscription handling ([614ee65](https://github.com/janovix/auth-svc/commit/614ee6550b9304049364fb9abb67c033dce76f4f))
+
 # [1.10.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.1...v1.10.0-rc.2) (2026-04-02)
 
 
