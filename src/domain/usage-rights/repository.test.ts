@@ -129,6 +129,14 @@ describe("UsageRightsRepository", () => {
 			expect(result).toBeNull();
 		});
 
+		it("query excludes license-backed rows so Step2 is Stripe-only", async () => {
+			db._mockFirst.mockResolvedValue(null);
+			await repo.getUserSubscription("user-1");
+			expect(db.prepare).toHaveBeenCalledWith(
+				expect.stringContaining("licenseId IS NULL"),
+			);
+		});
+
 		it("handles null period dates", async () => {
 			db._mockFirst.mockResolvedValue({
 				id: "sub-1",

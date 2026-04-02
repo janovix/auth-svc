@@ -8,6 +8,31 @@ import { SubscriptionService } from "./service";
 import type { SubscriptionRepository } from "./repository";
 import type Stripe from "stripe";
 import type { OrganizationUsage, UserSubscription, PlanLimits } from "./types";
+import type { EnterpriseLicense } from "../pricing/types";
+
+/** Active license row for subscription.licenseId === "license-001" in tests */
+const mockActiveEnterpriseLicense: EnterpriseLicense = {
+	id: "license-001",
+	key: "ENT-TEST",
+	organizationName: "Test Org",
+	userId: "user-license",
+	issuedBy: null,
+	status: "active",
+	expiresAt: new Date("2025-12-31"),
+	activatedAt: new Date("2024-01-01"),
+	notes: null,
+	maxOrganizations: 0,
+	maxUsers: 50,
+	reportsPerMonth: 500,
+	noticesPerMonth: 500,
+	alertsPerMonth: 1000,
+	operationsPerMonth: 5000,
+	clientsPerMonth: 2000,
+	watchlistQueriesPerMonth: 1000,
+	metadata: null,
+	createdAt: new Date("2024-01-01"),
+	updatedAt: new Date("2024-01-01"),
+};
 
 // Mock repository
 const createMockRepository = () => ({
@@ -105,7 +130,11 @@ const createMockPricingRepositoryForBusiness = () => ({
 	getLimitsByPlanName: vi.fn(),
 	getPricesForPlan: vi.fn(),
 	getLicenseByKey: vi.fn(),
-	getLicenseById: vi.fn(),
+	getLicenseById: vi
+		.fn()
+		.mockImplementation(async (id: string) =>
+			id === "license-001" ? mockActiveEnterpriseLicense : null,
+		),
 	activateLicense: vi.fn(),
 	getPriceByStripePriceId: vi.fn(),
 });
@@ -695,6 +724,34 @@ describe("SubscriptionService", () => {
 			expect(status.isLicenseBased).toBe(true);
 			expect(status.licenseExpiresAt).toBeNull();
 		});
+
+		it("should treat subscription as inactive when linked license is revoked", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+			mockRepository.countOrganizationsOwned.mockResolvedValue(2);
+
+			const mockPricingRepo = {
+				...createMockPricingRepositoryForBusiness(),
+				getLicenseById: vi.fn().mockResolvedValue({
+					...mockActiveEnterpriseLicense,
+					status: "revoked",
+				}),
+			};
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const status =
+				await serviceWithPricing.getUserSubscriptionStatus("user-license");
+
+			expect(status.hasSubscription).toBe(false);
+			expect(status.status).toBe("canceled");
+			expect(status.plan).toBeNull();
+			expect(status.isLicenseBased).toBe(false);
+		});
 	});
 
 	describe("canCreateOrganization", () => {
@@ -831,6 +888,29 @@ describe("SubscriptionService", () => {
 			mockRepository.getUserSubscription.mockResolvedValue(null);
 
 			const features = await service.getUserFeatures("user-none");
+
+			expect(features).toEqual([]);
+		});
+
+		it("should return no enterprise features when license is revoked", async () => {
+			mockRepository.getUserSubscription.mockResolvedValue(
+				mockLicenseSubscription,
+			);
+
+			const mockPricingRepo = {
+				...createMockPricingRepositoryForBusiness(),
+				getLicenseById: vi.fn().mockResolvedValue({
+					...mockActiveEnterpriseLicense,
+					status: "revoked",
+				}),
+			};
+			const serviceWithPricing = new SubscriptionService(
+				mockRepository as unknown as SubscriptionRepository,
+				mockStripe as unknown as Stripe,
+				mockPricingRepo as unknown as import("../pricing/repository").PricingRepository,
+			);
+
+			const features = await serviceWithPricing.getUserFeatures("user-license");
 
 			expect(features).toEqual([]);
 		});

@@ -764,17 +764,31 @@ export class PricingRepository {
 	}
 
 	/**
-	 * Revoke a license
+	 * Revoke a license and cancel any subscription rows still linked to it.
+	 * Keeps Stripe-only subscriptions untouched (they have licenseId IS NULL).
 	 */
-	async revokeLicense(licenseId: string): Promise<void> {
-		await this.db
-			.prepare(
-				`UPDATE enterprise_licenses 
-				 SET status = 'revoked', updated_at = datetime('now')
-				 WHERE id = ?`,
-			)
-			.bind(licenseId)
-			.run();
+	async revokeLicense(licenseId: string): Promise<{
+		subscriptionsCanceled: number;
+	}> {
+		const results = await this.db.batch([
+			this.db
+				.prepare(
+					`UPDATE enterprise_licenses 
+					 SET status = 'revoked', updated_at = datetime('now')
+					 WHERE id = ?`,
+				)
+				.bind(licenseId),
+			this.db
+				.prepare(
+					`UPDATE subscription 
+					 SET status = 'canceled', canceledAt = datetime('now'), updatedAt = datetime('now')
+					 WHERE licenseId = ? AND status IN ('active', 'trialing')`,
+				)
+				.bind(licenseId),
+		]);
+
+		const changes = results[1]?.meta?.changes ?? 0;
+		return { subscriptionsCanceled: Number(changes) };
 	}
 
 	/**

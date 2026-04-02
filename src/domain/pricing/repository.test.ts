@@ -24,14 +24,21 @@ const createMockDb = () => {
 		run: mockRun,
 	}));
 
+	const mockBatch = vi.fn().mockResolvedValue([
+		{ success: true, meta: { changes: 1 } },
+		{ success: true, meta: { changes: 1 } },
+	]);
+
 	return {
 		prepare: mockPrepare,
+		batch: mockBatch,
 		_mock: {
 			prepare: mockPrepare,
 			bind: mockBind,
 			first: mockFirst,
 			all: mockAll,
 			run: mockRun,
+			batch: mockBatch,
 		},
 	};
 };
@@ -304,16 +311,18 @@ describe("PricingRepository", () => {
 	});
 
 	describe("revokeLicense", () => {
-		it("should update license status to revoked", async () => {
-			mockDb._mock.run.mockResolvedValue({ success: true });
+		it("should batch-revoke license and cancel linked subscriptions", async () => {
+			mockDb._mock.batch.mockResolvedValue([
+				{ success: true, meta: { changes: 1 } },
+				{ success: true, meta: { changes: 2 } },
+			]);
 
-			await repository.revokeLicense("lic_bad");
+			const result = await repository.revokeLicense("lic_bad");
 
-			expect(mockDb._mock.prepare).toHaveBeenCalledWith(
-				expect.stringContaining("status = 'revoked'"),
-			);
-			expect(mockDb._mock.bind).toHaveBeenCalledWith("lic_bad");
-			expect(mockDb._mock.run).toHaveBeenCalled();
+			expect(result.subscriptionsCanceled).toBe(2);
+			expect(mockDb._mock.batch).toHaveBeenCalledTimes(1);
+			const batchArg = mockDb._mock.batch.mock.calls[0][0] as unknown[];
+			expect(batchArg).toHaveLength(2);
 		});
 	});
 

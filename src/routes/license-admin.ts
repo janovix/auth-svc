@@ -443,11 +443,17 @@ licenseAdminRoutes.delete("/:id", async (c) => {
 		return c.json({ success: false, error: "License not found" }, 404);
 	}
 
-	await repository.revokeLicense(id);
+	const { subscriptionsCanceled } = await repository.revokeLicense(id);
 
-	console.log(`[License Admin] Revoked license ${id} by admin ${admin.id}`);
+	console.log(
+		`[License Admin] Revoked license ${id} by admin ${admin.id} (subscriptionsCanceled=${subscriptionsCanceled})`,
+	);
 
-	return c.json({ success: true, message: "License revoked" });
+	return c.json({
+		success: true,
+		message: "License revoked",
+		subscriptionsCanceled,
+	});
 });
 
 /**

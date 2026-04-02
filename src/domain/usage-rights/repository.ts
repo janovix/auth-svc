@@ -87,6 +87,7 @@ export class UsageRightsRepository {
 				 FROM subscription 
 				 WHERE referenceId = ? 
 				 AND status IN ('active', 'trialing')
+				 AND licenseId IS NULL
 				 ORDER BY 
 				   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
 				   createdAt DESC 

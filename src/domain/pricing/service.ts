@@ -353,6 +353,13 @@ export class PricingService {
 	}
 
 	/**
+	 * Get license by primary key (any status — for validating subscription.licenseId)
+	 */
+	async getLicenseById(id: string): Promise<EnterpriseLicense | null> {
+		return this.repository.getLicenseById(id);
+	}
+
+	/**
 	 * Validate a license key (check if valid and not expired)
 	 */
 	async validateLicenseKey(

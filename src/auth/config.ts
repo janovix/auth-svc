@@ -475,8 +475,8 @@ export function buildResolvedAuthConfig(
 								.bind(subscription.licenseId)
 								.first<{ max_organizations: number }>();
 
-							// 0 means unlimited
-							maxOrganizations = license?.max_organizations ?? 0;
+							// 0 means unlimited; if license row missing/revoked, do not treat as unlimited
+							maxOrganizations = license?.max_organizations ?? 1;
 							console.log(
 								`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
 							);
