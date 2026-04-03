@@ -7,11 +7,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
-import {
-	UsageRightsService,
-	UsageRightsRepository,
-} from "../domain/usage-rights";
-import { PricingRepository } from "../domain/pricing";
+import { createUsageRightsServiceFromEnv } from "../domain/usage-rights";
 import { getBetterAuthContext } from "../auth/instance";
 import type { UsageMetric } from "../domain/usage-rights/types";
 
@@ -38,13 +34,6 @@ async function getAuthSession(c: Context<UsageRightsBindings>) {
 	} catch {
 		return null;
 	}
-}
-
-function createUsageRightsService(db: D1Database) {
-	return new UsageRightsService(
-		new UsageRightsRepository(db),
-		new PricingRepository(db),
-	);
 }
 
 const VALID_METRICS: UsageMetric[] = [
@@ -89,7 +78,7 @@ usageRightsRoutes.get("/check", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const result = await service.checkRight(organizationId, metric);
 
 	if (!result.allowed) {
@@ -147,7 +136,7 @@ usageRightsRoutes.post("/meter", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	await service.recordUsage(organizationId, body.metric, body.count ?? 1);
 
 	return c.json({ success: true });
@@ -183,7 +172,7 @@ usageRightsRoutes.post("/gate", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const result = await service.gateAndMeter(
 		organizationId,
 		body.metric,
@@ -231,7 +220,7 @@ usageRightsRoutes.get("/entitlement", async (c) => {
 		return c.json({ success: false, error: "organizationId is required" }, 400);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const details = await service.getEntitlementDetails(organizationId);
 
 	return c.json({ success: true, data: details });

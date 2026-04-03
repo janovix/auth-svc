@@ -2,10 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { app } from "./app";
 import { SettingsService } from "./domain/settings";
 import { AuditService } from "./domain/audit";
-import {
-	UsageRightsService,
-	UsageRightsRepository,
-} from "./domain/usage-rights";
+import { createUsageRightsServiceFromEnv } from "./domain/usage-rights";
 import { PricingRepository } from "./domain/pricing";
 import {
 	SubscriptionService,
@@ -85,6 +82,11 @@ export interface GateResult {
 	entitlementType?: string;
 	error?: string;
 	upgradeRequired?: boolean;
+	code?: string;
+	overageWarning?: boolean;
+	overageUnits?: number;
+	overageEnabled?: boolean;
+	spendLimitRemaining?: number | null;
 }
 
 export interface OrgBranding {
@@ -93,6 +95,8 @@ export interface OrgBranding {
 	slug: string;
 	logo: string | null;
 	metadata: Record<string, unknown> | null;
+	/** Better Auth organizations.status — archived orgs are read-only in product apps */
+	status: string;
 }
 
 export interface OrgMember {
@@ -243,10 +247,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		metric: UsageMetric,
 		count: number = 1,
 	): Promise<GateResult> {
-		const service = new UsageRightsService(
-			new UsageRightsRepository(this.env.DB),
-			new PricingRepository(this.env.DB),
-		);
+		const service = createUsageRightsServiceFromEnv(this.env);
 		const result = await service.gateAndMeter(orgId, metric, count);
 		return result as GateResult;
 	}
@@ -259,10 +260,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		metric: UsageMetric,
 		count: number = 1,
 	): Promise<void> {
-		const service = new UsageRightsService(
-			new UsageRightsRepository(this.env.DB),
-			new PricingRepository(this.env.DB),
-		);
+		const service = createUsageRightsServiceFromEnv(this.env);
 		await service.recordUsage(orgId, metric, count);
 	}
 
@@ -273,10 +271,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 		orgId: string,
 		metric: UsageMetric,
 	): Promise<GateResult> {
-		const service = new UsageRightsService(
-			new UsageRightsRepository(this.env.DB),
-			new PricingRepository(this.env.DB),
-		);
+		const service = createUsageRightsServiceFromEnv(this.env);
 		const result = await service.checkRight(orgId, metric);
 		return result as GateResult;
 	}
@@ -291,7 +286,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 	 */
 	async getOrganization(id: string): Promise<OrgBranding | null> {
 		const org = await this.env.DB.prepare(
-			`SELECT id, name, slug, logo, metadata FROM organizations WHERE id = ?`,
+			`SELECT id, name, slug, logo, metadata, status FROM organizations WHERE id = ?`,
 		)
 			.bind(id)
 			.first<{
@@ -300,6 +295,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 				slug: string;
 				logo: string | null;
 				metadata: string | null;
+				status: string | null;
 			}>();
 
 		if (!org) return null;
@@ -312,6 +308,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 			metadata: org.metadata
 				? (JSON.parse(org.metadata) as Record<string, unknown>)
 				: null,
+			status: org.status ?? "active",
 		};
 	}
 

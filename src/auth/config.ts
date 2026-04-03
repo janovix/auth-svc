@@ -506,9 +506,11 @@ export function buildResolvedAuthConfig(
 							}
 						}
 
-						// Count organizations owned by user
+						// Count active organizations owned by user (archived do not count toward limit)
 						const orgsResult = await env.DB.prepare(
-							`SELECT COUNT(*) as count FROM members WHERE userId = ? AND role = 'owner'`,
+							`SELECT COUNT(*) as count FROM members m
+							 INNER JOIN organizations o ON o.id = m.organizationId
+							 WHERE m.userId = ? AND m.role = 'owner' AND o.status = 'active'`,
 						)
 							.bind(user.id)
 							.first<{ count: number }>();
@@ -517,6 +519,17 @@ export function buildResolvedAuthConfig(
 
 						// 0 means unlimited -- skip limit check
 						if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
+							const overageRow = await env.DB.prepare(
+								`SELECT overage_enabled FROM user_overage_settings WHERE user_id = ? LIMIT 1`,
+							)
+								.bind(user.id)
+								.first<{ overage_enabled: number }>();
+							if (overageRow?.overage_enabled === 1) {
+								console.log(
+									`[Org Guard] User ${user.id} at org limit but metered overage enabled — allowing creation`,
+								);
+								return true;
+							}
 							console.log(
 								`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
 							);
@@ -822,7 +835,10 @@ export function buildResolvedAuthConfig(
 						try {
 							// Find user's first organization membership
 							const memberResult = await env.DB.prepare(
-								`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
+								`SELECT m.organizationId AS organizationId FROM members m
+								 INNER JOIN organizations o ON o.id = m.organizationId
+								 WHERE m.userId = ? AND o.status = 'active'
+								 ORDER BY m.createdAt ASC LIMIT 1`,
 							)
 								.bind(session.userId)
 								.first<{ organizationId: string }>();
@@ -1040,6 +1056,34 @@ export function buildResolvedAuthConfig(
 			// Member seat updates are handled via custom endpoints in routes/organization.ts:
 			// - POST /api/organization/update-seats (called after invitation acceptance)
 			// - POST /api/subscription/usage/sync-members (for admin sync)
+
+			// @ts-expect-error Organization plugin supplies databaseHooks.organization; @better-auth/core types only list user/session/etc.
+			organization: {
+				delete: {
+					before: async (org: { id: string }) => {
+						try {
+							await env.DB.prepare(
+								`UPDATE organizations SET status = 'archived', archivedAt = datetime('now'), archivedReason = ?, updatedAt = datetime('now') WHERE id = ?`,
+							)
+								.bind("user_initiated", org.id)
+								.run();
+							console.log(
+								`[Org Hook] Soft-archived organization ${org.id} instead of delete`,
+							);
+						} catch (e) {
+							console.error(
+								"[Org Hook] Failed to soft-archive organization:",
+								e,
+							);
+							Sentry.captureException(e, {
+								tags: { context: "organization-delete-hook" },
+								extra: { organizationId: org.id },
+							});
+						}
+						return false;
+					},
+				},
+			},
 		},
 	};
 

@@ -152,19 +152,25 @@ model Jwks {
 }
 
 // Better Auth Organization model
+// Custom columns (status, archivedAt, archivedReason) are not exposed by Better Auth APIs;
+// use custom HTTP routes or Prisma/raw SQL. Better Auth ignores unknown columns on create/update.
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  logo      String?
-  metadata  String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(uuid())
+  name             String
+  slug             String    @unique
+  logo             String?
+  metadata         String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  status           String    @default("active") // active, archived, suspended
+  archivedAt       DateTime?
+  archivedReason   String?
 
   members     Member[]
   invitations Invitation[]
 
   @@index([slug])
+  @@index([status])
   @@map("organizations")
 }
 
@@ -211,6 +217,21 @@ model Invitation {
 // Custom Auth-SVC Models (snake_case columns via @map directives)
 // These models are NOT managed by Better Auth and use standard conventions
 // ============================================================================
+
+// Per-user metered overage preferences and spend tracking (billing period accumulator reset via webhook)
+model UserOverageSettings {
+  id                         String   @id @default(uuid())
+  userId                     String   @unique @map("user_id")
+  overageEnabled             Boolean  @default(false) @map("overage_enabled")
+  spendLimitCents            Int?     @map("spend_limit_cents")
+  spendLimitCurrency         String   @default("MXN") @map("spend_limit_currency")
+  periodOverageChargeCents   Int      @default(0) @map("period_overage_charge_cents")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("user_overage_settings")
+}
 
 // Organization-level default settings (custom - snake_case)
 model OrganizationSettings {

@@ -20,6 +20,8 @@ import {
 	SubscriptionService,
 } from "../domain/subscription";
 import { PricingRepository, PricingService } from "../domain/pricing";
+import { OverageRepository } from "../domain/overage";
+import { UsageRightsRepository } from "../domain/usage-rights/repository";
 import { getBetterAuthContext } from "../auth/instance";
 
 type SubscriptionBindings = {
@@ -151,7 +153,24 @@ subscriptionRoutes.get("/can-create-org", async (c) => {
 
 	const service = createSubscriptionService(c);
 
-	const result = await service.canCreateOrganization(user.id);
+	let result = await service.canCreateOrganization(user.id);
+
+	if (
+		!result.allowed &&
+		result.reason?.toLowerCase().includes("limit") &&
+		result.reason?.toLowerCase().includes("organization")
+	) {
+		const overageRepo = new OverageRepository(c.env.DB);
+		const row = await overageRepo.getByUserId(user.id);
+		if (row?.overageEnabled) {
+			result = {
+				allowed: true,
+				reason: result.reason,
+				warning:
+					"You are at your plan organization limit. Additional usage may incur charges.",
+			};
+		}
+	}
 
 	return c.json({
 		success: true,
@@ -913,6 +932,276 @@ subscriptionRoutes.post("/portal", async (c) => {
  * POST /api/subscription/usage/report
  * Report usage increment (internal use by other services)
  */
+/**
+ * GET /api/subscription/overage-settings
+ */
+subscriptionRoutes.get("/overage-settings", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const repo = new OverageRepository(c.env.DB);
+	const row = await repo.getByUserId(user.id);
+
+	return c.json({
+		success: true,
+		data: row
+			? {
+					overageEnabled: row.overageEnabled,
+					spendLimitCents: row.spendLimitCents,
+					spendLimitCurrency: row.spendLimitCurrency,
+					periodOverageChargeCents: row.periodOverageChargeCents,
+				}
+			: {
+					overageEnabled: false,
+					spendLimitCents: null,
+					spendLimitCurrency: "MXN",
+					periodOverageChargeCents: 0,
+				},
+	});
+});
+
+/**
+ * PUT /api/subscription/overage-settings
+ */
+subscriptionRoutes.put("/overage-settings", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const body = await c.req.json<{
+		overageEnabled?: boolean;
+		spendLimitCents?: number | null;
+		spendLimitCurrency?: string;
+	}>();
+
+	const repo = new OverageRepository(c.env.DB);
+	const row = await repo.upsert({
+		userId: user.id,
+		overageEnabled: body.overageEnabled,
+		spendLimitCents: body.spendLimitCents,
+		spendLimitCurrency: body.spendLimitCurrency,
+	});
+
+	return c.json({
+		success: true,
+		data: {
+			overageEnabled: row.overageEnabled,
+			spendLimitCents: row.spendLimitCents,
+			spendLimitCurrency: row.spendLimitCurrency,
+			periodOverageChargeCents: row.periodOverageChargeCents,
+		},
+	});
+});
+
+/**
+ * GET /api/subscription/usage-details
+ * Usage for active org + owner limits + overage accumulator (for billing UI).
+ */
+subscriptionRoutes.get("/usage-details", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+	if (!user.organizationId) {
+		return c.json({ success: false, error: "No active organization" }, 400);
+	}
+
+	const subscriptionRepo = new SubscriptionRepository(c.env.DB);
+	const ownerUserId = await subscriptionRepo.getOrganizationOwnerUserId(
+		user.organizationId,
+	);
+	if (!ownerUserId) {
+		return c.json(
+			{ success: false, error: "Organization owner not found" },
+			404,
+		);
+	}
+
+	const service = createSubscriptionService(c);
+	const usage = await service.getOrCreateOrganizationUsage(
+		user.organizationId,
+		ownerUserId,
+	);
+	const limits = await service.getUserPlanLimits(ownerUserId);
+
+	const overageRepo = new OverageRepository(c.env.DB);
+	const overageRow = await overageRepo.getByUserId(ownerUserId);
+
+	const usageRightsRepo = new UsageRightsRepository(c.env.DB);
+	const periodStartStr = usage.periodStart.toISOString().slice(0, 10);
+	const periodEndStr = usage.periodEnd.toISOString().slice(0, 10);
+	const watchlistQueriesUsed =
+		await usageRightsRepo.getMonthlyWatchlistQueriesUsed(
+			user.organizationId,
+			periodStartStr,
+			periodEndStr,
+		);
+
+	return c.json({
+		success: true,
+		data: {
+			usage: {
+				reports: usage.reportsUsed,
+				notices: usage.noticesUsed,
+				alerts: usage.alertsUsed,
+				operations: usage.operationsUsed,
+				clients: usage.clientsUsed,
+				users: usage.usersCount,
+				watchlistQueries: watchlistQueriesUsed,
+			},
+			limits: limits
+				? {
+						reports: limits.reportsPerMonth,
+						notices: limits.noticesPerMonth,
+						alerts: limits.alertsPerMonth,
+						operations: limits.operationsPerMonth,
+						clients: limits.clientsPerMonth,
+						users: limits.usersPerOrg,
+						watchlistQueriesPerMonth: limits.watchlistQueriesPerMonth,
+						maxOrganizations: limits.maxOrganizations,
+					}
+				: null,
+			period: {
+				start: usage.periodStart.toISOString(),
+				end: usage.periodEnd.toISOString(),
+			},
+			overage: overageRow
+				? {
+						enabled: overageRow.overageEnabled,
+						spendLimitCents: overageRow.spendLimitCents,
+						periodChargeCents: overageRow.periodOverageChargeCents,
+						currency: overageRow.spendLimitCurrency,
+					}
+				: {
+						enabled: false,
+						spendLimitCents: null,
+						periodChargeCents: 0,
+						currency: "MXN",
+					},
+		},
+	});
+});
+
+/**
+ * POST /api/subscription/prepare-downgrade
+ * Returns owned orgs and whether they fit target plan limits (for DowngradeWizard).
+ */
+subscriptionRoutes.post("/prepare-downgrade", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const body = await c.req.json<{ targetPlan: string }>();
+	if (!body?.targetPlan?.trim()) {
+		return c.json({ success: false, error: "targetPlan is required" }, 400);
+	}
+
+	const pricingService = new PricingService(new PricingRepository(c.env.DB));
+	const targetLimits = await pricingService.getLimitsByPlanName(
+		body.targetPlan,
+	);
+	if (!targetLimits) {
+		return c.json({ success: false, error: "Unknown target plan" }, 400);
+	}
+
+	const rows = await c.env.DB.prepare(
+		`SELECT o.id, o.name, o.status,
+			(SELECT COUNT(*) FROM members m WHERE m.organizationId = o.id) AS memberCount
+		 FROM members me
+		 JOIN organizations o ON o.id = me.organizationId
+		 WHERE me.userId = ? AND me.role = 'owner'
+		 ORDER BY o.createdAt ASC`,
+	)
+		.bind(user.id)
+		.all<{
+			id: string;
+			name: string;
+			status: string;
+			memberCount: number;
+		}>();
+
+	const owned = rows.results ?? [];
+	const activeOwned = owned.filter((o) => o.status === "active");
+	const maxOrgs = targetLimits.maxOrganizations;
+	const usersCap = targetLimits.usersPerOrg;
+
+	const excessOrgSlots =
+		maxOrgs === 0 ? 0 : Math.max(0, activeOwned.length - maxOrgs);
+
+	const organizations = activeOwned.map((o) => ({
+		id: o.id,
+		name: o.name,
+		status: o.status,
+		memberCount: o.memberCount,
+		exceedsUsersPerOrgAfterDowngrade:
+			usersCap > 0 ? o.memberCount > usersCap : false,
+	}));
+
+	return c.json({
+		success: true,
+		data: {
+			targetPlan: body.targetPlan,
+			targetLimits: {
+				maxOrganizations: targetLimits.maxOrganizations,
+				usersPerOrg: targetLimits.usersPerOrg,
+			},
+			activeOrganizationCount: activeOwned.length,
+			excessOrganizationSlots: excessOrgSlots,
+			organizations,
+		},
+	});
+});
+
+/**
+ * POST /api/subscription/downgrade/archive-organizations
+ * Archives selected owned orgs before client completes plan downgrade via Stripe.
+ */
+subscriptionRoutes.post("/downgrade/archive-organizations", async (c) => {
+	const user = await getAuthenticatedUser(c);
+	if (!user) {
+		return c.json({ success: false, error: "Unauthorized" }, 401);
+	}
+
+	const body = await c.req.json<{ organizationIds?: string[] }>();
+	const ids = body.organizationIds ?? [];
+	if (!Array.isArray(ids) || ids.length === 0) {
+		return c.json(
+			{ success: false, error: "organizationIds must be a non-empty array" },
+			400,
+		);
+	}
+
+	for (const organizationId of ids) {
+		const row = await c.env.DB.prepare(
+			`SELECT 1 FROM members WHERE organizationId = ? AND userId = ? AND role = 'owner'`,
+		)
+			.bind(organizationId, user.id)
+			.first();
+
+		if (!row) {
+			return c.json(
+				{
+					success: false,
+					error: `Not owner of organization ${organizationId}`,
+				},
+				403,
+			);
+		}
+
+		await c.env.DB.prepare(
+			`UPDATE organizations SET status = 'archived', archivedAt = datetime('now'), archivedReason = ?, updatedAt = datetime('now') WHERE id = ?`,
+		)
+			.bind("downgrade", organizationId)
+			.run();
+	}
+
+	return c.json({ success: true, data: { archivedIds: ids } });
+});
+
 subscriptionRoutes.post("/usage/report", async (c) => {
 	// This endpoint is for internal service-to-service calls
 	// Verify internal token

@@ -143,7 +143,7 @@ export class SubscriptionService {
 	 */
 	async canCreateOrganization(
 		userId: string,
-	): Promise<{ allowed: boolean; reason?: string }> {
+	): Promise<{ allowed: boolean; reason?: string; warning?: string }> {
 		const status = await this.getUserSubscriptionStatus(userId);
 
 		if (!status.hasSubscription) {
@@ -670,6 +670,56 @@ export class SubscriptionService {
 			);
 			throw error;
 		}
+	}
+
+	/**
+	 * Resolve Stripe subscription item for the plan's overage price and report usage to Stripe.
+	 * No-op if Stripe, subscription, or matching item is missing.
+	 */
+	async reportOverageForMetricIfConfigured(
+		organizationId: string,
+		ownerUserId: string,
+		planName: string,
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
+	): Promise<void> {
+		if (!this.stripe || !this.pricingService) {
+			return;
+		}
+
+		const overagePriceId = await this.pricingService.getOveragePriceIdForMetric(
+			planName,
+			metric,
+		);
+		if (!overagePriceId) {
+			return;
+		}
+
+		const subscription = await this.repository.getUserSubscription(ownerUserId);
+		if (!subscription?.stripeSubscriptionId) {
+			return;
+		}
+
+		const stripeSub = await this.stripe.subscriptions.retrieve(
+			subscription.stripeSubscriptionId,
+			{ expand: ["items.data.price"] },
+		);
+
+		const item = stripeSub.items.data.find(
+			(line) => line.price.id === overagePriceId,
+		);
+		if (!item) {
+			console.warn(
+				`[Subscription] No subscription item for overage price ${overagePriceId} on sub ${subscription.stripeSubscriptionId}`,
+			);
+			return;
+		}
+
+		await this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			metric,
+			item.id,
+		);
 	}
 
 	/**

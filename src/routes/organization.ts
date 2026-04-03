@@ -50,6 +50,9 @@ organizationRoutes.get("/list-with-role", async (c) => {
 				o.metadata,
 				o.createdAt,
 				o.updatedAt,
+				o.status,
+				o.archivedAt,
+				o.archivedReason,
 				m.id        AS memberId,
 				m.role      AS role,
 				m.createdAt AS memberSince
@@ -67,6 +70,9 @@ organizationRoutes.get("/list-with-role", async (c) => {
 				metadata: string | null;
 				createdAt: string;
 				updatedAt: string;
+				status: string;
+				archivedAt: string | null;
+				archivedReason: string | null;
 				memberId: string;
 				role: string;
 				memberSince: string;
@@ -80,6 +86,9 @@ organizationRoutes.get("/list-with-role", async (c) => {
 			metadata: row.metadata ? JSON.parse(row.metadata) : null,
 			createdAt: row.createdAt,
 			updatedAt: row.updatedAt,
+			status: row.status,
+			archivedAt: row.archivedAt,
+			archivedReason: row.archivedReason,
 			memberId: row.memberId,
 			role: row.role,
 			memberSince: row.memberSince,
@@ -575,6 +584,139 @@ organizationRoutes.post("/transfer-ownership", async (c) => {
 						? error.message
 						: "Failed to transfer ownership",
 			},
+			500,
+		);
+	}
+});
+
+/**
+ * POST /api/organization/:organizationId/archive
+ * Soft-archive organization (owner only). Data retained for compliance.
+ */
+organizationRoutes.post("/:organizationId/archive", async (c) => {
+	try {
+		const { auth } = await getBetterAuthContext(c.env);
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+		if (!session?.user) {
+			return c.json({ success: false, error: "Unauthorized" }, 401);
+		}
+
+		const organizationId = c.req.param("organizationId");
+		const body = await c.req
+			.json<{ reason?: string }>()
+			.catch((): { reason?: string } => ({}));
+
+		const membership = await c.env.DB.prepare(
+			`SELECT role FROM members WHERE organizationId = ? AND userId = ? LIMIT 1`,
+		)
+			.bind(organizationId, session.user.id)
+			.first<{ role: string }>();
+
+		if (!membership || membership.role !== "owner") {
+			return c.json(
+				{ success: false, error: "Only the organization owner can archive" },
+				403,
+			);
+		}
+
+		const reason = body.reason?.trim() || "user_initiated";
+
+		await c.env.DB.prepare(
+			`UPDATE organizations SET status = 'archived', archivedAt = datetime('now'), archivedReason = ?, updatedAt = datetime('now') WHERE id = ?`,
+		)
+			.bind(reason, organizationId)
+			.run();
+
+		return c.json({
+			success: true,
+			data: { organizationId, status: "archived" },
+		});
+	} catch (error) {
+		console.error("[Organization] archive error:", error);
+		return c.json(
+			{ success: false, error: "Failed to archive organization" },
+			500,
+		);
+	}
+});
+
+/**
+ * POST /api/organization/:organizationId/restore
+ * Restore archived org if within subscription org limit (owner only).
+ */
+organizationRoutes.post("/:organizationId/restore", async (c) => {
+	try {
+		const { auth } = await getBetterAuthContext(c.env);
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+		if (!session?.user) {
+			return c.json({ success: false, error: "Unauthorized" }, 401);
+		}
+
+		const organizationId = c.req.param("organizationId");
+
+		const membership = await c.env.DB.prepare(
+			`SELECT role FROM members WHERE organizationId = ? AND userId = ? LIMIT 1`,
+		)
+			.bind(organizationId, session.user.id)
+			.first<{ role: string }>();
+
+		if (!membership || membership.role !== "owner") {
+			return c.json(
+				{ success: false, error: "Only the organization owner can restore" },
+				403,
+			);
+		}
+
+		const org = await c.env.DB.prepare(
+			`SELECT status FROM organizations WHERE id = ?`,
+		)
+			.bind(organizationId)
+			.first<{ status: string }>();
+
+		if (!org || org.status !== "archived") {
+			return c.json(
+				{ success: false, error: "Organization is not archived" },
+				400,
+			);
+		}
+
+		const subRepo = new SubscriptionRepository(c.env.DB);
+		const stripe = c.env.STRIPE_SECRET_KEY
+			? new Stripe(c.env.STRIPE_SECRET_KEY, { timeout: 15_000 })
+			: null;
+		const pricingRepo = new PricingRepository(c.env.DB);
+		const subService = new SubscriptionService(subRepo, stripe, pricingRepo);
+
+		const can = await subService.canCreateOrganization(session.user.id);
+		if (!can.allowed) {
+			return c.json(
+				{
+					success: false,
+					error: can.reason ?? "Cannot restore: subscription limit reached",
+					code: "ORG_LIMIT_EXCEEDED",
+				},
+				403,
+			);
+		}
+
+		await c.env.DB.prepare(
+			`UPDATE organizations SET status = 'active', archivedAt = NULL, archivedReason = NULL, updatedAt = datetime('now') WHERE id = ?`,
+		)
+			.bind(organizationId)
+			.run();
+
+		return c.json({
+			success: true,
+			data: { organizationId, status: "active" },
+		});
+	} catch (error) {
+		console.error("[Organization] restore error:", error);
+		return c.json(
+			{ success: false, error: "Failed to restore organization" },
 			500,
 		);
 	}

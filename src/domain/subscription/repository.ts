@@ -322,8 +322,9 @@ export class SubscriptionRepository {
 		const result = await this.db
 			.prepare(
 				`
-				SELECT COUNT(*) as count FROM members 
-				WHERE userId = ? AND role = 'owner'
+				SELECT COUNT(*) as count FROM members m
+				INNER JOIN organizations o ON o.id = m.organizationId
+				WHERE m.userId = ? AND m.role = 'owner' AND o.status = 'active'
 			`,
 			)
 			.bind(userId)
@@ -383,6 +384,7 @@ export class SubscriptionRepository {
 					m1.organizationId as organization_id,
 					COUNT(m2.id) as member_count
 				FROM members m1
+				INNER JOIN organizations o ON o.id = m1.organizationId AND o.status = 'active'
 				JOIN members m2 ON m1.organizationId = m2.organizationId
 				WHERE m1.userId = ? AND m1.role = 'owner'
 				GROUP BY m1.organizationId
