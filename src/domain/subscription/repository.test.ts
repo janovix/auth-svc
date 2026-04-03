@@ -172,7 +172,9 @@ describe("SubscriptionRepository", () => {
 
 			expect(result).toBe(2);
 			expect(mockDb.prepare).toHaveBeenCalledWith(
-				expect.stringContaining("WHERE userId = ? AND role = 'owner'"),
+				expect.stringContaining(
+					"WHERE m.userId = ? AND m.role = 'owner' AND o.status = 'active'",
+				),
 			);
 		});
 
