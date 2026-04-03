@@ -1,3 +1,10 @@
+# [1.10.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.3...v1.10.0-rc.4) (2026-04-03)
+
+
+### Features
+
+* implement user overage settings and organization archiving functionality ([5c01f67](https://github.com/janovix/auth-svc/commit/5c01f673503e4f2cc7134894e9116da87c714a09))
+
 # [1.10.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.2...v1.10.0-rc.3) (2026-04-02)
 
 
