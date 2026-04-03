@@ -1,3 +1,10 @@
+# [1.10.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.4...v1.10.0-rc.5) (2026-04-03)
+
+
+### Bug Fixes
+
+* update query in SubscriptionRepository test to include organization status check ([9616598](https://github.com/janovix/auth-svc/commit/9616598303b8913f3bfdcad7c4dec0111535cfee))
+
 # [1.10.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.3...v1.10.0-rc.4) (2026-04-03)
 
 
