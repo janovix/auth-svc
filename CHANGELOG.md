@@ -1,3 +1,10 @@
+# [1.10.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.8...v1.10.0-rc.9) (2026-04-04)
+
+
+### Features
+
+* add overage pricing details and seat price retrieval to subscription usage details ([56986bd](https://github.com/janovix/auth-svc/commit/56986bde07178300348d3c03ec0ff6ba45daa0e5))
+
 # [1.10.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.7...v1.10.0-rc.8) (2026-04-04)
 
 
