@@ -1,3 +1,10 @@
+# [1.10.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.6...v1.10.0-rc.7) (2026-04-04)
+
+
+### Features
+
+* implement Turnstile captcha verification for protected auth routes and add E2E test email handling ([3f479d0](https://github.com/janovix/auth-svc/commit/3f479d0651def3ed372179277f3ad0b880f6902d))
+
 # [1.10.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.5...v1.10.0-rc.6) (2026-04-04)
 
 
