@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { emailOTP, openAPI } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
@@ -13,6 +13,7 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+import { isE2eTestEmail } from "../utils/e2e-test-email";
 import { executeInBackground, getExecutionContext } from "./execution-context";
 import { PricingService } from "../domain/pricing/service";
 import { PricingRepository } from "../domain/pricing/repository";
@@ -620,6 +621,13 @@ export function buildResolvedAuthConfig(
 				// Override the default email verification with OTP-based verification
 				// This means no email links are sent - only OTP codes
 				sendVerificationOnSignUp: true,
+				// Playwright E2E: deterministic OTP for @e2e.janovix.com (domain-controlled)
+				generateOTP: ({ email }) => {
+					if (isE2eTestEmail(email)) {
+						return "123456";
+					}
+					return undefined;
+				},
 				sendVerificationOTP:
 					/* istanbul ignore next -- @preserve Mandrill email sending tested via integration */
 					async ({
@@ -635,6 +643,13 @@ export function buildResolvedAuthConfig(
 						console.log(
 							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
 						);
+
+						if (isE2eTestEmail(email)) {
+							console.log(
+								`[Email OTP] E2E test email (${email}); skipping Mandrill send`,
+							);
+							return;
+						}
 
 						try {
 							const apiKey = env.MANDRILL_API_KEY;
@@ -778,19 +793,8 @@ export function buildResolvedAuthConfig(
 						}),
 					]
 				: []),
-			// Turnstile captcha plugin for bot protection on email-sending endpoints
-			// Only load if TURNSTILE_SECRET_KEY is configured (production)
-			// In local/test environments without the secret, captcha is skipped
-			...(env.TURNSTILE_SECRET_KEY
-				? [
-						captcha({
-							provider: "cloudflare-turnstile",
-							secretKey: env.TURNSTILE_SECRET_KEY,
-							// Protect the endpoints that send emails to prevent abuse
-							endpoints: ["/sign-up/email", "/email-otp/send-verification-otp"],
-						}),
-					]
-				: []),
+			// Turnstile captcha: enforced in auth/routes.ts (verifyTurnstileForProtectedAuthPost)
+			// so @e2e.janovix.com can bypass without a second plugin layer.
 		],
 		session: {
 			updateAge: 60 * 30,
