@@ -227,6 +227,75 @@ describe("PricingService", () => {
 		});
 	});
 
+	describe("getSeatPriceForPlan", () => {
+		it("returns the seat PlanPrice row for the plan", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const seat = await service.getSeatPriceForPlan("business");
+
+			expect(seat).not.toBeNull();
+			expect(seat?.priceType).toBe("seat");
+			expect(seat?.amount).toBe(25000);
+			expect(seat?.stripePriceId).toBe("price_seat_business");
+		});
+
+		it("returns null when plan name is unknown", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(null);
+
+			const seat = await service.getSeatPriceForPlan("unknown");
+
+			expect(seat).toBeNull();
+		});
+	});
+
+	describe("getOveragePlanPriceForMetric", () => {
+		const overageReportPrice: PlanPrice = {
+			id: "price_ov_report",
+			planId: "plan_business",
+			stripePriceId: "price_overage_report",
+			priceType: "overage_report",
+			amount: 500,
+			currency: "MXN",
+			interval: null,
+			intervalCount: null,
+			description: "Per report overage",
+			isActive: true,
+			metadata: null,
+			createdAt: new Date("2024-01-01"),
+			updatedAt: new Date("2024-01-01"),
+		};
+
+		it("returns active overage price for reports metric", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getPricesForPlan.mockResolvedValue([
+				...mockBusinessPrices,
+				overageReportPrice,
+			]);
+
+			const row = await service.getOveragePlanPriceForMetric(
+				"business",
+				"reports",
+			);
+
+			expect(row).not.toBeNull();
+			expect(row?.priceType).toBe("overage_report");
+			expect(row?.amount).toBe(500);
+		});
+
+		it("returns null when no overage price exists for metric", async () => {
+			mockRepository.getPlanByName.mockResolvedValue(mockBusinessPlan);
+			mockRepository.getPricesForPlan.mockResolvedValue(mockBusinessPrices);
+
+			const row = await service.getOveragePlanPriceForMetric(
+				"business",
+				"reports",
+			);
+
+			expect(row).toBeNull();
+		});
+	});
+
 	describe("validateLicenseKey", () => {
 		it("should return valid for active license", async () => {
 			const mockLicense: EnterpriseLicense = {
