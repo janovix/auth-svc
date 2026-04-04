@@ -1020,6 +1020,18 @@ subscriptionRoutes.get("/usage-details", async (c) => {
 		);
 	}
 
+	if (user.id !== ownerUserId) {
+		return c.json(
+			{
+				success: false,
+				error: "forbidden",
+				message:
+					"Only the organization owner can view usage details for billing.",
+			},
+			403,
+		);
+	}
+
 	const service = createSubscriptionService(c);
 	const usage = await service.getOrCreateOrganizationUsage(
 		user.organizationId,
