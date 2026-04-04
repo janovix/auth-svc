@@ -1,3 +1,10 @@
+# [1.10.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.5...v1.10.0-rc.6) (2026-04-04)
+
+
+### Bug Fixes
+
+* update usersPerOrg limit for watchlist plan to 3 ([cc13be0](https://github.com/janovix/auth-svc/commit/cc13be0b14f9aab70720ad8173a5d0942672efe7))
+
 # [1.10.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.4...v1.10.0-rc.5) (2026-04-03)
 
 
