@@ -1,3 +1,10 @@
+# [1.10.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.7...v1.10.0-rc.8) (2026-04-04)
+
+
+### Features
+
+* restrict access to usage details for organization owners only ([65459b9](https://github.com/janovix/auth-svc/commit/65459b9a05d343108bbf3c58a4749080da3950a3))
+
 # [1.10.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.6...v1.10.0-rc.7) (2026-04-04)
 
 
