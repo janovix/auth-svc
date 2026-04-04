@@ -1052,6 +1052,61 @@ subscriptionRoutes.get("/usage-details", async (c) => {
 			periodEndStr,
 		);
 
+	const subStatus = await service.getUserSubscriptionStatus(ownerUserId);
+	const pricingService = new PricingService(new PricingRepository(c.env.DB));
+
+	let overagePricing: {
+		reports: { unitCents: number; currency: string } | null;
+		notices: { unitCents: number; currency: string } | null;
+		alerts: { unitCents: number; currency: string } | null;
+		operations: { unitCents: number; currency: string } | null;
+		clients: { unitCents: number; currency: string } | null;
+		seat: {
+			unitCents: number;
+			currency: string;
+			interval: string;
+		} | null;
+	} | null = null;
+
+	if (
+		subStatus.hasSubscription &&
+		!subStatus.isLicenseBased &&
+		subStatus.plan
+	) {
+		const planName = subStatus.plan;
+		const [
+			reportsRow,
+			noticesRow,
+			alertsRow,
+			operationsRow,
+			clientsRow,
+			seatRow,
+		] = await Promise.all([
+			pricingService.getOveragePlanPriceForMetric(planName, "reports"),
+			pricingService.getOveragePlanPriceForMetric(planName, "notices"),
+			pricingService.getOveragePlanPriceForMetric(planName, "alerts"),
+			pricingService.getOveragePlanPriceForMetric(planName, "operations"),
+			pricingService.getOveragePlanPriceForMetric(planName, "clients"),
+			pricingService.getSeatPriceForPlan(planName),
+		]);
+		const unit = (row: { amount: number; currency: string } | null) =>
+			row ? { unitCents: row.amount, currency: row.currency } : null;
+		overagePricing = {
+			reports: unit(reportsRow),
+			notices: unit(noticesRow),
+			alerts: unit(alertsRow),
+			operations: unit(operationsRow),
+			clients: unit(clientsRow),
+			seat: seatRow
+				? {
+						unitCents: seatRow.amount,
+						currency: seatRow.currency,
+						interval: seatRow.interval ?? "month",
+					}
+				: null,
+		};
+	}
+
 	return c.json({
 		success: true,
 		data: {
@@ -1093,6 +1148,7 @@ subscriptionRoutes.get("/usage-details", async (c) => {
 						periodChargeCents: 0,
 						currency: "MXN",
 					},
+			overagePricing,
 		},
 	});
 });
@@ -1153,6 +1209,17 @@ subscriptionRoutes.post("/prepare-downgrade", async (c) => {
 			usersCap > 0 ? o.memberCount > usersCap : false,
 	}));
 
+	const seatPriceRow = await pricingService.getSeatPriceForPlan(
+		body.targetPlan,
+	);
+	const seatPrice = seatPriceRow
+		? {
+				amountCents: seatPriceRow.amount,
+				currency: seatPriceRow.currency,
+				interval: seatPriceRow.interval ?? "month",
+			}
+		: null;
+
 	return c.json({
 		success: true,
 		data: {
@@ -1164,6 +1231,7 @@ subscriptionRoutes.post("/prepare-downgrade", async (c) => {
 			activeOrganizationCount: activeOwned.length,
 			excessOrganizationSlots: excessOrgSlots,
 			organizations,
+			seatPrice,
 		},
 	});
 });
