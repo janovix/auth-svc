@@ -1,3 +1,10 @@
+# [1.10.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.9...v1.10.0-rc.10) (2026-04-05)
+
+
+### Features
+
+* implement Stripe billing guards and flags service integration ([e35fb83](https://github.com/janovix/auth-svc/commit/e35fb8371d1e697f37c7b1eb6eb56a0a51ce3aad))
+
 # [1.10.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.8...v1.10.0-rc.9) (2026-04-04)
 
 
