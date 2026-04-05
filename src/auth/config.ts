@@ -17,6 +17,7 @@ import { isE2eTestEmail } from "../utils/e2e-test-email";
 import { executeInBackground, getExecutionContext } from "./execution-context";
 import { PricingService } from "../domain/pricing/service";
 import { PricingRepository } from "../domain/pricing/repository";
+import { isStripeBillingEnabled } from "../lib/stripe-billing-flag";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -916,6 +917,13 @@ export function buildResolvedAuthConfig(
 					}) => {
 						// Sync user to Stripe customer when profile is updated
 						if (!env.STRIPE_SECRET_KEY) {
+							return;
+						}
+
+						if (!(await isStripeBillingEnabled(env))) {
+							console.log(
+								`[Stripe Sync] Billing disabled via flags for user ${user.id}, skipping`,
+							);
 							return;
 						}
 

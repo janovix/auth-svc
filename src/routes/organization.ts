@@ -8,6 +8,7 @@
  */
 import { Hono } from "hono";
 import Stripe from "stripe";
+import { isStripeBillingEnabled } from "../lib/stripe-billing-flag";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
 import {
@@ -253,6 +254,17 @@ organizationRoutes.post("/update-seats", async (c) => {
 			});
 		}
 
+		if (!(await isStripeBillingEnabled(c.env))) {
+			console.log(
+				"[Organization] Stripe billing disabled via flags, skipping seat update",
+			);
+			return c.json({
+				success: true,
+				message: "Stripe billing disabled",
+				seatsUpdated: false,
+			});
+		}
+
 		const stripe = new Stripe(c.env.STRIPE_SECRET_KEY);
 		const repository = new SubscriptionRepository(c.env.DB);
 		const pricingRepository = new PricingRepository(c.env.DB);
@@ -355,6 +367,14 @@ organizationRoutes.post("/sync-all-seats", async (c) => {
 			return c.json({
 				success: true,
 				message: "Seat billing not configured",
+				synced: 0,
+			});
+		}
+
+		if (!(await isStripeBillingEnabled(c.env))) {
+			return c.json({
+				success: true,
+				message: "Stripe billing disabled",
 				synced: 0,
 			});
 		}

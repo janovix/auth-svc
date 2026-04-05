@@ -35,6 +35,11 @@
 			"service": "notifications-svc",
 			"entrypoint": "NotificationsEntrypoint",
 		},
+		{
+			"binding": "FLAGS_SERVICE",
+			"service": "flags-svc-preview",
+			"entrypoint": "FlagsSvcEntrypoint",
+		},
 	],
 	"r2_buckets": [
 		{

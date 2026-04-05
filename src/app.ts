@@ -17,6 +17,10 @@ import type { Bindings } from "./types/bindings";
 import { handleJwks } from "./routes/jwks";
 import { runWithExecutionContext } from "./auth/execution-context";
 import { createMemberLimitGuard } from "./middleware/member-limit";
+import {
+	createStripeBillingGuard,
+	createWebhookBillingGuard,
+} from "./middleware/stripe-billing-guard";
 import { settingsRoutes } from "./routes/settings";
 import { internalSettingsRoutes } from "./routes/internal-settings";
 import { auditRoutes } from "./routes/audit";
@@ -119,6 +123,11 @@ app.get("/api/auth/jwks", handleJwks);
 // Must be registered BEFORE registerBetterAuthRoutes so the middleware runs first.
 app.use("/api/auth/organization/invite-member", createMemberLimitGuard());
 
+// Block Better Auth Stripe subscription routes when billing is disabled via flags-svc.
+app.use("/api/auth/subscription/*", createStripeBillingGuard());
+// Better Auth Stripe plugin webhook (POST /api/auth/stripe/webhook) — 200 no-op when disabled
+app.use("/api/auth/stripe/webhook", createWebhookBillingGuard());
+
 // Register Better Auth routes (actual implementation - handles requests)
 registerBetterAuthRoutes(app);
 
@@ -143,9 +152,17 @@ app.route("/api/audit", auditRoutes);
 // Register Internal Audit routes for service bindings
 app.route("/internal/audit", internalAuditRoutes);
 
+// Stripe-only subscription routes (license-compatible routes stay on subscriptionRoutes)
+app.use("/api/subscription/ensure-customer", createStripeBillingGuard());
+app.use("/api/subscription/portal", createStripeBillingGuard());
+app.use("/api/subscription/usage/report", createStripeBillingGuard());
+
 // Register Subscription routes (usage tracking and org limits)
 // Note: Checkout, cancel, upgrade are handled by Better Auth at /api/auth/subscription/*
 app.route("/api/subscription", subscriptionRoutes);
+
+// Stripe catalog sync
+app.use("/api/pricing/sync-from-stripe", createStripeBillingGuard());
 
 // Register Pricing routes (database-driven plans, prices, and limits)
 app.route("/api/pricing", pricingRoutes);
@@ -166,6 +183,7 @@ app.route("/internal/usage-rights", internalUsageRightsRoutes);
 app.route("/api/organization", organizationRoutes);
 
 // Register Stripe Webhooks (card fingerprint check and usage reset)
+app.use("/webhooks/*", createWebhookBillingGuard());
 app.route("/webhooks", webhookRoutes);
 
 // Register Upload routes (avatar uploads via R2)
