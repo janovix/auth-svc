@@ -1,30 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
 	createStripeBillingGuard,
 	createWebhookBillingGuard,
 } from "./stripe-billing-guard";
-import type { Bindings } from "../types/bindings";
+import type { Bindings, FlagsSvcRpc } from "../types/bindings";
 
-vi.mock("../lib/stripe-billing-flag", () => ({
-	isStripeBillingEnabled: vi.fn(),
-}));
+const makeFlagsRpc = (enabled: boolean): FlagsSvcRpc => ({
+	fetch: vi.fn(),
+	evaluateFlag: vi.fn(),
+	evaluateFlags: vi.fn(),
+	evaluateAllFlags: vi.fn(),
+	isFlagEnabled: vi.fn().mockResolvedValue(enabled),
+});
 
-import { isStripeBillingEnabled } from "../lib/stripe-billing-flag";
-
-const minimalEnv = {} as Bindings;
+const makeEnv = (billingEnabled: boolean) =>
+	({ FLAGS_SERVICE: makeFlagsRpc(billingEnabled) }) as unknown as Bindings;
 
 describe("createStripeBillingGuard", () => {
-	beforeEach(() => {
-		vi.mocked(isStripeBillingEnabled).mockReset();
-	});
-
 	it("calls next when Stripe billing is enabled", async () => {
-		vi.mocked(isStripeBillingEnabled).mockResolvedValue(true);
 		const next = vi.fn().mockResolvedValue(undefined);
 		const json = vi.fn();
 		const guard = createStripeBillingGuard();
 		await guard(
-			{ env: minimalEnv, json } as unknown as Parameters<typeof guard>[0],
+			{ env: makeEnv(true), json } as unknown as Parameters<typeof guard>[0],
 			next,
 		);
 		expect(next).toHaveBeenCalled();
@@ -32,12 +30,11 @@ describe("createStripeBillingGuard", () => {
 	});
 
 	it("returns 403 with BILLING_DISABLED when billing is disabled", async () => {
-		vi.mocked(isStripeBillingEnabled).mockResolvedValue(false);
 		const next = vi.fn();
 		const json = vi.fn().mockReturnValue(new Response());
 		const guard = createStripeBillingGuard();
 		await guard(
-			{ env: minimalEnv, json } as unknown as Parameters<typeof guard>[0],
+			{ env: makeEnv(false), json } as unknown as Parameters<typeof guard>[0],
 			next,
 		);
 		expect(next).not.toHaveBeenCalled();
@@ -52,17 +49,12 @@ describe("createStripeBillingGuard", () => {
 });
 
 describe("createWebhookBillingGuard", () => {
-	beforeEach(() => {
-		vi.mocked(isStripeBillingEnabled).mockReset();
-	});
-
 	it("calls next when Stripe billing is enabled", async () => {
-		vi.mocked(isStripeBillingEnabled).mockResolvedValue(true);
 		const next = vi.fn().mockResolvedValue(undefined);
 		const json = vi.fn();
 		const guard = createWebhookBillingGuard();
 		await guard(
-			{ env: minimalEnv, json } as unknown as Parameters<typeof guard>[0],
+			{ env: makeEnv(true), json } as unknown as Parameters<typeof guard>[0],
 			next,
 		);
 		expect(next).toHaveBeenCalled();
@@ -70,12 +62,11 @@ describe("createWebhookBillingGuard", () => {
 	});
 
 	it("returns 200 { received, ignored } when billing is disabled", async () => {
-		vi.mocked(isStripeBillingEnabled).mockResolvedValue(false);
 		const next = vi.fn();
 		const json = vi.fn().mockReturnValue(new Response());
 		const guard = createWebhookBillingGuard();
 		await guard(
-			{ env: minimalEnv, json } as unknown as Parameters<typeof guard>[0],
+			{ env: makeEnv(false), json } as unknown as Parameters<typeof guard>[0],
 			next,
 		);
 		expect(next).not.toHaveBeenCalled();
