@@ -36,7 +36,7 @@
 		},
 		{
 			"binding": "FLAGS_SERVICE",
-			"service": "flags-svc",
+			"service": "flags-svc-prod",
 			"entrypoint": "FlagsSvcEntrypoint",
 		},
 	],
