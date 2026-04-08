@@ -1,3 +1,10 @@
+# [1.10.0-rc.11](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.10...v1.10.0-rc.11) (2026-04-08)
+
+
+### Bug Fixes
+
+* update flags service binding to use production environment ([207ca8e](https://github.com/janovix/auth-svc/commit/207ca8e4a7ae3802e8246b799a9749bb32ad3ef9))
+
 # [1.10.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.9...v1.10.0-rc.10) (2026-04-05)
 
 
