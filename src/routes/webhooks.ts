@@ -18,6 +18,7 @@ import {
 	SubscriptionService,
 } from "../domain/subscription";
 import { PricingRepository, PricingService } from "../domain/pricing";
+import { OverageRepository } from "../domain/overage";
 import { UsageRightsRepository } from "../domain/usage-rights/repository";
 
 type WebhookBindings = {
@@ -342,6 +343,16 @@ async function handleEvent(
 					);
 				console.log(`[Webhook] Reset usage for org ${org.organizationId}`);
 			}
+
+			const overageRepo = new OverageRepository(c.env.DB);
+			await overageRepo
+				.resetPeriodOverageCharge(subscription.referenceId)
+				.catch((err) =>
+					console.error(
+						`[Webhook] Failed to reset overage spend accumulator for user ${subscription.referenceId}:`,
+						err,
+					),
+				);
 			break;
 		}
 

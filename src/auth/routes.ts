@@ -7,6 +7,10 @@ import type { Bindings } from "../types/bindings";
 import { originMatchesAnyPattern } from "../http/origins";
 import { getTrustedOriginPatterns } from "../middleware/cors";
 import { JWKS_KV_CACHE_KEY } from "../routes/jwks";
+import {
+	rebuildPostRequest,
+	verifyTurnstileForProtectedAuthPost,
+} from "../middleware/turnstile-captcha";
 
 export const INTERNAL_AUTH_HEADER = "x-auth-internal-token";
 
@@ -146,7 +150,22 @@ async function handleAuthRequest(
 			}, AUTH_HANDLER_TIMEOUT_MS);
 		});
 
-		const handlerPromise = auth.handler(c.req.raw).catch((error) => {
+		let requestForAuth = c.req.raw;
+		if (c.req.method === "POST") {
+			const bodyText = await c.req.raw.text();
+			const turnstile = await verifyTurnstileForProtectedAuthPost(
+				c.req.url,
+				c.req.raw.headers,
+				bodyText,
+				c.env.TURNSTILE_SECRET_KEY,
+			);
+			if (!turnstile.ok) {
+				return addCorsHeadersIfNeeded(c, turnstile.response);
+			}
+			requestForAuth = rebuildPostRequest(c.req.raw, bodyText);
+		}
+
+		const handlerPromise = auth.handler(requestForAuth).catch((error) => {
 			if (isBetterAuthRedirectError(error)) {
 				const headers = new Headers();
 				const errorHeaders = error.headers;

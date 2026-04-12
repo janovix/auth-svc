@@ -18,6 +18,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import * as Sentry from "@sentry/cloudflare";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import { OverageRepository } from "../domain/overage";
 import {
 	UsageRightsService,
 	UsageRightsRepository,
@@ -92,10 +93,30 @@ export function createMemberLimitGuard(): MiddlewareHandler<AppBindings> {
 				return next();
 			}
 
+			const orgRow = await c.env.DB.prepare(
+				`SELECT status FROM organizations WHERE id = ? LIMIT 1`,
+			)
+				.bind(organizationId)
+				.first<{ status: string | null }>();
+			const orgStatus = orgRow?.status ?? "active";
+			if (orgStatus !== "active") {
+				return c.json(
+					{
+						success: false,
+						error: "organization_archived",
+						code: "ORGANIZATION_ARCHIVED",
+						message:
+							"This organization is archived or suspended. Invites are disabled.",
+					},
+					403,
+				);
+			}
+
 			// Resolve the usersPerOrg limit via the entitlement system (DB-driven)
 			const usageRightsService = new UsageRightsService(
 				new UsageRightsRepository(c.env.DB),
 				new PricingRepository(c.env.DB),
+				new OverageRepository(c.env.DB),
 			);
 
 			const entitlement =
@@ -120,6 +141,19 @@ export function createMemberLimitGuard(): MiddlewareHandler<AppBindings> {
 			);
 
 			if (currentCount >= usersPerOrg) {
+				const overageRow = await c.env.DB.prepare(
+					`SELECT overage_enabled FROM user_overage_settings WHERE user_id = ? LIMIT 1`,
+				)
+					.bind(entitlement.ownerUserId)
+					.first<{ overage_enabled: number }>();
+
+				if (overageRow?.overage_enabled === 1) {
+					console.log(
+						`[Member Limit Guard] Org ${organizationId} at seat limit but owner has metered overage enabled — allowing invite`,
+					);
+					return next();
+				}
+
 				console.log(
 					`[Member Limit Guard] Org ${organizationId} at limit (${currentCount}/${usersPerOrg}), blocking invitation`,
 				);

@@ -89,6 +89,15 @@ export interface GateResult {
 	entitlementType?: EntitlementType;
 	error?: string;
 	upgradeRequired?: boolean;
+	/** Machine-readable error for clients (e.g. ORGANIZATION_ARCHIVED) */
+	code?: string;
+	/** True when this request consumed included quota and entered metered overage (Stripe). */
+	overageWarning?: boolean;
+	/** Units of usage in this request that count as overage (for UI / billing transparency). */
+	overageUnits?: number;
+	overageEnabled?: boolean;
+	/** Remaining spend under user cap for the period, in minor units (null = no cap). */
+	spendLimitRemaining?: number | null;
 }
 
 /**

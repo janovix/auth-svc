@@ -73,6 +73,31 @@ export class SubscriptionService {
 			};
 		}
 
+		// License-backed row must match an active enterprise_licenses row (revoke can leave stale subscription)
+		if (subscription.licenseId && this.pricingService) {
+			const license = await this.pricingService.getLicenseById(
+				subscription.licenseId,
+			);
+			if (!license || license.status !== "active") {
+				return {
+					hasSubscription: false,
+					status: "canceled",
+					plan: null,
+					limits: null,
+					isTrialing: false,
+					trialDaysRemaining: null,
+					currentPeriodStart: null,
+					currentPeriodEnd: null,
+					cancelAtPeriodEnd: false,
+					isLicenseBased: false,
+					licenseExpiresAt: null,
+					organizationsOwned: orgsOwned,
+					organizationsLimit: 0,
+					stripeSubscriptionId: null,
+				};
+			}
+		}
+
 		const plan = subscription.plan;
 		// Get limits from database via pricing service, or null if not available
 		const limits = await this.getUserPlanLimits(userId);
@@ -118,7 +143,7 @@ export class SubscriptionService {
 	 */
 	async canCreateOrganization(
 		userId: string,
-	): Promise<{ allowed: boolean; reason?: string }> {
+	): Promise<{ allowed: boolean; reason?: string; warning?: string }> {
 		const status = await this.getUserSubscriptionStatus(userId);
 
 		if (!status.hasSubscription) {
@@ -195,8 +220,21 @@ export class SubscriptionService {
 		const subscription = await this.repository.getUserSubscription(userId);
 		if (!subscription) return [];
 
-		// Enterprise license users get all enterprise features
-		if (subscription.licenseId || subscription.plan === "enterprise") {
+		// Enterprise via license key: require an active license row (not just subscription.licenseId)
+		if (subscription.licenseId) {
+			if (this.pricingService) {
+				const license = await this.pricingService.getLicenseById(
+					subscription.licenseId,
+				);
+				if (!license || license.status !== "active") {
+					return [];
+				}
+			}
+			return PLAN_FEATURES.enterprise || [];
+		}
+
+		// Stripe (or other) enterprise tier without licenseId
+		if (subscription.plan === "enterprise") {
 			return PLAN_FEATURES.enterprise || [];
 		}
 
@@ -632,6 +670,56 @@ export class SubscriptionService {
 			);
 			throw error;
 		}
+	}
+
+	/**
+	 * Resolve Stripe subscription item for the plan's overage price and report usage to Stripe.
+	 * No-op if Stripe, subscription, or matching item is missing.
+	 */
+	async reportOverageForMetricIfConfigured(
+		organizationId: string,
+		ownerUserId: string,
+		planName: string,
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
+	): Promise<void> {
+		if (!this.stripe || !this.pricingService) {
+			return;
+		}
+
+		const overagePriceId = await this.pricingService.getOveragePriceIdForMetric(
+			planName,
+			metric,
+		);
+		if (!overagePriceId) {
+			return;
+		}
+
+		const subscription = await this.repository.getUserSubscription(ownerUserId);
+		if (!subscription?.stripeSubscriptionId) {
+			return;
+		}
+
+		const stripeSub = await this.stripe.subscriptions.retrieve(
+			subscription.stripeSubscriptionId,
+			{ expand: ["items.data.price"] },
+		);
+
+		const item = stripeSub.items.data.find(
+			(line) => line.price.id === overagePriceId,
+		);
+		if (!item) {
+			console.warn(
+				`[Subscription] No subscription item for overage price ${overagePriceId} on sub ${subscription.stripeSubscriptionId}`,
+			);
+			return;
+		}
+
+		await this.reportOverageToStripeForMetric(
+			organizationId,
+			ownerUserId,
+			metric,
+			item.id,
+		);
 	}
 
 	/**

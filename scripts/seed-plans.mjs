@@ -262,7 +262,7 @@ const PLANS = [
 const PLAN_LIMITS = {
 	watchlist: {
 		maxOrganizations: 1,
-		usersPerOrg: 1,
+		usersPerOrg: 3,
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,

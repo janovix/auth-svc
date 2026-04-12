@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS "subscription";
 DROP TABLE IF EXISTS "audit_logs";
 DROP TABLE IF EXISTS "user_settings";
 DROP TABLE IF EXISTS "organization_settings";
+DROP TABLE IF EXISTS "user_overage_settings";
 DROP TABLE IF EXISTS "invitations";
 DROP TABLE IF EXISTS "members";
 DROP TABLE IF EXISTS "organizations";

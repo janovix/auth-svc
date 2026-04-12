@@ -14,6 +14,7 @@ import type {
 	SubscriptionPlan,
 	PlanPrice,
 	PlanLimits,
+	PriceType,
 	EnterpriseLicense,
 	PlanWithDetails,
 	PublicPlanInfo,
@@ -290,6 +291,24 @@ export class PricingService {
 	}
 
 	/**
+	 * Active overage plan price row (amount in minor units, e.g. centavos) for spend-cap estimates.
+	 */
+	async getOveragePlanPriceForMetric(
+		planName: string,
+		metric: "reports" | "notices" | "alerts" | "operations" | "clients",
+	): Promise<PlanPrice | null> {
+		const plan = await this.repository.getPlanByName(planName);
+		if (!plan) return null;
+
+		const prices = await this.repository.getPricesForPlan(plan.id);
+		const overagePriceType =
+			`overage_${metric === "reports" ? "report" : metric.replace(/s$/, "")}` as PriceType;
+		return (
+			prices.find((p) => p.priceType === overagePriceType && p.isActive) ?? null
+		);
+	}
+
+	/**
 	 * Get plan name from a Stripe price ID
 	 * Useful for webhook handling and subscription detection
 	 */
@@ -350,6 +369,13 @@ export class PricingService {
 	 */
 	async getLicenseByUserId(userId: string): Promise<EnterpriseLicense | null> {
 		return this.repository.getLicenseByUserId(userId);
+	}
+
+	/**
+	 * Get license by primary key (any status — for validating subscription.licenseId)
+	 */
+	async getLicenseById(id: string): Promise<EnterpriseLicense | null> {
+		return this.repository.getLicenseById(id);
 	}
 
 	/**

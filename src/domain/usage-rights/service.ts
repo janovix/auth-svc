@@ -14,6 +14,8 @@
 import type { EnterpriseLicense } from "../pricing/types";
 import { PricingService } from "../pricing/service";
 import { PricingRepository } from "../pricing/repository";
+import { OverageRepository } from "../overage/repository";
+import type { SubscriptionService } from "../subscription/service";
 import { UsageRightsRepository } from "./repository";
 import type {
 	Entitlement,
@@ -69,6 +71,18 @@ function isWithinLimit(used: number, limit: number): boolean {
 	return used < limit;
 }
 
+/** Units of `count` that fall beyond the included `limit` (0 = all within included). */
+function marginalOverageUnits(
+	used: number,
+	limit: number,
+	count: number,
+): number {
+	if (limit === 0) return 0;
+	const before = Math.max(0, used - limit);
+	const after = Math.max(0, used + count - limit);
+	return Math.max(0, after - before);
+}
+
 /**
  * Get today's date as YYYY-MM-DD string
  */
@@ -101,6 +115,8 @@ export class UsageRightsService {
 	constructor(
 		private readonly repository: UsageRightsRepository,
 		pricingRepository: PricingRepository,
+		private readonly overageRepository: OverageRepository,
+		private readonly subscriptionService: SubscriptionService | null = null,
 	) {
 		this.pricingService = new PricingService(pricingRepository);
 	}
@@ -255,6 +271,27 @@ export class UsageRightsService {
 		metric: UsageMetric,
 		count: number = 1,
 	): Promise<GateResult> {
+		const lifecycle =
+			await this.repository.getOrganizationLifecycleStatus(orgId);
+		if (lifecycle === null) {
+			return {
+				allowed: false,
+				metric,
+				error: "organization_not_found",
+				code: "ORGANIZATION_NOT_FOUND",
+				upgradeRequired: false,
+			};
+		}
+		if (lifecycle !== "active") {
+			return {
+				allowed: false,
+				metric,
+				error: "organization_archived",
+				code: "ORGANIZATION_ARCHIVED",
+				upgradeRequired: false,
+			};
+		}
+
 		const entitlement = await this.resolveEntitlement(orgId);
 
 		if (entitlement.type === "none") {
@@ -292,7 +329,40 @@ export class UsageRightsService {
 
 		const used = await this.getUsedForMetric(orgId, metric, billingPeriod);
 
-		if (!isWithinLimit(used, limit)) {
+		// Unlimited included quota — always allow and meter
+		if (limit === 0) {
+			await this.recordUsage(orgId, metric, count);
+			const newUsed = used + count;
+			return {
+				allowed: true,
+				metric,
+				used: newUsed,
+				limit,
+				remaining: -1,
+				entitlementType: entitlement.type,
+			};
+		}
+
+		const overUnits = marginalOverageUnits(used, limit, count);
+
+		// Entirely within included quota
+		if (overUnits === 0) {
+			await this.recordUsage(orgId, metric, count);
+			const newUsed = used + count;
+			const remaining = Math.max(0, limit - newUsed);
+			return {
+				allowed: true,
+				metric,
+				used: newUsed,
+				limit,
+				remaining,
+				entitlementType: entitlement.type,
+				overageEnabled: false,
+			};
+		}
+
+		// Any overage: Stripe subscription + metered metric only
+		if (entitlement.type !== "stripe" || !isOverageMetric(metric)) {
 			return {
 				allowed: false,
 				metric,
@@ -305,31 +375,72 @@ export class UsageRightsService {
 			};
 		}
 
-		// Allowed -- increment meter
+		const settings =
+			(await this.overageRepository.getByUserId(entitlement.ownerUserId)) ??
+			null;
+		const overageEnabled = settings?.overageEnabled ?? false;
+
+		if (!overageEnabled) {
+			return {
+				allowed: false,
+				metric,
+				used,
+				limit,
+				remaining: 0,
+				entitlementType: entitlement.type,
+				error: "usage_limit_exceeded",
+				upgradeRequired: true,
+				overageEnabled: false,
+			};
+		}
+
+		const priceRow = await this.pricingService.getOveragePlanPriceForMetric(
+			entitlement.subscriptionPlan,
+			metric as OverageMetric,
+		);
+		const unitCents = priceRow?.amount ?? 0;
+		const deltaCents = overUnits * unitCents;
+		const periodCharge = settings?.periodOverageChargeCents ?? 0;
+		const cap = settings?.spendLimitCents ?? null;
+
+		if (cap !== null && periodCharge + deltaCents > cap) {
+			return {
+				allowed: false,
+				metric,
+				used,
+				limit,
+				remaining: 0,
+				entitlementType: entitlement.type,
+				error: "spend_limit_exceeded",
+				code: "SPEND_LIMIT_EXCEEDED",
+				upgradeRequired: true,
+				overageEnabled: true,
+				spendLimitRemaining: Math.max(0, cap - periodCharge),
+			};
+		}
+
 		await this.recordUsage(orgId, metric, count);
+		await this.overageRepository.addPeriodOverageCharge(
+			entitlement.ownerUserId,
+			deltaCents,
+		);
 
 		const newUsed = used + count;
-		const remaining = limit === 0 ? -1 : Math.max(0, limit - newUsed);
+		const remaining = Math.max(0, limit - newUsed);
 
-		// Fire-and-forget: report overage to Stripe for metered billing
-		if (
-			entitlement.type === "stripe" &&
-			limit > 0 &&
-			newUsed > limit &&
-			isOverageMetric(metric)
-		) {
-			this.reportOverageAsync(
+		this.subscriptionService
+			?.reportOverageForMetricIfConfigured(
 				orgId,
 				entitlement.ownerUserId,
 				entitlement.subscriptionPlan,
 				metric as OverageMetric,
-			).catch((err) =>
+			)
+			.catch((err) =>
 				console.error(
 					`[UsageRights] Overage reporting failed for org ${orgId}:`,
 					err,
 				),
 			);
-		}
 
 		return {
 			allowed: true,
@@ -338,6 +449,11 @@ export class UsageRightsService {
 			limit,
 			remaining,
 			entitlementType: entitlement.type,
+			overageWarning: true,
+			overageUnits: overUnits,
+			overageEnabled: true,
+			spendLimitRemaining:
+				cap !== null ? Math.max(0, cap - periodCharge - deltaCents) : null,
 		};
 	}
 
@@ -366,44 +482,6 @@ export class UsageRightsService {
 					}
 				: null,
 		};
-	}
-
-	// =========================================================================
-	// OVERAGE REPORTING
-	// =========================================================================
-
-	/**
-	 * Asynchronously report overage usage to Stripe for a metric.
-	 * This is fire-and-forget; errors are logged but do not affect the gate result.
-	 *
-	 * Flow:
-	 * 1. Look up the overage price for the plan+metric
-	 * 2. Resolve the Stripe subscription item for that price
-	 * 3. Report the overage usage to Stripe via the SubscriptionService
-	 */
-	private async reportOverageAsync(
-		orgId: string,
-		ownerUserId: string,
-		planName: string,
-		metric: OverageMetric,
-	): Promise<void> {
-		const overagePriceId = await this.pricingService.getOveragePriceIdForMetric(
-			planName,
-			metric,
-		);
-		if (!overagePriceId) return; // No overage pricing configured
-
-		// Get the Stripe subscription to find the subscription item
-		const subscription = await this.repository.getUserSubscription(ownerUserId);
-		if (!subscription?.stripeSubscriptionId) return;
-
-		// Look up subscription items via Stripe to find the one matching this overage price
-		// For now, we store the overage Stripe price ID. The actual Stripe subscription item
-		// resolution happens in the SubscriptionService.reportOverageToStripeForMetric
-		// which already handles fetching usage, computing overage, and creating usage records.
-		console.log(
-			`[UsageRights] Overage detected for org ${orgId}, metric ${metric}, plan ${planName}, overagePriceId ${overagePriceId}`,
-		);
 	}
 
 	// =========================================================================

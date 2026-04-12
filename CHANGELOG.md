@@ -1,11 +1,92 @@
-# [1.10.0](https://github.com/janovix/auth-svc/compare/v1.9.0...v1.10.0) (2026-03-26)
+# [1.11.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.10.0...v1.11.0-rc.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* update flags service binding to use production environment ([207ca8e](https://github.com/janovix/auth-svc/commit/207ca8e4a7ae3802e8246b799a9749bb32ad3ef9))
+* update query in SubscriptionRepository test to include organization status check ([9616598](https://github.com/janovix/auth-svc/commit/9616598303b8913f3bfdcad7c4dec0111535cfee))
+* update usersPerOrg limit for watchlist plan to 3 ([cc13be0](https://github.com/janovix/auth-svc/commit/cc13be0b14f9aab70720ad8173a5d0942672efe7))
 
 
 ### Features
 
-* **entrypoint:** add image field to OrgMember interface and update query results ([c5660e9](https://github.com/janovix/auth-svc/commit/c5660e9e7992876ae6e8e8a3c038e506cc72c2dd))
-* **entrypoint:** enhance AuthSvcEntrypoint with organization and subscription methods ([dcf073f](https://github.com/janovix/auth-svc/commit/dcf073f56e2c79c9a2f1a905e04ed8e0cb9e8407))
-* **entrypoints:** add entrypoints for AML and Notifications services ([c7c161a](https://github.com/janovix/auth-svc/commit/c7c161ac9a73e510b53a08d8f8efb481e55eb857))
+* add overage pricing details and seat price retrieval to subscription usage details ([56986bd](https://github.com/janovix/auth-svc/commit/56986bde07178300348d3c03ec0ff6ba45daa0e5))
+* add resolveFromOrg parameter to subscription endpoints ([8fab3a4](https://github.com/janovix/auth-svc/commit/8fab3a4d839b050067e4606f1a1d2f4d07cb6cb5))
+* enhance license revocation process and subscription handling ([614ee65](https://github.com/janovix/auth-svc/commit/614ee6550b9304049364fb9abb67c033dce76f4f))
+* implement Stripe billing guards and flags service integration ([e35fb83](https://github.com/janovix/auth-svc/commit/e35fb8371d1e697f37c7b1eb6eb56a0a51ce3aad))
+* implement Turnstile captcha verification for protected auth routes and add E2E test email handling ([3f479d0](https://github.com/janovix/auth-svc/commit/3f479d0651def3ed372179277f3ad0b880f6902d))
+* implement user overage settings and organization archiving functionality ([5c01f67](https://github.com/janovix/auth-svc/commit/5c01f673503e4f2cc7134894e9116da87c714a09))
+* restrict access to usage details for organization owners only ([65459b9](https://github.com/janovix/auth-svc/commit/65459b9a05d343108bbf3c58a4749080da3950a3))
+
+# [1.10.0-rc.11](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.10...v1.10.0-rc.11) (2026-04-08)
+
+
+### Bug Fixes
+
+* update flags service binding to use production environment ([207ca8e](https://github.com/janovix/auth-svc/commit/207ca8e4a7ae3802e8246b799a9749bb32ad3ef9))
+
+# [1.10.0-rc.10](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.9...v1.10.0-rc.10) (2026-04-05)
+
+
+### Features
+
+* implement Stripe billing guards and flags service integration ([e35fb83](https://github.com/janovix/auth-svc/commit/e35fb8371d1e697f37c7b1eb6eb56a0a51ce3aad))
+
+# [1.10.0-rc.9](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.8...v1.10.0-rc.9) (2026-04-04)
+
+
+### Features
+
+* add overage pricing details and seat price retrieval to subscription usage details ([56986bd](https://github.com/janovix/auth-svc/commit/56986bde07178300348d3c03ec0ff6ba45daa0e5))
+
+# [1.10.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.7...v1.10.0-rc.8) (2026-04-04)
+
+
+### Features
+
+* restrict access to usage details for organization owners only ([65459b9](https://github.com/janovix/auth-svc/commit/65459b9a05d343108bbf3c58a4749080da3950a3))
+
+# [1.10.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.6...v1.10.0-rc.7) (2026-04-04)
+
+
+### Features
+
+* implement Turnstile captcha verification for protected auth routes and add E2E test email handling ([3f479d0](https://github.com/janovix/auth-svc/commit/3f479d0651def3ed372179277f3ad0b880f6902d))
+
+# [1.10.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.5...v1.10.0-rc.6) (2026-04-04)
+
+
+### Bug Fixes
+
+* update usersPerOrg limit for watchlist plan to 3 ([cc13be0](https://github.com/janovix/auth-svc/commit/cc13be0b14f9aab70720ad8173a5d0942672efe7))
+
+# [1.10.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.4...v1.10.0-rc.5) (2026-04-03)
+
+
+### Bug Fixes
+
+* update query in SubscriptionRepository test to include organization status check ([9616598](https://github.com/janovix/auth-svc/commit/9616598303b8913f3bfdcad7c4dec0111535cfee))
+
+# [1.10.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.3...v1.10.0-rc.4) (2026-04-03)
+
+
+### Features
+
+* implement user overage settings and organization archiving functionality ([5c01f67](https://github.com/janovix/auth-svc/commit/5c01f673503e4f2cc7134894e9116da87c714a09))
+
+# [1.10.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.2...v1.10.0-rc.3) (2026-04-02)
+
+
+### Features
+
+* enhance license revocation process and subscription handling ([614ee65](https://github.com/janovix/auth-svc/commit/614ee6550b9304049364fb9abb67c033dce76f4f))
+
+# [1.10.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.10.0-rc.1...v1.10.0-rc.2) (2026-04-02)
+
+
+### Features
+
+* add resolveFromOrg parameter to subscription endpoints ([8fab3a4](https://github.com/janovix/auth-svc/commit/8fab3a4d839b050067e4606f1a1d2f4d07cb6cb5))
 
 # [1.10.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.9.0...v1.10.0-rc.1) (2026-03-17)
 

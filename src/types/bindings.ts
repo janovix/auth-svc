@@ -79,6 +79,39 @@ export interface NotificationsRpc {
 	sendEmail(input: EmailSendRpcInput): Promise<EmailSendRpcResult>;
 }
 
+export type FlagsFlagValue =
+	| boolean
+	| string
+	| number
+	| Record<string, unknown>;
+
+export interface FlagsEvaluationContext {
+	organizationId?: string;
+	userId?: string;
+	plan?: string;
+	environment?: string;
+	attributes?: Record<string, string | number | boolean>;
+}
+
+/**
+ * RPC interface exposed by flags-svc via `FlagsSvcEntrypoint`.
+ */
+export interface FlagsSvcRpc {
+	fetch(request: Request | string, init?: RequestInit): Promise<Response>;
+	evaluateFlag(
+		key: string,
+		context: FlagsEvaluationContext,
+	): Promise<FlagsFlagValue | null>;
+	evaluateFlags(
+		keys: string[],
+		context: FlagsEvaluationContext,
+	): Promise<Record<string, FlagsFlagValue>>;
+	evaluateAllFlags(
+		context: FlagsEvaluationContext,
+	): Promise<Record<string, FlagsFlagValue>>;
+	isFlagEnabled(key: string, context: FlagsEvaluationContext): Promise<boolean>;
+}
+
 export type JanovixEnvironment =
 	| "local"
 	| "preview"
@@ -186,6 +219,12 @@ export type Bindings = Env & {
 	 * Caller wrangler config must include `"entrypoint": "NotificationsEntrypoint"`.
 	 */
 	NOTIFICATIONS_SERVICE?: NotificationsRpc;
+
+	/**
+	 * Service binding to flags-svc via `FlagsSvcEntrypoint`.
+	 * Used to gate Stripe billing when `stripe-billing-enabled` is false.
+	 */
+	FLAGS_SERVICE?: FlagsSvcRpc;
 
 	// =========================================================================
 	// STRIPE BILLING

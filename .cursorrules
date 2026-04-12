@@ -15,7 +15,7 @@ These tables MUST use camelCase column names in the database:
 | `accounts` | `accountId`, `providerId`, `userId`, `accessToken`, `refreshToken`, `idToken`, `accessTokenExpiresAt` |
 | `verifications` | `expiresAt`, `createdAt`, `updatedAt` |
 | `jwks` | `publicKey`, `privateKey`, `createdAt`, `expiresAt` |
-| `organizations` | `createdAt`, `updatedAt` |
+| `organizations` | `createdAt`, `updatedAt`, `status`, `archivedAt`, `archivedReason` (archive fields applied in `0002_org_archive_user_overage.sql`) |
 | `members` | `organizationId`, `userId`, `createdAt`, `updatedAt` |
 | `invitations` | `organizationId`, `inviterId`, `expiresAt`, `createdAt`, `updatedAt` |
 
@@ -47,7 +47,10 @@ Options considered:
 
 ## Migration File Convention
 
-The single migration file `migrations/0001_initial.sql` is the full schema for D1 (regenerate from `prisma/schema.prisma` via `pnpm exec prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script -o migrations/0001_initial.sql`, then re-add the `DROP TABLE IF EXISTS` preamble). It contains Better Auth tables with camelCase columns and custom tables with snake_case columns.
+- `migrations/0001_initial.sql` — baseline full schema for D1 (regenerate from `prisma/schema.prisma` via `pnpm exec prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, then merge with the existing `DROP TABLE IF EXISTS` preamble and ordering). New environments apply 0001 then later files in order.
+- `migrations/0002_*.sql` and onward — additive changes only (`ALTER TABLE`, new tables, indexes). Do not fold already-deployed deltas back into 0001 once shipped, or remote DBs that already ran the old 0001 will drift.
+
+Prisma `schema.prisma` reflects the **post-migration** shape; SQL history stays in numbered migration files.
 
 ## Testing After Schema Changes
 

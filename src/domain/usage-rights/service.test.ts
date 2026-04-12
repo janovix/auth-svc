@@ -11,6 +11,7 @@ import type { UsageRightsRepository } from "./repository";
 import type { PricingRepository } from "../pricing/repository";
 import type { EnterpriseLicense } from "../pricing/types";
 import type { UsageMetric } from "./types";
+import type { OverageRepository } from "../overage/repository";
 
 vi.mock("./repository");
 vi.mock("../pricing/repository");
@@ -73,7 +74,12 @@ const mockPlanLimits = {
 
 describe("UsageRightsService", () => {
 	let service: UsageRightsService;
+	let mockOverageRepo: {
+		getByUserId: ReturnType<typeof vi.fn>;
+		addPeriodOverageCharge: ReturnType<typeof vi.fn>;
+	};
 	let mockUsageRightsRepo: {
+		getOrganizationLifecycleStatus: ReturnType<typeof vi.fn>;
 		getOrganizationOwnerUserId: ReturnType<typeof vi.fn>;
 		getLicenseByUserId: ReturnType<typeof vi.fn>;
 		getUserSubscription: ReturnType<typeof vi.fn>;
@@ -109,7 +115,13 @@ describe("UsageRightsService", () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2024-06-15T12:00:00Z"));
 
+		mockOverageRepo = {
+			getByUserId: vi.fn().mockResolvedValue(null),
+			addPeriodOverageCharge: vi.fn().mockResolvedValue(undefined),
+		};
+
 		mockUsageRightsRepo = {
+			getOrganizationLifecycleStatus: vi.fn().mockResolvedValue("active"),
 			getOrganizationOwnerUserId: vi.fn(),
 			getLicenseByUserId: vi.fn(),
 			getUserSubscription: vi.fn(),
@@ -141,6 +153,8 @@ describe("UsageRightsService", () => {
 		service = new UsageRightsService(
 			mockUsageRightsRepo as unknown as UsageRightsRepository,
 			mockPricingRepo as unknown as PricingRepository,
+			mockOverageRepo as unknown as OverageRepository,
+			null,
 		);
 	});
 

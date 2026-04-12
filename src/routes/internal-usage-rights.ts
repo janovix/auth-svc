@@ -7,23 +7,12 @@
  */
 import { Hono } from "hono";
 import type { Bindings } from "../types/bindings";
-import {
-	UsageRightsService,
-	UsageRightsRepository,
-} from "../domain/usage-rights";
-import { PricingRepository } from "../domain/pricing";
+import { createUsageRightsServiceFromEnv } from "../domain/usage-rights";
 import type { UsageMetric } from "../domain/usage-rights/types";
 
 type InternalBindings = { Bindings: Bindings };
 
 const internalUsageRightsRoutes = new Hono<InternalBindings>();
-
-function createUsageRightsService(db: D1Database) {
-	return new UsageRightsService(
-		new UsageRightsRepository(db),
-		new PricingRepository(db),
-	);
-}
 
 const VALID_METRICS: UsageMetric[] = [
 	"reports",
@@ -61,7 +50,7 @@ internalUsageRightsRoutes.get("/check", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const result = await service.checkRight(organizationId, metric);
 
 	if (!result.allowed) {
@@ -113,7 +102,7 @@ internalUsageRightsRoutes.post("/meter", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	await service.recordUsage(body.organizationId, body.metric, body.count ?? 1);
 
 	return c.json({ success: true });
@@ -143,7 +132,7 @@ internalUsageRightsRoutes.post("/gate", async (c) => {
 		);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const result = await service.gateAndMeter(
 		body.organizationId,
 		body.metric,
@@ -154,12 +143,14 @@ internalUsageRightsRoutes.post("/gate", async (c) => {
 		return c.json(
 			{
 				error: result.error ?? "usage_limit_exceeded",
-				upgradeRequired: true,
+				code: result.code,
+				upgradeRequired: result.upgradeRequired ?? true,
 				metric: result.metric,
 				used: result.used,
 				limit: result.limit,
 				remaining: 0,
 				entitlementType: result.entitlementType,
+				spendLimitRemaining: result.spendLimitRemaining,
 			},
 			403,
 		);
@@ -172,6 +163,10 @@ internalUsageRightsRoutes.post("/gate", async (c) => {
 		limit: result.limit,
 		remaining: result.remaining,
 		entitlementType: result.entitlementType,
+		overageWarning: result.overageWarning,
+		overageUnits: result.overageUnits,
+		overageEnabled: result.overageEnabled,
+		spendLimitRemaining: result.spendLimitRemaining,
 	});
 });
 
@@ -185,7 +180,7 @@ internalUsageRightsRoutes.get("/entitlement", async (c) => {
 		return c.json({ success: false, error: "organizationId is required" }, 400);
 	}
 
-	const service = createUsageRightsService(c.env.DB);
+	const service = createUsageRightsServiceFromEnv(c.env);
 	const details = await service.getEntitlementDetails(organizationId);
 
 	return c.json({ success: true, data: details });

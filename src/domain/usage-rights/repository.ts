@@ -87,6 +87,7 @@ export class UsageRightsRepository {
 				 FROM subscription 
 				 WHERE referenceId = ? 
 				 AND status IN ('active', 'trialing')
+				 AND licenseId IS NULL
 				 ORDER BY 
 				   CASE WHEN stripeSubscriptionId IS NOT NULL THEN 0 ELSE 1 END,
 				   createdAt DESC 
@@ -297,6 +298,29 @@ export class UsageRightsRepository {
 			)
 			.bind(organizationId, beforeDate)
 			.run();
+	}
+
+	/**
+	 * Custom columns on Better Auth `organizations` (status / archive).
+	 * Returns null if the organization row does not exist.
+	 */
+	async getOrganizationLifecycleStatus(
+		organizationId: string,
+	): Promise<"active" | "archived" | "suspended" | null> {
+		const row = await this.db
+			.prepare(`SELECT status FROM organizations WHERE id = ? LIMIT 1`)
+			.bind(organizationId)
+			.first<{ status: string | null }>();
+
+		if (!row) {
+			return null;
+		}
+
+		const s = row.status ?? "active";
+		if (s === "archived" || s === "suspended" || s === "active") {
+			return s;
+		}
+		return "active";
 	}
 
 	// =========================================================================

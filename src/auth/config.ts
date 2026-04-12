@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI, captcha } from "better-auth/plugins";
+import { emailOTP, openAPI } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
@@ -13,9 +13,11 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+import { isE2eTestEmail } from "../utils/e2e-test-email";
 import { executeInBackground, getExecutionContext } from "./execution-context";
 import { PricingService } from "../domain/pricing/service";
 import { PricingRepository } from "../domain/pricing/repository";
+import { isStripeBillingEnabled } from "../lib/stripe-billing-flag";
 
 // ============================================================================
 // Subscription Plan Limits (User-based billing)
@@ -36,7 +38,7 @@ import { PricingRepository } from "../domain/pricing/repository";
 export const PLAN_LIMITS = {
 	watchlist: {
 		maxOrganizations: 1,
-		usersPerOrg: 1,
+		usersPerOrg: 3,
 		reportsPerMonth: 0,
 		noticesPerMonth: 0,
 		alertsPerMonth: 0,
@@ -475,8 +477,8 @@ export function buildResolvedAuthConfig(
 								.bind(subscription.licenseId)
 								.first<{ max_organizations: number }>();
 
-							// 0 means unlimited
-							maxOrganizations = license?.max_organizations ?? 0;
+							// 0 means unlimited; if license row missing/revoked, do not treat as unlimited
+							maxOrganizations = license?.max_organizations ?? 1;
 							console.log(
 								`[Org Guard] User ${user.id} has enterprise license, maxOrganizations: ${maxOrganizations === 0 ? "unlimited" : maxOrganizations}`,
 							);
@@ -506,9 +508,11 @@ export function buildResolvedAuthConfig(
 							}
 						}
 
-						// Count organizations owned by user
+						// Count active organizations owned by user (archived do not count toward limit)
 						const orgsResult = await env.DB.prepare(
-							`SELECT COUNT(*) as count FROM members WHERE userId = ? AND role = 'owner'`,
+							`SELECT COUNT(*) as count FROM members m
+							 INNER JOIN organizations o ON o.id = m.organizationId
+							 WHERE m.userId = ? AND m.role = 'owner' AND o.status = 'active'`,
 						)
 							.bind(user.id)
 							.first<{ count: number }>();
@@ -517,6 +521,17 @@ export function buildResolvedAuthConfig(
 
 						// 0 means unlimited -- skip limit check
 						if (maxOrganizations > 0 && orgsOwned >= maxOrganizations) {
+							const overageRow = await env.DB.prepare(
+								`SELECT overage_enabled FROM user_overage_settings WHERE user_id = ? LIMIT 1`,
+							)
+								.bind(user.id)
+								.first<{ overage_enabled: number }>();
+							if (overageRow?.overage_enabled === 1) {
+								console.log(
+									`[Org Guard] User ${user.id} at org limit but metered overage enabled — allowing creation`,
+								);
+								return true;
+							}
 							console.log(
 								`[Org Guard] User ${user.id} has ${orgsOwned}/${maxOrganizations} orgs, denying creation`,
 							);
@@ -607,6 +622,13 @@ export function buildResolvedAuthConfig(
 				// Override the default email verification with OTP-based verification
 				// This means no email links are sent - only OTP codes
 				sendVerificationOnSignUp: true,
+				// Playwright E2E: deterministic OTP for @e2e.janovix.com (domain-controlled)
+				generateOTP: ({ email }) => {
+					if (isE2eTestEmail(email)) {
+						return "123456";
+					}
+					return undefined;
+				},
 				sendVerificationOTP:
 					/* istanbul ignore next -- @preserve Mandrill email sending tested via integration */
 					async ({
@@ -622,6 +644,13 @@ export function buildResolvedAuthConfig(
 						console.log(
 							`[Email OTP] sendVerificationOTP called for ${email}, type: ${type}`,
 						);
+
+						if (isE2eTestEmail(email)) {
+							console.log(
+								`[Email OTP] E2E test email (${email}); skipping Mandrill send`,
+							);
+							return;
+						}
 
 						try {
 							const apiKey = env.MANDRILL_API_KEY;
@@ -765,19 +794,8 @@ export function buildResolvedAuthConfig(
 						}),
 					]
 				: []),
-			// Turnstile captcha plugin for bot protection on email-sending endpoints
-			// Only load if TURNSTILE_SECRET_KEY is configured (production)
-			// In local/test environments without the secret, captcha is skipped
-			...(env.TURNSTILE_SECRET_KEY
-				? [
-						captcha({
-							provider: "cloudflare-turnstile",
-							secretKey: env.TURNSTILE_SECRET_KEY,
-							// Protect the endpoints that send emails to prevent abuse
-							endpoints: ["/sign-up/email", "/email-otp/send-verification-otp"],
-						}),
-					]
-				: []),
+			// Turnstile captcha: enforced in auth/routes.ts (verifyTurnstileForProtectedAuthPost)
+			// so @e2e.janovix.com can bypass without a second plugin layer.
 		],
 		session: {
 			updateAge: 60 * 30,
@@ -822,7 +840,10 @@ export function buildResolvedAuthConfig(
 						try {
 							// Find user's first organization membership
 							const memberResult = await env.DB.prepare(
-								`SELECT organizationId FROM members WHERE userId = ? LIMIT 1`,
+								`SELECT m.organizationId AS organizationId FROM members m
+								 INNER JOIN organizations o ON o.id = m.organizationId
+								 WHERE m.userId = ? AND o.status = 'active'
+								 ORDER BY m.createdAt ASC LIMIT 1`,
 							)
 								.bind(session.userId)
 								.first<{ organizationId: string }>();
@@ -896,6 +917,13 @@ export function buildResolvedAuthConfig(
 					}) => {
 						// Sync user to Stripe customer when profile is updated
 						if (!env.STRIPE_SECRET_KEY) {
+							return;
+						}
+
+						if (!(await isStripeBillingEnabled(env))) {
+							console.log(
+								`[Stripe Sync] Billing disabled via flags for user ${user.id}, skipping`,
+							);
 							return;
 						}
 
@@ -1040,6 +1068,34 @@ export function buildResolvedAuthConfig(
 			// Member seat updates are handled via custom endpoints in routes/organization.ts:
 			// - POST /api/organization/update-seats (called after invitation acceptance)
 			// - POST /api/subscription/usage/sync-members (for admin sync)
+
+			// @ts-expect-error Organization plugin supplies databaseHooks.organization; @better-auth/core types only list user/session/etc.
+			organization: {
+				delete: {
+					before: async (org: { id: string }) => {
+						try {
+							await env.DB.prepare(
+								`UPDATE organizations SET status = 'archived', archivedAt = datetime('now'), archivedReason = ?, updatedAt = datetime('now') WHERE id = ?`,
+							)
+								.bind("user_initiated", org.id)
+								.run();
+							console.log(
+								`[Org Hook] Soft-archived organization ${org.id} instead of delete`,
+							);
+						} catch (e) {
+							console.error(
+								"[Org Hook] Failed to soft-archive organization:",
+								e,
+							);
+							Sentry.captureException(e, {
+								tags: { context: "organization-delete-hook" },
+								extra: { organizationId: org.id },
+							});
+						}
+						return false;
+					},
+				},
+			},
 		},
 	};
 
