@@ -1,3 +1,10 @@
+# [1.12.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.11.0...v1.12.0-rc.1) (2026-04-16)
+
+
+### Features
+
+* add webhook management and API key environment support ([96c3d99](https://github.com/janovix/auth-svc/commit/96c3d994d3314067d2030f75b6d18b05df29bc3d))
+
 # [1.11.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.11.0-rc.1...v1.11.0-rc.2) (2026-04-16)
 
 
