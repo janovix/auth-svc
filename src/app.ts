@@ -41,6 +41,7 @@ import { licenseAdminRoutes } from "./routes/license-admin";
 import { subscriptionAdminRoutes } from "./routes/subscription-admin";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { internalWebhookRoutes } from "./routes/internal-webhooks";
+import { publicWebhookRoutes } from "./routes/webhooks-public";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -182,6 +183,9 @@ app.route("/internal/usage-rights", internalUsageRightsRoutes);
 
 // Register Internal Webhook routes (service binding, called by api worker)
 app.route("/internal/webhooks", internalWebhookRoutes);
+
+// Dashboard webhook CRUD (session + org owner/admin)
+app.route("/api/webhooks", publicWebhookRoutes);
 
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);
