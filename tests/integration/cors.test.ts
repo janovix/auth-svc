@@ -153,4 +153,32 @@ describe("createCorsMiddleware integration", () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
 	});
+
+	it("allows x-environment in CORS preflight Access-Control-Allow-Headers", async () => {
+		const request = new Request("http://localhost/healthz", {
+			method: "OPTIONS",
+			headers: {
+				origin: "https://app.janovix.workers.dev",
+				"Access-Control-Request-Method": "GET",
+				"Access-Control-Request-Headers": "x-environment",
+			},
+		});
+
+		const response = await typedWorker.fetch(
+			request,
+			{
+				...env,
+				ENVIRONMENT: "dev",
+				BETTER_AUTH_SECRET: SECRET,
+				BETTER_AUTH_URL: "https://auth-svc.janovix.workers.dev",
+				AUTH_INTERNAL_TOKEN: TEST_INTERNAL_TOKEN,
+			},
+			{} as ExecutionContext,
+		);
+
+		expect(response.status).toBeLessThan(500);
+		const allowHeaders =
+			response.headers.get("Access-Control-Allow-Headers") ?? "";
+		expect(allowHeaders.toLowerCase()).toContain("x-environment");
+	});
 });
