@@ -67,6 +67,13 @@ describe("buildResolvedAuthConfig", () => {
 				(plugin: any) => plugin?.id === "jwt",
 			),
 		).toBe(true);
+		expect(
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(config.options as any).plugins?.some(
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(plugin: any) => plugin?.id === "one-tap",
+			),
+		).toBe(true);
 	});
 
 	it("isolates QA cookies and trusted origins under *.algenium.qa", () => {

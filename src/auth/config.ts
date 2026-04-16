@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
-import { emailOTP, openAPI } from "better-auth/plugins";
+import { emailOTP, openAPI, oneTap } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import Stripe from "stripe";
@@ -751,6 +751,11 @@ export function buildResolvedAuthConfig(
 				rpID: resolvePasskeyRpID(env.AUTH_FRONTEND_URL, resolvedEnv),
 				rpName: "Janovix",
 				origin: resolvePasskeyOrigin(env.AUTH_FRONTEND_URL, resolvedEnv),
+			}),
+			oneTap({
+				// JWT audience verification; same client as socialProviders.google.
+				clientId: env.GOOGLE_CLIENT_ID as string,
+				disableSignup: false,
 			}),
 			// Stripe plugin for user-based billing
 			// Price IDs are fetched from database (plan_prices table)
