@@ -31,6 +31,7 @@ export interface ApiKeyValidationResult {
 	organizationId?: string;
 	jwt?: string;
 	plan?: string | null;
+	environment?: string;
 	error?: string;
 }
 
@@ -45,11 +46,12 @@ export async function validateApiKeyDirect(
 
 	const service = new ApiKeyService(new ApiKeyRepository(env.DB));
 
-	// Step 1-2: Validate the key (hash, lookup, check revoked/expired)
 	const validation = await service.validate(key);
 	if (!validation.valid || !validation.organizationId) {
 		return { valid: false, error: validation.error ?? "invalid_key" };
 	}
+
+	const keyEnvironment = validation.environment ?? "production";
 
 	// Step 3: Look up org owner and subscription plan
 	const owner = await env.DB.prepare(
@@ -102,6 +104,7 @@ export async function validateApiKeyDirect(
 			name: ownerUser.name,
 			role: ownerUser.role,
 			organizationId: validation.organizationId,
+			environment: keyEnvironment,
 		});
 	} catch (err) {
 		console.error("[Internal API Keys] JWT creation failed:", err);
@@ -124,6 +127,7 @@ export async function validateApiKeyDirect(
 		organizationId: validation.organizationId,
 		jwt,
 		plan,
+		environment: keyEnvironment,
 	};
 }
 
@@ -187,6 +191,7 @@ async function createEphemeralJwt(
 		name: string | null;
 		role: string;
 		organizationId: string;
+		environment: string;
 	},
 ): Promise<string> {
 	const secret = getSecret(env);

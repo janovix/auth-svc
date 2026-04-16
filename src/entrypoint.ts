@@ -14,6 +14,8 @@ import type {
 	UsageMetric as SubUsageMetric,
 } from "./domain/subscription/types";
 import type { Bindings } from "./types/bindings";
+import { normalizeLanguage, type LanguageCode } from "./lib/i18n";
+import { getOrganizationLanguageFromDb } from "./utils/email-language";
 import {
 	validateApiKeyDirect,
 	type ApiKeyValidationResult,
@@ -106,6 +108,8 @@ export interface OrgMember {
 	email: string;
 	name: string;
 	image: string | null;
+	/** Resolved for email: user_settings.language ?? org_settings.language ?? en */
+	language: LanguageCode;
 }
 
 export interface OrgIdsPage {
@@ -318,9 +322,12 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 	 */
 	async getOrganizationMembers(orgId: string): Promise<OrgMember[]> {
 		const result = await this.env.DB.prepare(
-			`SELECT m.id, m.userId, m.role, u.email, u.name, u.image
+			`SELECT m.id, m.userId, m.role, u.email, u.name, u.image,
+				COALESCE(us.language, os.language, 'en') AS language
 			 FROM members m
 			 INNER JOIN users u ON u.id = m.userId
+			 LEFT JOIN user_settings us ON us.user_id = u.id
+			 LEFT JOIN organization_settings os ON os.organization_id = m.organizationId
 			 WHERE m.organizationId = ?
 			 ORDER BY m.createdAt ASC`,
 		)
@@ -332,6 +339,7 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 				email: string;
 				name: string | null;
 				image: string | null;
+				language: string | null;
 			}>();
 
 		return result.results.map((m) => ({
@@ -341,7 +349,15 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 			email: m.email,
 			name: m.name ?? "",
 			image: m.image ?? null,
+			language: normalizeLanguage(m.language),
 		}));
+	}
+
+	/**
+	 * Default UI/email language for an organization (organization_settings).
+	 */
+	async getOrganizationLanguage(organizationId: string): Promise<LanguageCode> {
+		return getOrganizationLanguageFromDb(this.env.DB, organizationId);
 	}
 
 	/**

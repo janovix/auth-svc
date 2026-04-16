@@ -1,3 +1,5 @@
+import type { EmailI18nPayload, LanguageCode } from "../lib/i18n";
+
 // =============================================================================
 // LOCAL RPC INTERFACES
 // Mirrors entrypoint methods to enable typed RPC calls without a shared package.
@@ -43,6 +45,8 @@ interface NotifyRpcInput {
 	severity?: NotificationsSeverity;
 	callbackUrl?: string;
 	sendEmail?: boolean;
+	emailI18n?: EmailI18nPayload;
+	emailLocale?: LanguageCode;
 	sourceService: string;
 	sourceEvent?: string;
 }
@@ -60,6 +64,7 @@ interface EmailSendRpcInput {
 	tags?: string[];
 	sourceService: string;
 	sourceEvent?: string;
+	language?: LanguageCode;
 }
 
 interface EmailSendRpcResult {

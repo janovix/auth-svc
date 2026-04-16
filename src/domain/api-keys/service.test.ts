@@ -22,9 +22,10 @@ const createMockRepository = () => {
 const mockApiKey: ApiKey = {
 	id: "key-1",
 	name: "Test Key",
-	keyPrefix: "jnvx_abc123",
+	keyPrefix: "jnvx_live_abc1",
 	organizationId: "org-1",
 	createdById: "user-1",
+	environment: "production",
 	lastUsedAt: null,
 	expiresAt: null,
 	revokedAt: null,
@@ -55,7 +56,7 @@ describe("ApiKeyService", () => {
 
 			expect(result.apiKey).toEqual(mockApiKey);
 			expect(result.plainKey).toBeDefined();
-			expect(result.plainKey).toMatch(/^jnvx_/);
+			expect(result.plainKey).toMatch(/^jnvx_live_/);
 			expect(result.plainKey.length).toBeGreaterThan(20);
 		});
 
@@ -79,8 +80,8 @@ describe("ApiKeyService", () => {
 			);
 			// Key hash (SHA-256 hex)
 			expect(callArgs[1]).toMatch(/^[0-9a-f]{64}$/);
-			// Key prefix (first 12 chars of plain key)
-			expect(callArgs[2]).toMatch(/^jnvx_/);
+			// Key prefix (first 14 chars of plain key, includes env)
+			expect(callArgs[2]).toMatch(/^jnvx_live_/);
 		});
 	});
 
@@ -93,7 +94,10 @@ describe("ApiKeyService", () => {
 			const result = await service.listByOrganization("org-1");
 
 			expect(result).toEqual([mockApiKey]);
-			expect(mockRepo.listByOrganization).toHaveBeenCalledWith("org-1");
+			expect(mockRepo.listByOrganization).toHaveBeenCalledWith(
+				"org-1",
+				undefined,
+			);
 		});
 	});
 
@@ -153,7 +157,7 @@ describe("ApiKeyService", () => {
 
 			expect(result).not.toBeNull();
 			expect(result?.apiKey).toEqual(newKey);
-			expect(result?.plainKey).toMatch(/^jnvx_/);
+			expect(result?.plainKey).toMatch(/^jnvx_live_/);
 			expect(mockRepo.revoke).toHaveBeenCalledWith("key-1");
 		});
 

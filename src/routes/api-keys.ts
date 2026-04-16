@@ -8,6 +8,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { ApiKeyService, ApiKeyRepository } from "../domain/api-keys";
+import { isValidApiKeyEnvironment } from "../domain/api-keys/types";
+import type { ApiKeyEnvironment } from "../domain/api-keys/types";
 import { getBetterAuthContext } from "../auth/instance";
 
 type ApiKeysBindings = { Bindings: Bindings };
@@ -112,8 +114,17 @@ apiKeysRoutes.get("/", async (c) => {
 		return c.json({ success: false, error: "No active organization" }, 409);
 	}
 
+	const envFilter = c.req.query("environment");
+	const environment =
+		envFilter && isValidApiKeyEnvironment(envFilter)
+			? (envFilter as ApiKeyEnvironment)
+			: undefined;
+
 	const service = new ApiKeyService(new ApiKeyRepository(c.env.DB));
-	const keys = await service.listByOrganization(user.organizationId);
+	const keys = await service.listByOrganization(
+		user.organizationId,
+		environment,
+	);
 
 	return c.json({ success: true, data: keys });
 });
@@ -157,16 +168,22 @@ apiKeysRoutes.post("/", async (c) => {
 		);
 	}
 
-	const body = await c.req.json<{ name?: string }>();
+	const body = await c.req.json<{ name?: string; environment?: string }>();
 	if (!body.name || typeof body.name !== "string" || body.name.trim() === "") {
 		return c.json({ success: false, error: "A key name is required" }, 400);
 	}
+
+	const environment: ApiKeyEnvironment =
+		body.environment && isValidApiKeyEnvironment(body.environment)
+			? (body.environment as ApiKeyEnvironment)
+			: "production";
 
 	const service = new ApiKeyService(new ApiKeyRepository(c.env.DB));
 	const result = await service.create({
 		name: body.name.trim(),
 		organizationId: user.organizationId,
 		createdById: user.id,
+		environment,
 	});
 
 	return c.json(

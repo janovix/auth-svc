@@ -1,9 +1,13 @@
 /**
  * API Keys repository for database operations
  */
-import type { ApiKey, ApiKeyRow, CreateApiKeyInput } from "./types";
+import type {
+	ApiKey,
+	ApiKeyRow,
+	ApiKeyEnvironment,
+	CreateApiKeyInput,
+} from "./types";
 
-/** Maps database row to domain model */
 function mapApiKeyRow(row: ApiKeyRow): ApiKey {
 	return {
 		id: row.id,
@@ -11,6 +15,7 @@ function mapApiKeyRow(row: ApiKeyRow): ApiKey {
 		keyPrefix: row.key_prefix,
 		organizationId: row.organization_id,
 		createdById: row.created_by_id,
+		environment: (row.environment as ApiKeyEnvironment) ?? "production",
 		lastUsedAt: row.last_used_at,
 		expiresAt: row.expires_at,
 		revokedAt: row.revoked_at,
@@ -22,7 +27,6 @@ function mapApiKeyRow(row: ApiKeyRow): ApiKey {
 export class ApiKeyRepository {
 	constructor(private readonly db: D1Database) {}
 
-	/** Find an active (non-revoked, non-expired) API key by its hash */
 	async findActiveByHash(keyHash: string): Promise<ApiKey | null> {
 		const row = await this.db
 			.prepare(
@@ -38,7 +42,6 @@ export class ApiKeyRepository {
 		return row ? mapApiKeyRow(row) : null;
 	}
 
-	/** Find any API key by its hash (including revoked/expired) */
 	async findByHash(keyHash: string): Promise<ApiKey | null> {
 		const row = await this.db
 			.prepare(`SELECT * FROM api_keys WHERE key_hash = ? LIMIT 1`)
@@ -48,7 +51,6 @@ export class ApiKeyRepository {
 		return row ? mapApiKeyRow(row) : null;
 	}
 
-	/** Find API key by ID */
 	async findById(id: string): Promise<ApiKey | null> {
 		const row = await this.db
 			.prepare(`SELECT * FROM api_keys WHERE id = ? LIMIT 1`)
@@ -58,8 +60,22 @@ export class ApiKeyRepository {
 		return row ? mapApiKeyRow(row) : null;
 	}
 
-	/** List all API keys for an organization (including revoked) */
-	async listByOrganization(organizationId: string): Promise<ApiKey[]> {
+	async listByOrganization(
+		organizationId: string,
+		environment?: ApiKeyEnvironment,
+	): Promise<ApiKey[]> {
+		if (environment) {
+			const result = await this.db
+				.prepare(
+					`SELECT * FROM api_keys
+					 WHERE organization_id = ? AND environment = ?
+					 ORDER BY created_at DESC`,
+				)
+				.bind(organizationId, environment)
+				.all<ApiKeyRow>();
+			return (result.results ?? []).map(mapApiKeyRow);
+		}
+
 		const result = await this.db
 			.prepare(
 				`SELECT * FROM api_keys
@@ -72,7 +88,6 @@ export class ApiKeyRepository {
 		return (result.results ?? []).map(mapApiKeyRow);
 	}
 
-	/** Create a new API key */
 	async create(
 		id: string,
 		keyHash: string,
@@ -80,10 +95,11 @@ export class ApiKeyRepository {
 		input: CreateApiKeyInput,
 	): Promise<ApiKey> {
 		const now = new Date().toISOString();
+		const environment = input.environment ?? "production";
 		await this.db
 			.prepare(
-				`INSERT INTO api_keys (id, name, key_hash, key_prefix, organization_id, created_by_id, expires_at, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO api_keys (id, name, key_hash, key_prefix, organization_id, created_by_id, environment, expires_at, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				id,
@@ -92,6 +108,7 @@ export class ApiKeyRepository {
 				keyPrefix,
 				input.organizationId,
 				input.createdById,
+				environment,
 				input.expiresAt ?? null,
 				now,
 				now,
@@ -105,7 +122,6 @@ export class ApiKeyRepository {
 		return created;
 	}
 
-	/** Soft-revoke an API key by setting revoked_at */
 	async revoke(id: string): Promise<void> {
 		const now = new Date().toISOString();
 		await this.db
@@ -116,7 +132,6 @@ export class ApiKeyRepository {
 			.run();
 	}
 
-	/** Update last_used_at timestamp */
 	async updateLastUsedAt(id: string): Promise<void> {
 		const now = new Date().toISOString();
 		await this.db

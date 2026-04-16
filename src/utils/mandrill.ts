@@ -4,6 +4,7 @@
  */
 
 import * as Sentry from "@sentry/cloudflare";
+import { t, type LanguageCode } from "../lib/i18n";
 import { TEMPLATE_IMAGES } from "./constants";
 export type OrganizationInvitationEmail = {
 	email: string;
@@ -143,13 +144,16 @@ export async function sendOtpEmail(
 	otp: string,
 	type: string,
 	templateName = "janovix-email-otp-template",
+	language: LanguageCode = "en",
 ): Promise<void> {
-	// Determine subject based on OTP type
-	const subjectMap: Record<string, string> = {
-		"email-verification": "Tu código de verificación - Janovix",
-		"sign-in": "Tu código de inicio de sesión - Janovix",
-	};
-	const subject = subjectMap[type] || "Tu código de verificación - Janovix";
+	let subject: string;
+	if (type === "email-verification") {
+		subject = t(language, "otp.subject.email_verification");
+	} else if (type === "sign-in") {
+		subject = t(language, "otp.subject.sign_in");
+	} else {
+		subject = t(language, "otp.subject.default");
+	}
 
 	try {
 		const result = await sendMandrillTemplate(apiKey, {
@@ -205,13 +209,16 @@ export async function sendOrganizationInvitationEmail(
 	apiKey: string,
 	invitation: OrganizationInvitationEmail,
 	templateName = "janovix-org-invitation-template",
+	language: LanguageCode = "en",
 ): Promise<void> {
 	try {
 		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: invitation.email, type: "to" }],
 			from_email: "noreply@janovix.com",
 			from_name: "Janovix",
-			subject: `Invitación a unirse a ${invitation.organizationName}`,
+			subject: t(language, "org_invite.subject", {
+				organizationName: invitation.organizationName,
+			}),
 			template_name: templateName,
 			global_merge_vars: [
 				{ name: "org_name", content: invitation.organizationName },
@@ -268,13 +275,14 @@ export async function sendPromotionEmail(
 	apiKey: string,
 	promotion: BetaPromotionEmail,
 	templateName = "janovix-beta-promotion-template",
+	language: LanguageCode = "en",
 ): Promise<void> {
 	try {
 		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: promotion.email, type: "to" }],
 			from_email: "noreply@janovix.com",
 			from_name: "Janovix",
-			subject: "¡Tu acceso a Janovix ha sido activado!",
+			subject: t(language, "promotion.subject"),
 			template_name: templateName,
 			global_merge_vars: [
 				{ name: "user_name", content: promotion.userName },

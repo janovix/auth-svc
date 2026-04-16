@@ -8,6 +8,7 @@ import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
 import { sendPromotionEmail } from "../utils/mandrill";
+import { getLanguageForUserId } from "../utils/email-language";
 import { executeInBackground } from "../auth/execution-context";
 
 type AdminBindings = {
@@ -323,11 +324,18 @@ adminRoutes.post("/users/:userId/promote", async (c) => {
 			const authAppUrl =
 				c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
 
-			const emailPromise = sendPromotionEmail(apiKey, {
-				email: targetUser.email,
-				userName: targetUser.name || targetUser.email.split("@")[0],
-				loginUrl: `${authAppUrl}/login`,
-			});
+			const promotionLang = await getLanguageForUserId(c.env.DB, userId);
+
+			const emailPromise = sendPromotionEmail(
+				apiKey,
+				{
+					email: targetUser.email,
+					userName: targetUser.name || targetUser.email.split("@")[0],
+					loginUrl: `${authAppUrl}/login`,
+				},
+				"janovix-beta-promotion-template",
+				promotionLang,
+			);
 
 			executeInBackground(
 				emailPromise,
