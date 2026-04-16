@@ -8,7 +8,9 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import { t } from "../lib/i18n";
 import { sendOrgNotification } from "../utils/notifications";
+import { getOrganizationLanguageFromDb } from "../utils/email-language";
 import { getAuthenticatedAdmin } from "./admin";
 
 type AdminOrgBindings = {
@@ -468,14 +470,21 @@ adminOrganizationsRoutes.patch("/:id", async (c) => {
 
 		const authAppUrl =
 			c.env.AUTH_FRONTEND_URL || "https://auth.janovix.workers.dev";
+		const orgLang = await getOrganizationLanguageFromDb(c.env.DB, id);
+		const orgName = updatedOrg!.name;
 		await sendOrgNotification(c.env.NOTIFICATIONS_SERVICE, id, {
 			channelSlug: "system",
 			type: "organization.updated",
-			title: "Organization Settings Updated",
-			body: `Organization "${updatedOrg!.name}" settings have been updated by an administrator.`,
+			title: t(orgLang, "org_settings_updated.title"),
+			body: t(orgLang, "org_settings_updated.body", { orgName }),
 			callbackUrl: `${authAppUrl}/settings/organization`,
 			sourceService: "auth-svc",
 			sourceEvent: "admin_organizations.patch",
+			emailI18n: {
+				titleKey: "org_settings_updated.title",
+				bodyKey: "org_settings_updated.body",
+				bodyParams: { orgName },
+			},
 		});
 
 		return c.json({

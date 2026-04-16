@@ -230,9 +230,7 @@ describe("Mandrill Email Integration", () => {
 			expect(callBody.message.to).toEqual([{ email: toEmail, type: "to" }]);
 			expect(callBody.message.from_email).toBe("noreply@janovix.com");
 			expect(callBody.message.from_name).toBe("Janovix");
-			expect(callBody.message.subject).toBe(
-				"Tu código de verificación - Janovix",
-			);
+			expect(callBody.message.subject).toBe("Your verification code - Janovix");
 			expect(callBody.message.global_merge_vars).toEqual([
 				{ name: "env", content: userName },
 				{ name: "otp", content: otp },
@@ -248,6 +246,40 @@ describe("Mandrill Email Integration", () => {
 			);
 
 			consoleLogSpy.mockRestore();
+		});
+
+		it("uses Spanish OTP subject when language is es", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: toEmail,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			await sendOtpEmail(
+				apiKey,
+				toEmail,
+				userName,
+				otp,
+				"sign-in",
+				"janovix-email-otp-template",
+				"es",
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(callBody.message.subject).toBe(
+				"Tu código de inicio de sesión - Janovix",
+			);
 		});
 
 		it("sends OTP email with correct subject for sign-in", async () => {
@@ -271,9 +303,7 @@ describe("Mandrill Email Integration", () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-			expect(callBody.message.subject).toBe(
-				"Tu código de inicio de sesión - Janovix",
-			);
+			expect(callBody.message.subject).toBe("Your sign-in code - Janovix");
 		});
 
 		it("uses default subject for unknown OTP type", async () => {
@@ -297,9 +327,7 @@ describe("Mandrill Email Integration", () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-			expect(callBody.message.subject).toBe(
-				"Tu código de verificación - Janovix",
-			);
+			expect(callBody.message.subject).toBe("Your verification code - Janovix");
 		});
 
 		it("uses custom template name when provided", async () => {
@@ -420,7 +448,7 @@ describe("Mandrill Email Integration", () => {
 			expect(callBody.message.from_email).toBe("noreply@janovix.com");
 			expect(callBody.message.from_name).toBe("Janovix");
 			expect(callBody.message.subject).toBe(
-				`Invitación a unirse a ${invitation.organizationName}`,
+				`Invitation to join ${invitation.organizationName}`,
 			);
 			expect(callBody.message.global_merge_vars).toEqual([
 				{ name: "org_name", content: invitation.organizationName },
@@ -438,6 +466,37 @@ describe("Mandrill Email Integration", () => {
 			);
 
 			consoleLogSpy.mockRestore();
+		});
+
+		it("uses Spanish invitation subject when language is es", async () => {
+			const mockResponse: MandrillSendResponse[] = [
+				{
+					_id: "test-id",
+					email: invitation.email,
+					status: "sent",
+				},
+			];
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				text: async () => JSON.stringify(mockResponse),
+				json: async () => mockResponse,
+			});
+
+			await sendOrganizationInvitationEmail(
+				apiKey,
+				invitation,
+				"janovix-org-invitation-template",
+				"es",
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+			expect(callBody.message.subject).toBe(
+				`Invitación a unirse a ${invitation.organizationName}`,
+			);
 		});
 
 		it("uses default role when role is not provided", async () => {

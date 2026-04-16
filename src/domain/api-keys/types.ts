@@ -2,6 +2,31 @@
  * API Keys domain types
  */
 
+/** Valid environment values for API keys */
+export const API_KEY_ENVIRONMENTS = [
+	"production",
+	"staging",
+	"development",
+] as const;
+export type ApiKeyEnvironment = (typeof API_KEY_ENVIRONMENTS)[number];
+
+export function isValidApiKeyEnvironment(
+	value: string,
+): value is ApiKeyEnvironment {
+	return API_KEY_ENVIRONMENTS.includes(value as ApiKeyEnvironment);
+}
+
+/** Key prefix by environment */
+const ENV_PREFIX_MAP: Record<ApiKeyEnvironment, string> = {
+	production: "jnvx_live_",
+	staging: "jnvx_stg_",
+	development: "jnvx_dev_",
+};
+
+export function getKeyPrefixForEnvironment(env: ApiKeyEnvironment): string {
+	return ENV_PREFIX_MAP[env];
+}
+
 /** Database row shape (snake_case columns) */
 export interface ApiKeyRow {
 	id: string;
@@ -10,6 +35,7 @@ export interface ApiKeyRow {
 	key_prefix: string;
 	organization_id: string;
 	created_by_id: string;
+	environment: string;
 	last_used_at: string | null;
 	expires_at: string | null;
 	revoked_at: string | null;
@@ -24,6 +50,7 @@ export interface ApiKey {
 	keyPrefix: string;
 	organizationId: string;
 	createdById: string;
+	environment: ApiKeyEnvironment;
 	lastUsedAt: string | null;
 	expiresAt: string | null;
 	revokedAt: string | null;
@@ -42,6 +69,7 @@ export interface CreateApiKeyInput {
 	name: string;
 	organizationId: string;
 	createdById: string;
+	environment?: ApiKeyEnvironment;
 	expiresAt?: string | null;
 }
 
@@ -49,6 +77,7 @@ export interface CreateApiKeyInput {
 export interface ApiKeyValidationResult {
 	valid: boolean;
 	organizationId?: string;
+	environment?: ApiKeyEnvironment;
 	plan?: string;
 	error?: string;
 }

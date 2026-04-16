@@ -490,9 +490,10 @@ model ApiKey {
   id             String    @id @default(uuid())
   name           String
   keyHash        String    @unique @map("key_hash")
-  keyPrefix      String    @map("key_prefix") // first 8 chars for identification (e.g., "jnvx_a3f")
+  keyPrefix      String    @map("key_prefix") // first 8 chars for identification (e.g., "jnvx_live_a3f")
   organizationId String    @map("organization_id")
   createdById    String    @map("created_by_id")
+  environment    String    @default("production") @map("environment") // production | staging | development
   lastUsedAt     DateTime? @map("last_used_at")
   expiresAt      DateTime? @map("expires_at")
   revokedAt      DateTime? @map("revoked_at")
@@ -501,6 +502,8 @@ model ApiKey {
 
   @@index([organizationId])
   @@index([createdById])
+  @@index([environment])
+  @@index([organizationId, environment])
   @@map("api_keys")
 }
 
@@ -527,4 +530,53 @@ model OrganizationUsage {
   @@index([ownerUserId])
   @@index([periodStart])
   @@map("organization_usage")
+}
+
+// ============================================================================
+// Webhook Domain
+// ============================================================================
+
+model WebhookEndpoint {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  environment    String   @default("production") @map("environment")
+  url            String
+  secret         String
+  description    String?
+  events         String   // JSON array: ["client.created", "alert.created"]
+  active         Boolean  @default(true)
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  deliveries WebhookDelivery[]
+
+  @@index([organizationId])
+  @@index([organizationId, environment])
+  @@index([active])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id                 String   @id @default(uuid())
+  endpointId         String   @map("endpoint_id")
+  organizationId     String   @map("organization_id")
+  environment        String   @map("environment")
+  eventType          String   @map("event_type")
+  payload            String
+  status             String   @default("pending") // pending, delivered, failed
+  attempts           Int      @default(0)
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  lastResponseStatus Int?     @map("last_response_status")
+  lastError          String?  @map("last_error")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId])
+  @@index([organizationId])
+  @@index([organizationId, environment])
+  @@index([status])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
 }

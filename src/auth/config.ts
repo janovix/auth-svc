@@ -13,6 +13,11 @@ import {
 	sendOtpEmail,
 	sendOrganizationInvitationEmail,
 } from "../utils/mandrill";
+import {
+	getLanguageForUserEmail,
+	getOrganizationLanguageFromDb,
+} from "../utils/email-language";
+import { t } from "../lib/i18n";
 import { isE2eTestEmail } from "../utils/e2e-test-email";
 import { executeInBackground, getExecutionContext } from "./execution-context";
 import { PricingService } from "../domain/pricing/service";
@@ -560,7 +565,7 @@ export function buildResolvedAuthConfig(
 					async (data: {
 						invitation?: { id?: string };
 						id?: string;
-						organization?: { name?: string };
+						organization?: { id?: string; name?: string };
 						inviter?: { user?: { name?: string; email?: string } };
 						email?: string;
 						role?: string;
@@ -583,8 +588,13 @@ export function buildResolvedAuthConfig(
 							? `${authAppUrl}/invite?invitationId=${encodeURIComponent(invitationId)}`
 							: `${authAppUrl}/invite`;
 
+						const orgId = data.organization?.id;
+						const inviteLang = orgId
+							? await getOrganizationLanguageFromDb(env.DB, orgId)
+							: "en";
 						const organizationName =
-							data.organization?.name ?? "tu organización";
+							data.organization?.name ??
+							t(inviteLang, "org_invite.org_fallback_name");
 						// inviter is a member with nested user info
 						const inviterUser = data.inviter?.user;
 						const inviterName =
@@ -598,13 +608,18 @@ export function buildResolvedAuthConfig(
 							return;
 						}
 
-						const invitationPromise = sendOrganizationInvitationEmail(apiKey, {
-							email,
-							inviteUrl,
-							organizationName,
-							inviterName,
-							role: data.role,
-						});
+						const invitationPromise = sendOrganizationInvitationEmail(
+							apiKey,
+							{
+								email,
+								inviteUrl,
+								organizationName,
+								inviterName,
+								role: data.role,
+							},
+							"janovix-org-invitation-template",
+							inviteLang,
+						);
 
 						// Use dynamic execution context to handle background task
 						executeInBackground(
@@ -669,6 +684,11 @@ export function buildResolvedAuthConfig(
 								? trimmedEmail.split("@")[0]
 								: trimmedEmail || email;
 
+							const otpLang = await getLanguageForUserEmail(
+								env.DB,
+								trimmedEmail,
+							);
+
 							// Use waitUntil for Cloudflare Workers to ensure async operation completes
 							// even after the response is sent to the client.
 							// IMPORTANT: We do NOT await this promise to prevent blocking the response.
@@ -678,6 +698,8 @@ export function buildResolvedAuthConfig(
 								userName,
 								otp,
 								type,
+								undefined,
+								otpLang,
 							)
 								.then(() => {
 									const elapsed = Date.now() - callbackStart;

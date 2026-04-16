@@ -3,6 +3,7 @@
  * via the notifications-svc RPC entrypoint (Cloudflare Service Binding).
  */
 
+import type { EmailI18nPayload, LanguageCode } from "../lib/i18n";
 import type { NotificationsRpc } from "../types/bindings";
 
 /**
@@ -31,6 +32,8 @@ export interface SendNotificationInput {
 	severity?: NotificationSeverity;
 	callbackUrl?: string;
 	sendEmail?: boolean;
+	emailI18n?: EmailI18nPayload;
+	emailLocale?: LanguageCode;
 	sourceService: string;
 	sourceEvent?: string;
 }
@@ -93,6 +96,8 @@ export async function sendNotification(
 			severity: input.severity ?? "info",
 			callbackUrl: input.callbackUrl,
 			sendEmail: input.sendEmail ?? false,
+			emailI18n: input.emailI18n,
+			emailLocale: input.emailLocale,
 			sourceService: input.sourceService,
 			sourceEvent: input.sourceEvent,
 		});

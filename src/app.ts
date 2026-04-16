@@ -40,6 +40,7 @@ import { internalUsageRightsRoutes } from "./routes/internal-usage-rights";
 import { licenseAdminRoutes } from "./routes/license-admin";
 import { subscriptionAdminRoutes } from "./routes/subscription-admin";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
+import { internalWebhookRoutes } from "./routes/internal-webhooks";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -178,6 +179,9 @@ app.route("/api/usage-rights", usageRightsRoutes);
 
 // Register Internal Usage Rights routes (service binding, no auth)
 app.route("/internal/usage-rights", internalUsageRightsRoutes);
+
+// Register Internal Webhook routes (service binding, called by api worker)
+app.route("/internal/webhooks", internalWebhookRoutes);
 
 // Register Organization routes (invitation lookup by ID)
 app.route("/api/organization", organizationRoutes);
