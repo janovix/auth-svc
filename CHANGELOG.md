@@ -1,3 +1,10 @@
+# [1.12.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.12.0-rc.1...v1.12.0-rc.2) (2026-04-16)
+
+
+### Features
+
+* implement public webhook management routes and service functions ([872093d](https://github.com/janovix/auth-svc/commit/872093dc2933a0a499c434b7dd355fa8b7dd924f))
+
 # [1.12.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.11.0...v1.12.0-rc.1) (2026-04-16)
 
 
