@@ -1,3 +1,10 @@
+# [1.14.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.1...v1.14.0-rc.2) (2026-04-22)
+
+
+### Features
+
+* add new service URLs and E2E API key to configuration ([bd78cd4](https://github.com/janovix/auth-svc/commit/bd78cd438b0452b56dde5b9baa27f35e7124be0a))
+
 # [1.14.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.13.0...v1.14.0-rc.1) (2026-04-16)
 
 
