@@ -39,7 +39,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 					"Access-Control-Allow-Headers":
 						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with, x-captcha-response, x-e2e-turnstile-bypass",
 					"Access-Control-Expose-Headers": "X-Retry-After",
-					"Access-Control-Max-Age": "86400",
+					"Access-Control-Max-Age": "600",
 				},
 			});
 		}
