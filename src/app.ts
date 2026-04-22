@@ -30,6 +30,7 @@ import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
+import { adminE2ePurgeRoutes } from "./routes/admin-e2e-purge";
 import { adminOrganizationsRoutes } from "./routes/admin-organizations";
 import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 import { pricingRoutes } from "./routes/pricing";
@@ -199,6 +200,7 @@ app.route("/api/upload", uploadRoutes);
 
 // Register Admin routes (KV management, etc.)
 app.route("/api/admin", adminRoutes);
+app.route("/api/admin/e2e", adminE2ePurgeRoutes);
 
 // Register License Admin routes (CRUD for enterprise licenses)
 app.route("/api/admin/licenses", licenseAdminRoutes);

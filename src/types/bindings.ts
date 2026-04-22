@@ -286,4 +286,13 @@ export type Bindings = Env & {
 	 * Example: `https://avatars.janovix.com` or `https://pub-xxx.r2.dev`
 	 */
 	AVATARS_PUBLIC_URL?: string;
+
+	/** E2E purge + internal test hooks (must match other services). */
+	E2E_API_KEY?: string;
+	/** Public HTTP base URL for aml-svc (purge fan-out). */
+	AML_SVC_URL?: string;
+	/** Public HTTP base URL for watchlist-svc (purge fan-out). */
+	WATCHLIST_SVC_URL?: string;
+	/** Public HTTP base URL for doc-svc (purge fan-out). */
+	DOC_SVC_URL?: string;
 };
