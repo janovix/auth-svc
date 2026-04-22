@@ -1,3 +1,10 @@
+# [1.14.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.2...v1.14.0-rc.3) (2026-04-22)
+
+
+### Features
+
+* implement E2E Turnstile bypass for auth-svc ([f3f2bf1](https://github.com/janovix/auth-svc/commit/f3f2bf14cd5cd6e678623129bfeec1aceb20a439))
+
 # [1.14.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.1...v1.14.0-rc.2) (2026-04-22)
 
 
