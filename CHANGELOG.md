@@ -1,3 +1,10 @@
+# [1.14.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.3...v1.14.0-rc.4) (2026-04-22)
+
+
+### Bug Fixes
+
+* update CORS configuration for E2E Turnstile bypass ([8062dc3](https://github.com/janovix/auth-svc/commit/8062dc3d2eb5aeee199509917803ae6d1f832842))
+
 # [1.14.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.2...v1.14.0-rc.3) (2026-04-22)
 
 
