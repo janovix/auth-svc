@@ -37,7 +37,7 @@ export function registerBetterAuthRoutes(app: Hono<{ Bindings: Bindings }>) {
 					"Access-Control-Allow-Methods":
 						"GET, POST, PUT, DELETE, PATCH, OPTIONS",
 					"Access-Control-Allow-Headers":
-						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with, x-captcha-response",
+						"Content-Type, Authorization, x-auth-internal-token, x-csrf-token, x-xsrf-token, x-requested-with, x-captcha-response, x-e2e-turnstile-bypass",
 					"Access-Control-Expose-Headers": "X-Retry-After",
 					"Access-Control-Max-Age": "86400",
 				},
@@ -158,6 +158,7 @@ async function handleAuthRequest(
 				c.req.raw.headers,
 				bodyText,
 				c.env.TURNSTILE_SECRET_KEY,
+				c.env.E2E_TURNSTILE_BYPASS_SECRET,
 			);
 			if (!turnstile.ok) {
 				return addCorsHeadersIfNeeded(c, turnstile.response);

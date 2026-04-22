@@ -25,6 +25,7 @@ export async function verifyTurnstileForProtectedAuthPost(
 	headers: Headers,
 	bodyText: string,
 	secretKey: string | undefined,
+	e2eTurnstileBypassSecret?: string,
 ): Promise<VerifyResult> {
 	if (!secretKey) {
 		return { ok: true };
@@ -32,6 +33,15 @@ export async function verifyTurnstileForProtectedAuthPost(
 
 	const pathname = new URL(requestUrl).pathname;
 	if (!isCaptchaProtectedAuthPath(pathname)) {
+		return { ok: true };
+	}
+
+	const bypassHeader = headers.get("x-e2e-turnstile-bypass");
+	if (
+		e2eTurnstileBypassSecret &&
+		bypassHeader &&
+		bypassHeader === e2eTurnstileBypassSecret
+	) {
 		return { ok: true };
 	}
 

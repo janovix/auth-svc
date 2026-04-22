@@ -188,6 +188,12 @@ export type Bindings = Env & {
 	 */
 	TURNSTILE_SECRET_KEY?: string;
 	/**
+	 * Shared secret for Playwright E2E: when `x-e2e-turnstile-bypass` matches this value,
+	 * Turnstile verification is skipped on protected auth POSTs (defense in depth; `@e2e.janovix.com` also bypasses).
+	 * Dashboard only — do not commit to wrangler.jsonc.
+	 */
+	E2E_TURNSTILE_BYPASS_SECRET?: string;
+	/**
 	 * Google OAuth Client ID for social login.
 	 * Created in Google Cloud Console, configured via wrangler vars.
 	 */
