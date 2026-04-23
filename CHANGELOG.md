@@ -1,3 +1,10 @@
+# [1.14.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.4...v1.14.0-rc.5) (2026-04-23)
+
+
+### Features
+
+* add referral program with code generation and validation ([3b2acc6](https://github.com/janovix/auth-svc/commit/3b2acc6fe238a2fc5bb0f2ea05b101ef5f381660))
+
 # [1.14.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.3...v1.14.0-rc.4) (2026-04-22)
 
 
