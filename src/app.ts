@@ -43,6 +43,7 @@ import { subscriptionAdminRoutes } from "./routes/subscription-admin";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { internalWebhookRoutes } from "./routes/internal-webhooks";
 import { publicWebhookRoutes } from "./routes/webhooks-public";
+import { referralRoutes } from "./routes/referrals";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -133,6 +134,9 @@ app.use("/api/auth/stripe/webhook", createWebhookBillingGuard());
 
 // Register Better Auth routes (actual implementation - handles requests)
 registerBetterAuthRoutes(app);
+
+// User referral program (opt-in codes, public validate)
+app.route("/api/referrals", referralRoutes);
 
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);

@@ -23,6 +23,8 @@ import { PricingRepository, PricingService } from "../domain/pricing";
 import { OverageRepository } from "../domain/overage";
 import { UsageRightsRepository } from "../domain/usage-rights/repository";
 import { getBetterAuthContext } from "../auth/instance";
+import { getPrismaForD1 } from "../lib/prisma-d1";
+import { markReferralConvertedIfPending } from "../domain/referrals";
 
 type SubscriptionBindings = {
 	Bindings: Bindings;
@@ -813,6 +815,21 @@ subscriptionRoutes.post("/license/activate", async (c) => {
 
 	// Get effective limits for the response
 	const limits = await pricingService.getEffectiveLimitsForLicense(license.id);
+
+	// Enterprise license activation counts as a successful referral (if this user was referred)
+	try {
+		const prisma = getPrismaForD1(c.env.DB);
+		await markReferralConvertedIfPending(
+			prisma,
+			user.id,
+			"license",
+			license.id,
+		);
+	} catch (err) {
+		Sentry.captureException(err, {
+			tags: { context: "referral-license-convert" },
+		});
+	}
 
 	return c.json({
 		success: true,

@@ -150,6 +150,24 @@ adminE2ePurgeRoutes.post("/purge", async (c) => {
 		});
 	}
 
+	await prisma.referralConversion.deleteMany({
+		where: { referredUserId: { in: userIds } },
+	});
+	const refCodes = await prisma.referralCode.findMany({
+		where: { userId: { in: userIds } },
+		select: { id: true },
+	});
+	if (refCodes.length > 0) {
+		await prisma.referralConversion.deleteMany({
+			where: {
+				referralCodeId: { in: refCodes.map((r) => r.id) },
+			},
+		});
+	}
+	await prisma.referralCode.deleteMany({
+		where: { userId: { in: userIds } },
+	});
+
 	await prisma.userOverageSettings.deleteMany({
 		where: { userId: { in: userIds } },
 	});
