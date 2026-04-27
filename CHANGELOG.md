@@ -1,3 +1,10 @@
+# [1.14.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.5...v1.14.0-rc.6) (2026-04-27)
+
+
+### Features
+
+* add E2E license management routes ([643cc6e](https://github.com/janovix/auth-svc/commit/643cc6ec202ea01a790eed132ef50649ec70b73a))
+
 # [1.14.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.4...v1.14.0-rc.5) (2026-04-23)
 
 
