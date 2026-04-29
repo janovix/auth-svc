@@ -1,3 +1,10 @@
+# [1.14.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.6...v1.14.0-rc.7) (2026-04-29)
+
+
+### Features
+
+* add membership role resolution and active member listing functionality ([ef03b84](https://github.com/janovix/auth-svc/commit/ef03b84f9bbc57cc4e4cd86634790fe886064b22))
+
 # [1.14.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.5...v1.14.0-rc.6) (2026-04-27)
 
 
