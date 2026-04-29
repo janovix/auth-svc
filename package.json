@@ -86,7 +86,7 @@
 		"seed:plans:preview": "ENV=preview REMOTE=true node scripts/seed-plans.mjs",
 		"seed:plans:prod": "ENV=prod REMOTE=true node scripts/seed-plans.mjs",
 		"release": "semantic-release",
-		"typecheck": "tsc -p tsconfig.json && tsc -p tests/tsconfig.json",
+		"typecheck": "npx prisma generate && tsc -p tsconfig.json && tsc -p tests/tsconfig.json",
 		"vitest": "vitest --config tests/vitest.config.mts",
 		"vitest:coverage": "vitest run --coverage --config tests/vitest.config.mts",
 		"test": "node -e \"if(process.platform==='win32'){console.log('⚠️  Skipping auth-svc tests on Windows (vitest-pool-workers module resolution issue)');process.exit(0)}else{process.exit(1)}\" || npm run vitest",
