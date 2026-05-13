@@ -1,3 +1,10 @@
+# [1.14.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.7...v1.14.0-rc.8) (2026-05-13)
+
+
+### Bug Fixes
+
+* update watchlist rescan settings in organization settings schema ([c5acc0d](https://github.com/janovix/auth-svc/commit/c5acc0dbaa658a021a7d8f811e69fe56baca8773))
+
 # [1.14.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.6...v1.14.0-rc.7) (2026-04-29)
 
 
