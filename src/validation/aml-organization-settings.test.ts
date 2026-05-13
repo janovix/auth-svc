@@ -14,10 +14,10 @@ describe("aml-organization-settings schemas", () => {
 		const r = organizationSettingsCreateSchema.safeParse({
 			...validBase,
 			watchlistRescanEnabled: true,
-			watchlistRescanIntervalDays: 30,
+			watchlistRescanIntervalDays: 90,
 			watchlistRescanIncludeBcs: true,
 			watchlistRescanNotifyOnStatusChange: true,
-			watchlistRescanDailyCap: 500,
+			watchlistRescanDailyCap: 5000,
 			watchlistRescanNotifyChannels: ["in_app", "email"],
 			watchlistRescanSources: ["ofac", "un", "sat69b", "pep", "adverse_media"],
 		});
@@ -27,7 +27,7 @@ describe("aml-organization-settings schemas", () => {
 	it("create schema rejects invalid rescan interval", () => {
 		const r = organizationSettingsCreateSchema.safeParse({
 			...validBase,
-			watchlistRescanIntervalDays: 3,
+			watchlistRescanIntervalDays: 89,
 		});
 		expect(r.success).toBe(false);
 	});

@@ -41,7 +41,7 @@ export const organizationSettingsCreateSchema = z.object({
 	selfServiceRequiredSections: z.array(z.string()).nullable().optional(),
 	selfServiceSendEmail: z.boolean().optional(),
 	watchlistRescanEnabled: z.boolean().optional(),
-	watchlistRescanIntervalDays: z.number().int().min(7).max(180).optional(),
+	watchlistRescanIntervalDays: z.number().int().min(90).max(180).optional(),
 	watchlistRescanIncludeBcs: z.boolean().optional(),
 	watchlistRescanNotifyOnStatusChange: z.boolean().optional(),
 	watchlistRescanDailyCap: z.number().int().min(50).max(10_000).optional(),
