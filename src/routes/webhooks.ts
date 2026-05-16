@@ -20,6 +20,8 @@ import {
 import { PricingRepository, PricingService } from "../domain/pricing";
 import { OverageRepository } from "../domain/overage";
 import { UsageRightsRepository } from "../domain/usage-rights/repository";
+import { getPrismaForD1 } from "../lib/prisma-d1";
+import { markReferralConvertedIfPending } from "../domain/referrals";
 
 type WebhookBindings = {
 	Bindings: Bindings;
@@ -282,6 +284,8 @@ async function handleEvent(
 			// Only handle subscription invoices
 			// Type assertion needed as Stripe types vary by version
 			const invoiceData = invoice as unknown as {
+				id?: string;
+				billing_reason?: string | null;
 				subscription?: string | { id: string } | null;
 				period_start: number;
 				period_end: number;
@@ -305,6 +309,25 @@ async function handleEvent(
 					`[Webhook] invoice.paid: No subscription found for ${subscriptionId}`,
 				);
 				break;
+			}
+
+			// First paid invoice for a new subscription → count referral (if this user was referred)
+			if (
+				invoiceData.billing_reason === "subscription_create" &&
+				invoiceData.id
+			) {
+				const prisma = getPrismaForD1(c.env.DB);
+				const refResult = await markReferralConvertedIfPending(
+					prisma,
+					subscription.referenceId,
+					"subscription",
+					invoiceData.id,
+				);
+				if (refResult.converted) {
+					console.log(
+						`[Webhook] invoice.paid: Referral conversion recorded for user ${subscription.referenceId} (first invoice)`,
+					);
+				}
 			}
 
 			// Get organizations owned by this user

@@ -27,6 +27,7 @@ export function createCorsMiddleware() {
 			"x-xsrf-token",
 			"x-requested-with",
 			"x-environment",
+			"x-e2e-turnstile-bypass",
 		],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		exposeHeaders: ["X-Retry-After"],

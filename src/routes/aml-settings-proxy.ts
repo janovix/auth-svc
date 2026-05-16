@@ -9,6 +9,10 @@ import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Bindings } from "../types/bindings";
 import { getBetterAuthContext } from "../auth/instance";
+import {
+	organizationSettingsCreateSchema,
+	organizationSettingsUpdateSchema,
+} from "../validation/aml-organization-settings";
 
 type AmlProxyBindings = {
 	Bindings: Bindings;
@@ -229,10 +233,21 @@ amlSettingsProxyRoutes.put("/:orgId", async (c) => {
 	}
 
 	try {
-		const body = await c.req.json();
+		const raw = await c.req.json();
+		const parseResult = organizationSettingsCreateSchema.safeParse(raw);
+		if (!parseResult.success) {
+			return c.json(
+				{
+					success: false,
+					error: "Validation Error",
+					details: parseResult.error.format(),
+				},
+				400,
+			);
+		}
 		const result = await c.env.AML_SERVICE.updateOrganizationSettings(
 			orgId,
-			body,
+			parseResult.data,
 		);
 		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {
@@ -270,10 +285,21 @@ amlSettingsProxyRoutes.patch("/:orgId", async (c) => {
 	}
 
 	try {
-		const body = await c.req.json();
+		const raw = await c.req.json();
+		const parseResult = organizationSettingsUpdateSchema.safeParse(raw);
+		if (!parseResult.success) {
+			return c.json(
+				{
+					success: false,
+					error: "Validation Error",
+					details: parseResult.error.format(),
+				},
+				400,
+			);
+		}
 		const result = await c.env.AML_SERVICE.patchOrganizationSettings(
 			orgId,
-			body,
+			parseResult.data,
 		);
 		return c.json({ success: true, data: result.settings }, 200);
 	} catch (error) {

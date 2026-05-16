@@ -30,6 +30,8 @@ import { organizationRoutes } from "./routes/organization";
 import { webhookRoutes } from "./routes/webhooks";
 import { uploadRoutes } from "./routes/upload";
 import { adminRoutes } from "./routes/admin";
+import { adminE2ePurgeRoutes } from "./routes/admin-e2e-purge";
+import { adminE2eLicensesRoutes } from "./routes/admin-e2e-licenses";
 import { adminOrganizationsRoutes } from "./routes/admin-organizations";
 import { internalOrganizationsRoutes } from "./routes/internal-organizations";
 import { pricingRoutes } from "./routes/pricing";
@@ -42,6 +44,7 @@ import { subscriptionAdminRoutes } from "./routes/subscription-admin";
 import { amlSettingsProxyRoutes } from "./routes/aml-settings-proxy";
 import { internalWebhookRoutes } from "./routes/internal-webhooks";
 import { publicWebhookRoutes } from "./routes/webhooks-public";
+import { referralRoutes } from "./routes/referrals";
 
 // Start a Hono app
 export const app = new Hono<{ Bindings: Bindings }>();
@@ -133,6 +136,9 @@ app.use("/api/auth/stripe/webhook", createWebhookBillingGuard());
 // Register Better Auth routes (actual implementation - handles requests)
 registerBetterAuthRoutes(app);
 
+// User referral program (opt-in codes, public validate)
+app.route("/api/referrals", referralRoutes);
+
 // Register Settings routes (actual implementation)
 app.route("/api/settings", settingsRoutes);
 
@@ -199,6 +205,8 @@ app.route("/api/upload", uploadRoutes);
 
 // Register Admin routes (KV management, etc.)
 app.route("/api/admin", adminRoutes);
+app.route("/api/admin/e2e", adminE2ePurgeRoutes);
+app.route("/api/admin/e2e/licenses", adminE2eLicensesRoutes);
 
 // Register License Admin routes (CRUD for enterprise licenses)
 app.route("/api/admin/licenses", licenseAdminRoutes);

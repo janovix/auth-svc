@@ -112,6 +112,13 @@ export interface OrgMember {
 	language: LanguageCode;
 }
 
+export interface ActiveOrgMemberRow {
+	userId: string;
+	organizationId: string;
+	email: string;
+	name: string;
+}
+
 export interface OrgIdsPage {
 	organizationIds: string[];
 	total: number;
@@ -320,6 +327,74 @@ export class AuthSvcEntrypoint extends WorkerEntrypoint<Bindings> {
 	 * Get all members (with user info) for an organization.
 	 * Used by notifications-svc to send org-scoped emails.
 	 */
+	/**
+	 * Resolve membership role for training / org-scoped admin checks.
+	 */
+	async getMemberRole(
+		userId: string,
+		organizationId: string,
+	): Promise<"owner" | "admin" | "member" | null> {
+		const row = await this.env.DB.prepare(
+			`SELECT role FROM members WHERE userId = ? AND organizationId = ?`,
+		)
+			.bind(userId, organizationId)
+			.first<{ role: string }>();
+
+		if (!row) return null;
+
+		const r = row.role.trim().toLowerCase();
+		if (r === "owner" || r === "admin" || r === "member") {
+			return r;
+		}
+		return "member";
+	}
+
+	/**
+	 * Paginated active-organization members (for AML training auto-enrollment cron).
+	 */
+	async listActiveMembers(
+		organizationId?: string,
+		cursor?: string,
+	): Promise<{
+		items: ActiveOrgMemberRow[];
+		nextCursor: string | null;
+	}> {
+		const limit = 500;
+		const offset = cursor ? Number.parseInt(cursor, 10) || 0 : 0;
+
+		let sql = `SELECT m.userId AS userId, m.organizationId AS organizationId, u.email AS email,
+			COALESCE(u.name, '') AS name
+			FROM members m
+			INNER JOIN users u ON u.id = m.userId
+			INNER JOIN organizations o ON o.id = m.organizationId
+			WHERE (o.status IS NULL OR LOWER(o.status) = 'active')`;
+
+		const binds: unknown[] = [];
+
+		if (organizationId) {
+			sql += ` AND m.organizationId = ?`;
+			binds.push(organizationId);
+		}
+
+		sql += ` ORDER BY m.organizationId ASC, m.userId ASC LIMIT ? OFFSET ?`;
+		binds.push(limit + 1, offset);
+
+		const stmt = this.env.DB.prepare(sql);
+		const result = await stmt.bind(...binds).all<{
+			userId: string;
+			organizationId: string;
+			email: string;
+			name: string;
+		}>();
+
+		const rows = result.results ?? [];
+		const hasMore = rows.length > limit;
+		const items = hasMore ? rows.slice(0, limit) : rows;
+		const nextCursor = hasMore ? String(offset + limit) : null;
+
+		return { items, nextCursor };
+	}
+
 	async getOrganizationMembers(orgId: string): Promise<OrgMember[]> {
 		const result = await this.env.DB.prepare(
 			`SELECT m.id, m.userId, m.role, u.email, u.name, u.image,

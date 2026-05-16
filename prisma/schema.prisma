@@ -8,7 +8,8 @@
 // Models affected: User, Session, Account, Verification, Jwks, Organization, Member, Invitation, Subscription
 //
 // Custom auth-svc tables use snake_case column names via @map directives.
-// Models affected: OrganizationSettings, UserSettings, AuditLog, UsedCardFingerprint, OrganizationUsage
+// Models affected: OrganizationSettings, UserSettings, AuditLog, UsedCardFingerprint, OrganizationUsage,
+// ReferralCode, ReferralConversion
 //
 // BILLING MODEL: User-based (not organization-based)
 // - Users are Stripe customers and hold subscriptions via Better Auth Stripe plugin
@@ -33,14 +34,14 @@ datasource db {
 
 // Better Auth User model
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  phone         String?
-  name          String?
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  email            String    @unique
+  phone            String?
+  name             String?
+  emailVerified    Boolean   @default(false)
+  image            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   // Better Auth admin plugin fields
   role             String    @default("user")
   banned           Boolean   @default(false)
@@ -56,6 +57,9 @@ model User {
   invitationsSent Invitation[]
   // Better Auth passkey plugin relations
   passkeys        Passkey[]
+
+  referralCode ReferralCode?
+  referredAs   ReferralConversion? @relation("ReferredUser")
 
   @@map("users")
 }
@@ -155,16 +159,16 @@ model Jwks {
 // Custom columns (status, archivedAt, archivedReason) are not exposed by Better Auth APIs;
 // use custom HTTP routes or Prisma/raw SQL. Better Auth ignores unknown columns on create/update.
 model Organization {
-  id               String    @id @default(uuid())
-  name             String
-  slug             String    @unique
-  logo             String?
-  metadata         String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  status           String    @default("active") // active, archived, suspended
-  archivedAt       DateTime?
-  archivedReason   String?
+  id             String    @id @default(uuid())
+  name           String
+  slug           String    @unique
+  logo           String?
+  metadata       String? // JSON string for organization settings (RFC, vulnerable activity, etc.)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  status         String    @default("active") // active, archived, suspended
+  archivedAt     DateTime?
+  archivedReason String?
 
   members     Member[]
   invitations Invitation[]
@@ -220,14 +224,14 @@ model Invitation {
 
 // Per-user metered overage preferences and spend tracking (billing period accumulator reset via webhook)
 model UserOverageSettings {
-  id                         String   @id @default(uuid())
-  userId                     String   @unique @map("user_id")
-  overageEnabled             Boolean  @default(false) @map("overage_enabled")
-  spendLimitCents            Int?     @map("spend_limit_cents")
-  spendLimitCurrency         String   @default("MXN") @map("spend_limit_currency")
-  periodOverageChargeCents   Int      @default(0) @map("period_overage_charge_cents")
-  createdAt                  DateTime @default(now()) @map("created_at")
-  updatedAt                  DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(uuid())
+  userId                   String   @unique @map("user_id")
+  overageEnabled           Boolean  @default(false) @map("overage_enabled")
+  spendLimitCents          Int?     @map("spend_limit_cents")
+  spendLimitCurrency       String   @default("MXN") @map("spend_limit_currency")
+  periodOverageChargeCents Int      @default(0) @map("period_overage_charge_cents")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("user_overage_settings")
@@ -370,19 +374,19 @@ model SubscriptionPlan {
 // Note: stripe_price_id is NOT unique because the same Stripe price may be 
 // shared across plans in dev/preview environments
 model PlanPrice {
-  id             String   @id @default(uuid())
-  planId         String   @map("plan_id")
-  stripePriceId  String   @map("stripe_price_id")
-  priceType      String   @map("price_type") // "subscription", "seat", "overage_report", "overage_notice", etc.
-  amount         Int // Amount in cents
-  currency       String   @default("MXN")
-  interval       String? // "month", "year", null for one-time
-  intervalCount  Int?     @map("interval_count") // 1 for monthly, 12 for yearly
-  description    String?
-  isActive       Boolean  @default(true) @map("is_active")
-  metadata       String? // JSON for extensibility
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  planId        String   @map("plan_id")
+  stripePriceId String   @map("stripe_price_id")
+  priceType     String   @map("price_type") // "subscription", "seat", "overage_report", "overage_notice", etc.
+  amount        Int // Amount in cents
+  currency      String   @default("MXN")
+  interval      String? // "month", "year", null for one-time
+  intervalCount Int?     @map("interval_count") // 1 for monthly, 12 for yearly
+  description   String?
+  isActive      Boolean  @default(true) @map("is_active")
+  metadata      String? // JSON for extensibility
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
@@ -396,19 +400,19 @@ model PlanPrice {
 
 // Plan limits (configurable limits per plan)
 model PlanLimit {
-  id               String   @id @default(uuid())
-  planId           String   @map("plan_id")
-  maxOrganizations Int      @default(1) @map("max_organizations")
-  usersPerOrg      Int      @default(5) @map("users_per_org")
-  reportsPerMonth  Int      @default(0) @map("reports_per_month")
-  noticesPerMonth  Int      @default(3) @map("notices_per_month")
-  alertsPerMonth   Int      @default(50) @map("alerts_per_month")
-  operationsPerMonth Int  @default(250) @map("operations_per_month")
-  clientsPerMonth  Int      @default(50) @map("clients_per_month")
-  watchlistQueriesPerMonth Int @default(0) @map("watchlist_queries_per_month")
-  metadata         String? // JSON for additional limits
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(uuid())
+  planId                   String   @map("plan_id")
+  maxOrganizations         Int      @default(1) @map("max_organizations")
+  usersPerOrg              Int      @default(5) @map("users_per_org")
+  reportsPerMonth          Int      @default(0) @map("reports_per_month")
+  noticesPerMonth          Int      @default(3) @map("notices_per_month")
+  alertsPerMonth           Int      @default(50) @map("alerts_per_month")
+  operationsPerMonth       Int      @default(250) @map("operations_per_month")
+  clientsPerMonth          Int      @default(50) @map("clients_per_month")
+  watchlistQueriesPerMonth Int      @default(0) @map("watchlist_queries_per_month")
+  metadata                 String? // JSON for additional limits
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
@@ -438,31 +442,68 @@ model UsedCardFingerprint {
   @@map("used_card_fingerprints")
 }
 
+// Per-user opt-in referral code; generated on first request
+model ReferralCode {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  code                String   @unique
+  successfulReferrals Int      @default(0) @map("successful_referrals")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversions ReferralConversion[]
+
+  @@index([code])
+  @@index([userId])
+  @@map("referral_codes")
+}
+
+// A referee (referred user) is attributed at signup; conversion is recorded on first paid sub or license
+model ReferralConversion {
+  id                  String    @id @default(uuid())
+  referralCodeId      String    @map("referral_code_id")
+  referredUserId      String    @unique @map("referred_user_id")
+  attributedAt        DateTime  @default(now()) @map("attributed_at")
+  convertedAt         DateTime? @map("converted_at")
+  conversionType      String?   @map("conversion_type") // subscription | license
+  conversionReference String?   @map("conversion_reference")
+
+  referralCode ReferralCode @relation(fields: [referralCodeId], references: [id], onDelete: Cascade)
+  referredUser User         @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referralCodeId])
+  @@index([referredUserId])
+  @@index([convertedAt])
+  @@map("referral_conversions")
+}
+
 // Enterprise licenses for direct sales (not through Stripe)
 // License is USER-scoped (mirrors Stripe model): one license per user, covers all orgs they own.
 // All limits are explicit (no plan inheritance). 0 = unlimited.
 model EnterpriseLicense {
-  id                     String    @id @default(uuid())
-  key                    String    @unique // License key (e.g., "ENT-XXXX-XXXX-XXXX")
-  organizationName       String    @map("organization_name") // Licensee company name (admin label)
-  userId                 String?   @map("user_id") // User who redeemed -- primary binding
-  issuedBy               String?   @map("issued_by") // Admin user ID who created the license
-  status                 String    @default("active") // "active", "revoked", "expired", "suspended"
-  expiresAt              DateTime? @map("expires_at")
-  activatedAt            DateTime? @map("activated_at")
-  notes                  String? // Admin annotations
+  id                       String    @id @default(uuid())
+  key                      String    @unique // License key (e.g., "ENT-XXXX-XXXX-XXXX")
+  organizationName         String    @map("organization_name") // Licensee company name (admin label)
+  userId                   String?   @map("user_id") // User who redeemed -- primary binding
+  issuedBy                 String?   @map("issued_by") // Admin user ID who created the license
+  status                   String    @default("active") // "active", "revoked", "expired", "suspended"
+  expiresAt                DateTime? @map("expires_at")
+  activatedAt              DateTime? @map("activated_at")
+  notes                    String? // Admin annotations
   // All limits explicit, no plan inheritance. 0 = unlimited.
-  maxOrganizations       Int       @default(0) @map("max_organizations")
-  maxUsers               Int       @default(0) @map("max_users")
-  reportsPerMonth        Int       @default(0) @map("reports_per_month")
-  noticesPerMonth        Int       @default(0) @map("notices_per_month")
-  alertsPerMonth         Int       @default(0) @map("alerts_per_month")
-  operationsPerMonth     Int       @default(0) @map("operations_per_month")
-  clientsPerMonth        Int       @default(0) @map("clients_per_month")
-  watchlistQueriesPerMonth Int     @default(0) @map("watchlist_queries_per_month")
-  metadata               String? // JSON for extensibility
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  maxOrganizations         Int       @default(0) @map("max_organizations")
+  maxUsers                 Int       @default(0) @map("max_users")
+  reportsPerMonth          Int       @default(0) @map("reports_per_month")
+  noticesPerMonth          Int       @default(0) @map("notices_per_month")
+  alertsPerMonth           Int       @default(0) @map("alerts_per_month")
+  operationsPerMonth       Int       @default(0) @map("operations_per_month")
+  clientsPerMonth          Int       @default(0) @map("clients_per_month")
+  watchlistQueriesPerMonth Int       @default(0) @map("watchlist_queries_per_month")
+  metadata                 String? // JSON for extensibility
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
   @@index([key])
   @@index([userId])
@@ -472,12 +513,12 @@ model EnterpriseLicense {
 
 // Per-organization daily usage tracking (for daily-metered limits like watchlist queries)
 model OrganizationDailyUsage {
-  id                     String   @id @default(uuid())
-  organizationId         String   @map("organization_id")
-  date                   String // "YYYY-MM-DD" format
-  watchlistQueriesUsed   Int      @default(0) @map("watchlist_queries_used")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid())
+  organizationId       String   @map("organization_id")
+  date                 String // "YYYY-MM-DD" format
+  watchlistQueriesUsed Int      @default(0) @map("watchlist_queries_used")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@unique([organizationId, date])
   @@index([organizationId])
@@ -516,7 +557,7 @@ model OrganizationUsage {
   reportsUsed         Int       @default(0) @map("reports_used")
   noticesUsed         Int       @default(0) @map("notices_used")
   alertsUsed          Int       @default(0) @map("alerts_used")
-  operationsUsed    Int       @default(0) @map("operations_used")
+  operationsUsed      Int       @default(0) @map("operations_used")
   clientsUsed         Int       @default(0) @map("clients_used")
   usersCount          Int       @default(0) @map("users_count")
   periodStart         DateTime  @map("period_start")
@@ -543,7 +584,7 @@ model WebhookEndpoint {
   url            String
   secret         String
   description    String?
-  events         String   // JSON array: ["client.created", "alert.created"]
+  events         String // JSON array: ["client.created", "alert.created"]
   active         Boolean  @default(true)
   createdById    String   @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -558,18 +599,18 @@ model WebhookEndpoint {
 }
 
 model WebhookDelivery {
-  id                 String   @id @default(uuid())
-  endpointId         String   @map("endpoint_id")
-  organizationId     String   @map("organization_id")
-  environment        String   @map("environment")
-  eventType          String   @map("event_type")
+  id                 String    @id @default(uuid())
+  endpointId         String    @map("endpoint_id")
+  organizationId     String    @map("organization_id")
+  environment        String    @map("environment")
+  eventType          String    @map("event_type")
   payload            String
-  status             String   @default("pending") // pending, delivered, failed
-  attempts           Int      @default(0)
+  status             String    @default("pending") // pending, delivered, failed
+  attempts           Int       @default(0)
   lastAttemptAt      DateTime? @map("last_attempt_at")
-  lastResponseStatus Int?     @map("last_response_status")
-  lastError          String?  @map("last_error")
-  createdAt          DateTime @default(now()) @map("created_at")
+  lastResponseStatus Int?      @map("last_response_status")
+  lastError          String?   @map("last_error")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id])
 

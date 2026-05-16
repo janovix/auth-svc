@@ -1,23 +1,82 @@
-# [1.14.0](https://github.com/janovix/auth-svc/compare/v1.13.0...v1.14.0) (2026-04-16)
+# [1.15.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.14.0...v1.15.0-rc.1) (2026-05-16)
+
+
+### Bug Fixes
+
+* update CORS configuration for E2E Turnstile bypass ([8062dc3](https://github.com/janovix/auth-svc/commit/8062dc3d2eb5aeee199509917803ae6d1f832842))
+* update watchlist rescan settings in organization settings schema ([c5acc0d](https://github.com/janovix/auth-svc/commit/c5acc0dbaa658a021a7d8f811e69fe56baca8773))
+
+
+### Features
+
+* add E2E license management routes ([643cc6e](https://github.com/janovix/auth-svc/commit/643cc6ec202ea01a790eed132ef50649ec70b73a))
+* add membership role resolution and active member listing functionality ([ef03b84](https://github.com/janovix/auth-svc/commit/ef03b84f9bbc57cc4e4cd86634790fe886064b22))
+* add new service URLs and E2E API key to configuration ([bd78cd4](https://github.com/janovix/auth-svc/commit/bd78cd438b0452b56dde5b9baa27f35e7124be0a))
+* add referral program with code generation and validation ([3b2acc6](https://github.com/janovix/auth-svc/commit/3b2acc6fe238a2fc5bb0f2ea05b101ef5f381660))
+* implement E2E Turnstile bypass for auth-svc ([f3f2bf1](https://github.com/janovix/auth-svc/commit/f3f2bf14cd5cd6e678623129bfeec1aceb20a439))
+
+# [1.14.0-rc.8](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.7...v1.14.0-rc.8) (2026-05-13)
+
+
+### Bug Fixes
+
+* update watchlist rescan settings in organization settings schema ([c5acc0d](https://github.com/janovix/auth-svc/commit/c5acc0dbaa658a021a7d8f811e69fe56baca8773))
+
+# [1.14.0-rc.7](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.6...v1.14.0-rc.7) (2026-04-29)
+
+
+### Features
+
+* add membership role resolution and active member listing functionality ([ef03b84](https://github.com/janovix/auth-svc/commit/ef03b84f9bbc57cc4e4cd86634790fe886064b22))
+
+# [1.14.0-rc.6](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.5...v1.14.0-rc.6) (2026-04-27)
+
+
+### Features
+
+* add E2E license management routes ([643cc6e](https://github.com/janovix/auth-svc/commit/643cc6ec202ea01a790eed132ef50649ec70b73a))
+
+# [1.14.0-rc.5](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.4...v1.14.0-rc.5) (2026-04-23)
+
+
+### Features
+
+* add referral program with code generation and validation ([3b2acc6](https://github.com/janovix/auth-svc/commit/3b2acc6fe238a2fc5bb0f2ea05b101ef5f381660))
+
+# [1.14.0-rc.4](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.3...v1.14.0-rc.4) (2026-04-22)
+
+
+### Bug Fixes
+
+* update CORS configuration for E2E Turnstile bypass ([8062dc3](https://github.com/janovix/auth-svc/commit/8062dc3d2eb5aeee199509917803ae6d1f832842))
+
+# [1.14.0-rc.3](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.2...v1.14.0-rc.3) (2026-04-22)
+
+
+### Features
+
+* implement E2E Turnstile bypass for auth-svc ([f3f2bf1](https://github.com/janovix/auth-svc/commit/f3f2bf14cd5cd6e678623129bfeec1aceb20a439))
+
+# [1.14.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.14.0-rc.1...v1.14.0-rc.2) (2026-04-22)
+
+
+### Features
+
+* add new service URLs and E2E API key to configuration ([bd78cd4](https://github.com/janovix/auth-svc/commit/bd78cd438b0452b56dde5b9baa27f35e7124be0a))
+
+# [1.14.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.13.0...v1.14.0-rc.1) (2026-04-16)
 
 
 ### Features
 
 * add oneTap plugin to auth configuration ([82eeb1e](https://github.com/janovix/auth-svc/commit/82eeb1e673b0f76a6f82b3e41df54cc63f09ab79))
 
-# [1.13.0](https://github.com/janovix/auth-svc/compare/v1.12.0...v1.13.0) (2026-04-16)
+# [1.12.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.12.0-rc.1...v1.12.0-rc.2) (2026-04-16)
 
 
 ### Features
 
 * implement public webhook management routes and service functions ([872093d](https://github.com/janovix/auth-svc/commit/872093dc2933a0a499c434b7dd355fa8b7dd924f))
-
-# [1.12.0](https://github.com/janovix/auth-svc/compare/v1.11.0...v1.12.0) (2026-04-16)
-
-
-### Features
-
-* add webhook management and API key environment support ([96c3d99](https://github.com/janovix/auth-svc/commit/96c3d994d3314067d2030f75b6d18b05df29bc3d))
 
 # [1.12.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.11.0...v1.12.0-rc.1) (2026-04-16)
 

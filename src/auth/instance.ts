@@ -1,11 +1,10 @@
-import { PrismaD1 } from "@prisma/adapter-d1";
-import { PrismaClient } from "@prisma/client";
-import * as Sentry from "@sentry/cloudflare";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import * as Sentry from "@sentry/cloudflare";
 
 import { buildResolvedAuthConfig, type StripePriceIds } from "./config";
 import type { Bindings } from "../types/bindings";
+import { getPrismaForD1 } from "../lib/prisma-d1";
 import { createKVSecondaryStorage } from "../utils/kv-storage";
 import { PricingRepository, PricingService } from "../domain/pricing";
 
@@ -36,11 +35,6 @@ const authCache = new Map<string, { auth: ReturnType<typeof betterAuth> }>();
 let cachedPriceIds: StripePriceIds | null = null;
 let priceIdsCacheTime = 0;
 const PRICE_IDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function createPrismaClient(db: D1Database) {
-	const adapter = new PrismaD1(db);
-	return new PrismaClient({ adapter });
-}
 
 /**
  * Fetch Stripe price IDs from the database.
@@ -156,7 +150,7 @@ export async function getBetterAuthContext(
 		};
 	}
 
-	const prisma = createPrismaClient(env.DB);
+	const prisma = getPrismaForD1(env.DB);
 	const secondaryStorage = createKVSecondaryStorage(env.KV);
 
 	const auth = betterAuth({

@@ -53,5 +53,8 @@
 		"AUTH_TRUSTED_ORIGINS": "https://*.janovix.workers.dev,https://*.vusercontent.net",
 		"AUTH_FRONTEND_URL": "https://auth.janovix.workers.dev",
 		"AVATARS_PUBLIC_URL": "https://avatar.janovix.com",
+		"AML_SVC_URL": "https://aml-svc.janovix.workers.dev",
+		"WATCHLIST_SVC_URL": "https://watchlist-svc.janovix.workers.dev",
+		"DOC_SVC_URL": "https://doc-svc.janovix.workers.dev",
 	},
 }
