@@ -1,3 +1,20 @@
+# [1.15.0](https://github.com/janovix/auth-svc/compare/v1.14.0...v1.15.0) (2026-05-16)
+
+
+### Bug Fixes
+
+* update CORS configuration for E2E Turnstile bypass ([8062dc3](https://github.com/janovix/auth-svc/commit/8062dc3d2eb5aeee199509917803ae6d1f832842))
+* update watchlist rescan settings in organization settings schema ([c5acc0d](https://github.com/janovix/auth-svc/commit/c5acc0dbaa658a021a7d8f811e69fe56baca8773))
+
+
+### Features
+
+* add E2E license management routes ([643cc6e](https://github.com/janovix/auth-svc/commit/643cc6ec202ea01a790eed132ef50649ec70b73a))
+* add membership role resolution and active member listing functionality ([ef03b84](https://github.com/janovix/auth-svc/commit/ef03b84f9bbc57cc4e4cd86634790fe886064b22))
+* add new service URLs and E2E API key to configuration ([bd78cd4](https://github.com/janovix/auth-svc/commit/bd78cd438b0452b56dde5b9baa27f35e7124be0a))
+* add referral program with code generation and validation ([3b2acc6](https://github.com/janovix/auth-svc/commit/3b2acc6fe238a2fc5bb0f2ea05b101ef5f381660))
+* implement E2E Turnstile bypass for auth-svc ([f3f2bf1](https://github.com/janovix/auth-svc/commit/f3f2bf14cd5cd6e678623129bfeec1aceb20a439))
+
 # [1.15.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.14.0...v1.15.0-rc.1) (2026-05-16)
 
 
