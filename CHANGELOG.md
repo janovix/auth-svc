@@ -1,3 +1,10 @@
+# [1.15.0-rc.2](https://github.com/janovix/auth-svc/compare/v1.15.0-rc.1...v1.15.0-rc.2) (2026-10-16)
+
+
+### Features
+
+* **brand:** rebrand visible Janovix branding to Yenio ([cedd239](https://github.com/janovix/auth-svc/commit/cedd23930f59f1cfebbeb4ae126c4c229c4e5a95))
+
 # [1.15.0-rc.1](https://github.com/janovix/auth-svc/compare/v1.14.0...v1.15.0-rc.1) (2026-05-16)
 
 
