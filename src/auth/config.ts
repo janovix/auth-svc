@@ -598,7 +598,7 @@ export function buildResolvedAuthConfig(
 						// inviter is a member with nested user info
 						const inviterUser = data.inviter?.user;
 						const inviterName =
-							inviterUser?.name ?? inviterUser?.email ?? "Janovix";
+							inviterUser?.name ?? inviterUser?.email ?? "Yenio";
 						const email = data.email ?? "";
 
 						if (!email) {
@@ -749,7 +749,7 @@ export function buildResolvedAuthConfig(
 			}),
 			passkey({
 				rpID: resolvePasskeyRpID(env.AUTH_FRONTEND_URL, resolvedEnv),
-				rpName: "Janovix",
+				rpName: "Yenio",
 				origin: resolvePasskeyOrigin(env.AUTH_FRONTEND_URL, resolvedEnv),
 			}),
 			oneTap({

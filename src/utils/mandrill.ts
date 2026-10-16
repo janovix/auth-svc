@@ -159,7 +159,7 @@ export async function sendOtpEmail(
 		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: toEmail, type: "to" }],
 			from_email: "noreply@janovix.com",
-			from_name: "Janovix",
+			from_name: "Yenio",
 			subject,
 			template_name: templateName,
 			global_merge_vars: [
@@ -215,7 +215,7 @@ export async function sendOrganizationInvitationEmail(
 		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: invitation.email, type: "to" }],
 			from_email: "noreply@janovix.com",
-			from_name: "Janovix",
+			from_name: "Yenio",
 			subject: t(language, "org_invite.subject", {
 				organizationName: invitation.organizationName,
 			}),
@@ -281,7 +281,7 @@ export async function sendPromotionEmail(
 		const result = await sendMandrillTemplate(apiKey, {
 			to: [{ email: promotion.email, type: "to" }],
 			from_email: "noreply@janovix.com",
-			from_name: "Janovix",
+			from_name: "Yenio",
 			subject: t(language, "promotion.subject"),
 			template_name: templateName,
 			global_merge_vars: [

@@ -39,7 +39,7 @@ describe("PricingService", () => {
 	const mockBusinessPlan: SubscriptionPlan = {
 		id: "plan_business",
 		name: "business",
-		displayName: "Janovix Business",
+		displayName: "Yenio Business",
 		description: "Business plan",
 		isActive: true,
 		sortOrder: 1,
@@ -52,7 +52,7 @@ describe("PricingService", () => {
 	const mockProPlan: SubscriptionPlan = {
 		id: "plan_pro",
 		name: "pro",
-		displayName: "Janovix Pro",
+		displayName: "Yenio Pro",
 		description: "Pro plan",
 		isActive: true,
 		sortOrder: 2,
@@ -172,7 +172,7 @@ describe("PricingService", () => {
 
 			// Check first plan
 			expect(plans[0].name).toBe("business");
-			expect(plans[0].displayName).toBe("Janovix Business");
+			expect(plans[0].displayName).toBe("Yenio Business");
 			expect(plans[0].limits).toBeDefined();
 			expect(plans[0].limits?.maxOrganizations).toBe(1);
 			expect(plans[0].limits?.usersPerOrg).toBe(5);
