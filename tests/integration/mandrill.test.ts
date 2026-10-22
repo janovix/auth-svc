@@ -229,8 +229,8 @@ describe("Mandrill Email Integration", () => {
 			expect(callBody.template_name).toBe("janovix-email-otp-template");
 			expect(callBody.message.to).toEqual([{ email: toEmail, type: "to" }]);
 			expect(callBody.message.from_email).toBe("noreply@janovix.com");
-			expect(callBody.message.from_name).toBe("Yenio");
-			expect(callBody.message.subject).toBe("Your verification code - Yenio");
+			expect(callBody.message.from_name).toBe("Janovix");
+			expect(callBody.message.subject).toBe("Your verification code - Janovix");
 			expect(callBody.message.global_merge_vars).toEqual([
 				{ name: "env", content: userName },
 				{ name: "otp", content: otp },
@@ -278,7 +278,7 @@ describe("Mandrill Email Integration", () => {
 
 			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
 			expect(callBody.message.subject).toBe(
-				"Tu código de inicio de sesión - Yenio",
+				"Tu código de inicio de sesión - Janovix",
 			);
 		});
 
@@ -303,7 +303,7 @@ describe("Mandrill Email Integration", () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-			expect(callBody.message.subject).toBe("Your sign-in code - Yenio");
+			expect(callBody.message.subject).toBe("Your sign-in code - Janovix");
 		});
 
 		it("uses default subject for unknown OTP type", async () => {
@@ -327,7 +327,7 @@ describe("Mandrill Email Integration", () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-			expect(callBody.message.subject).toBe("Your verification code - Yenio");
+			expect(callBody.message.subject).toBe("Your verification code - Janovix");
 		});
 
 		it("uses custom template name when provided", async () => {
@@ -446,7 +446,7 @@ describe("Mandrill Email Integration", () => {
 				{ email: invitation.email, type: "to" },
 			]);
 			expect(callBody.message.from_email).toBe("noreply@janovix.com");
-			expect(callBody.message.from_name).toBe("Yenio");
+			expect(callBody.message.from_name).toBe("Janovix");
 			expect(callBody.message.subject).toBe(
 				`Invitation to join ${invitation.organizationName}`,
 			);

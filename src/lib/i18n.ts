@@ -83,12 +83,12 @@ export function isMessageKey(key: string): key is MessageKey {
 }
 
 const en: Record<MessageKey, string> = {
-	"otp.subject.email_verification": "Your verification code - Yenio",
-	"otp.subject.sign_in": "Your sign-in code - Yenio",
-	"otp.subject.default": "Your verification code - Yenio",
+	"otp.subject.email_verification": "Your verification code - Janovix",
+	"otp.subject.sign_in": "Your sign-in code - Janovix",
+	"otp.subject.default": "Your verification code - Janovix",
 	"org_invite.subject": "Invitation to join {{organizationName}}",
 	"org_invite.org_fallback_name": "your organization",
-	"promotion.subject": "Your Yenio access has been activated!",
+	"promotion.subject": "Your Janovix access has been activated!",
 	"email.view_details": "View details: {{url}}",
 	"risk.client_high.title": "Client classified as High Risk",
 	"risk.client_high.body":
@@ -175,12 +175,12 @@ const en: Record<MessageKey, string> = {
 };
 
 const es: Record<MessageKey, string> = {
-	"otp.subject.email_verification": "Tu código de verificación - Yenio",
-	"otp.subject.sign_in": "Tu código de inicio de sesión - Yenio",
-	"otp.subject.default": "Tu código de verificación - Yenio",
+	"otp.subject.email_verification": "Tu código de verificación - Janovix",
+	"otp.subject.sign_in": "Tu código de inicio de sesión - Janovix",
+	"otp.subject.default": "Tu código de verificación - Janovix",
 	"org_invite.subject": "Invitación a unirse a {{organizationName}}",
 	"org_invite.org_fallback_name": "tu organización",
-	"promotion.subject": "¡Tu acceso a Yenio ha sido activado!",
+	"promotion.subject": "¡Tu acceso a Janovix ha sido activado!",
 	"email.view_details": "Ver detalles: {{url}}",
 	"risk.client_high.title": "Cliente clasificado como Alto Riesgo",
 	"risk.client_high.body":

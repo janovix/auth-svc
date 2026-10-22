@@ -53,7 +53,7 @@ const mockStripeLimits = {
 const mockPlan = {
 	id: "plan_business",
 	name: "business",
-	displayName: "Yenio Business",
+	displayName: "Janovix Business",
 	description: "Business plan",
 	isActive: true,
 	sortOrder: 1,

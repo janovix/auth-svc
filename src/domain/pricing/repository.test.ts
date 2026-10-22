@@ -58,7 +58,7 @@ describe("PricingRepository", () => {
 				{
 					id: "plan_business",
 					name: "business",
-					display_name: "Yenio Business",
+					display_name: "Janovix Business",
 					description: "Business plan",
 					is_active: 1,
 					sort_order: 1,
@@ -70,7 +70,7 @@ describe("PricingRepository", () => {
 				{
 					id: "plan_pro",
 					name: "pro",
-					display_name: "Yenio Pro",
+					display_name: "Janovix Pro",
 					description: "Pro plan",
 					is_active: 1,
 					sort_order: 2,
@@ -87,7 +87,7 @@ describe("PricingRepository", () => {
 
 			expect(plans).toHaveLength(2);
 			expect(plans[0].name).toBe("business");
-			expect(plans[0].displayName).toBe("Yenio Business");
+			expect(plans[0].displayName).toBe("Janovix Business");
 			expect(plans[0].isActive).toBe(true);
 			expect(plans[1].name).toBe("pro");
 		});
@@ -106,7 +106,7 @@ describe("PricingRepository", () => {
 			const mockPlan = {
 				id: "plan_business",
 				name: "business",
-				display_name: "Yenio Business",
+				display_name: "Janovix Business",
 				description: "Business plan",
 				is_active: 1,
 				sort_order: 1,
@@ -122,7 +122,7 @@ describe("PricingRepository", () => {
 
 			expect(plan).not.toBeNull();
 			expect(plan?.name).toBe("business");
-			expect(plan?.displayName).toBe("Yenio Business");
+			expect(plan?.displayName).toBe("Janovix Business");
 		});
 
 		it("should return null when plan not found", async () => {
